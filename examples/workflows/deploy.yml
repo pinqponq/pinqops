@@ -1,9 +1,24 @@
+# TEMPLATE — copy this into YOUR application repository as
+# .github/workflows/deploy.yml
+#
+# This is not an active workflow in the pinqops product repo (pinqops has no
+# container app to deploy). It shows how a consuming application uses pinqops:
+# GitHub builds the app image in the cloud and pushes it to GHCR, then a
+# self-hosted runner on your closed server runs `pinqops deploy`.
+#
+# Requirements in the consuming repo:
+#   - A Dockerfile at the repository root (your application image).
+#   - A self-hosted runner labelled `pinqops-prod`, installed with
+#     `pinqops install-runner` (see docs/SETUP.md).
+#   - The pinqops CLI on the runner's PATH, and the fixed app compose project on
+#     the server (default /opt/pinqops/docker-compose.yml).
+
 name: Build and Deploy
 
 # Deployment runs ONLY when a commit lands on master. Because the repository
-# uses branch protection (see docs/SETUP.md), the only way a commit reaches
-# master is by merging a reviewed pull request. Opening a PR or pushing to any
-# other branch does NOT trigger this workflow.
+# uses branch protection, the only way a commit reaches master is by merging a
+# reviewed pull request. Opening a PR or pushing to any other branch does NOT
+# trigger this workflow.
 on:
   push:
     branches:

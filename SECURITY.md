@@ -60,7 +60,7 @@ base project but compatible with it.
 - [ ] The runner runs as a non-root user that is in the `docker` group.
 - [ ] The server has **no** inbound ports open (verify with your firewall/host).
 - [ ] Outbound access is limited to what's needed (`github.com`, `ghcr.io`).
-- [ ] The runner label in `deploy.yml` matches the installed runner.
+- [ ] The runner label in the deploy workflow matches the installed runner.
 
 ## Supported versions
 

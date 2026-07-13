@@ -95,8 +95,9 @@ sudo /opt/actions-runner/svc.sh status
 The runner should appear as **Idle** under Settings → Actions → Runners.
 
 > The label `pinqops-prod` must match `runs-on: [self-hosted, pinqops-prod]` in
-> [`../.github/workflows/deploy.yml`](../.github/workflows/deploy.yml). Override
-> it with `--labels` if you change one — but change both.
+> your app repo's deploy workflow (copied from
+> [`../examples/workflows/deploy.yml`](../examples/workflows/deploy.yml)).
+> Override it with `--labels` if you change one — but change both.
 
 ## 6. Server: the application compose project
 

@@ -41,7 +41,8 @@ from the New-issue page).
 | `src/PinqOps.Core` | Deploy engine + runner installer (library, unit-tested) |
 | `src/PinqOps.Cli` | The `pinqops` console app (`deploy`, `install-runner`) |
 | `tests/PinqOps.Core.Tests` | xUnit tests |
-| `.github/workflows/` | `ci.yml` (build+test), `deploy.yml` (pipeline), `release.yml` (binary) |
+| `.github/workflows/` | `ci.yml` (build+test), `release.yml` (binary) |
+| `examples/workflows/deploy.yml` | Deploy pipeline **template** consumers copy into their app repo |
 | `deploy/`, `examples/`, `docs/` | Example compose project, example app Dockerfile, docs |
 
 ## Development setup

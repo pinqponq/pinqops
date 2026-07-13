@@ -20,9 +20,11 @@ and this project adheres to a rolling release model (latest `master` only).
 - **xUnit tests** (`tests/PinqOps.Core.Tests`) covering command building,
   option validation, the deploy sequence (via a fake process runner), and the
   runner-install orchestration.
-- **Workflows:** `ci.yml` (dotnet build + test on PRs), `deploy.yml` (push to
-  `master` → cloud build + GHCR push → deploy job on the self-hosted runner),
-  and `release.yml` (tag → publish a self-contained linux-x64 `pinqops` binary).
+- **Workflows:** `ci.yml` (dotnet build + test on PRs) and `release.yml`
+  (tag → publish a self-contained linux-x64 `pinqops` binary). A deploy pipeline
+  **template** ships under `examples/workflows/deploy.yml` for consumers to copy
+  into their own app repo (push to `master` → cloud build + GHCR push → deploy
+  job on the self-hosted runner).
 - Example files: the fixed application compose project and an example
   application Dockerfile.
 - Documentation: README, ARCHITECTURE, SETUP, CONFIGURATION, SECURITY,

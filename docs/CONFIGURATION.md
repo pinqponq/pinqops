@@ -73,7 +73,7 @@ pinqops install-runner --repo-url <url> --token <token> [options]
 |---|---|---|---|
 | `--repo-url` | ✅ | — | `https://github.com/<owner>/<repo>` (or env `REPO_URL`) |
 | `--token` | ✅ | — | Short-lived registration token (or env `RUNNER_TOKEN`) |
-| `--labels` | — | `pinqops-prod` | Must match `runs-on` in `deploy.yml` |
+| `--labels` | — | `pinqops-prod` | Must match `runs-on` in the deploy workflow |
 | `--name` | — | `<hostname>-pinqops` | Display name on GitHub |
 | `--version` | — | `2.319.1` | Runner release to download |
 | `--dir` | — | `/opt/actions-runner` | Install directory |
@@ -81,7 +81,8 @@ pinqops install-runner --repo-url <url> --token <token> [options]
 
 ## Workflow permissions
 
-Set per job in [`../.github/workflows/deploy.yml`](../.github/workflows/deploy.yml):
+Set per job in the deploy workflow template
+[`../examples/workflows/deploy.yml`](../examples/workflows/deploy.yml):
 
 | Job | `contents` | `packages` |
 |---|---|---|

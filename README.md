@@ -205,7 +205,7 @@ There is almost nothing to configure — that's the point.
 
 | Setting | Where | Default |
 |---|---|---|
-| Runner label | `runs-on` in `deploy.yml` / `--labels` at install | `pinqops-prod` |
+| Runner label | `runs-on` in `examples/workflows/deploy.yml` / `--labels` at install | `pinqops-prod` |
 | App compose path | repo variable `APP_COMPOSE_PATH` (optional) | `/opt/pinqops/docker-compose.yml` |
 | Image reference | your app compose file | `ghcr.io/<owner>/<repo>:latest` |
 
@@ -222,12 +222,12 @@ Full reference: [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 │   └── PinqOps.Core.Tests/    # xUnit tests
 ├── .github/workflows/
 │   ├── ci.yml                 # PR validation: dotnet build + test
-│   ├── deploy.yml             # master → build (cloud) → deploy (self-hosted runner)
 │   └── release.yml            # tag → publish self-contained pinqops binary
 ├── deploy/
 │   └── app.docker-compose.example.yml   # The single, fixed app project (example)
 ├── examples/
-│   └── app/Dockerfile.example
+│   ├── app/Dockerfile.example
+│   └── workflows/deploy.yml   # TEMPLATE: copy into your app repo's .github/workflows/
 ├── docs/                      # ARCHITECTURE, SETUP, CONFIGURATION, DEVELOPING-WITH-CLAUDE
 ├── .pinq-doq/                 # Submodule: shared Claude standards (vendored)
 └── pinqops.sln
