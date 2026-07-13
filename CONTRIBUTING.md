@@ -21,8 +21,7 @@ Go to the repository's **Issues → New issue** and pick a template:
 
 Blank issues are disabled so the right details are captured up front. For
 **security vulnerabilities**, do **not** open a public issue — follow
-[`SECURITY.md`](SECURITY.md). For open-ended questions, use Discussions (linked
-from the New-issue page).
+[`SECURITY.md`](SECURITY.md).
 
 ## Ground rules
 
