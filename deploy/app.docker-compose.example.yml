@@ -1,0 +1,30 @@
+# Example of the SINGLE, FIXED application compose project that lives on the
+# production server (for example at /opt/pinqops/docker-compose.yml).
+#
+# The deploy job on the self-hosted runner runs, verbatim, via the pinqops CLI:
+#   pinqops deploy --compose-file /opt/pinqops/docker-compose.yml
+# which performs:
+#   docker compose -f /opt/pinqops/docker-compose.yml pull
+#   docker compose -f /opt/pinqops/docker-compose.yml up -d
+#
+# Copy this to the server, replace the image reference, and add whatever your
+# application itself needs (ports, networks, volumes, env). The application's
+# own networking is out of scope for the deploy system.
+name: pinqops
+
+services:
+  app:
+    # Moving tag: master builds overwrite :latest, and `pull` fetches the new
+    # digest so `up -d` recreates the container.
+    image: ghcr.io/your-org/pinqops:latest
+    restart: unless-stopped
+
+    # --- Everything below is application-specific and only an illustration. ---
+    # Add whatever YOUR application needs here (ports, networks, volumes, env).
+    # The deploy system does not require or manage any of this — how your app
+    # serves traffic is entirely up to you.
+    #
+    # ports:
+    #   - "8080:8080"
+    # environment:
+    #   - EXAMPLE=value

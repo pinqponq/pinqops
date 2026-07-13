@@ -1,0 +1,86 @@
+name: Build and Deploy
+
+# Deployment runs ONLY when a commit lands on master. Because the repository
+# uses branch protection (see docs/SETUP.md), the only way a commit reaches
+# master is by merging a reviewed pull request. Opening a PR or pushing to any
+# other branch does NOT trigger this workflow.
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-master
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) Build in the cloud (GitHub-hosted runner) and push :latest to GHCR.
+  #    The production server never builds and never receives the source code.
+  # ---------------------------------------------------------------------------
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Moving :latest tag by design (no rollback/version tracking in scope).
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ---------------------------------------------------------------------------
+  # 2) Deploy on the self-hosted runner that lives on the production server.
+  #    The runner dials GitHub outbound, so the server exposes NO inbound port.
+  #    It invokes the pinqops CLI (installed on the server) — see docs/SETUP.md.
+  # ---------------------------------------------------------------------------
+  deploy:
+    needs: build
+    runs-on: [self-hosted, pinqops-prod]
+    permissions:
+      contents: read
+      packages: read
+    env:
+      # Path to the single, fixed application compose project on the server.
+      # Override by setting a repository variable APP_COMPOSE_PATH if needed.
+      APP_COMPOSE_PATH: ${{ vars.APP_COMPOSE_PATH || '/opt/pinqops/docker-compose.yml' }}
+    steps:
+      - name: Deploy with pinqops
+        run: |
+          set -euo pipefail
+
+          # Authenticate to GHCR using the per-job, short-lived GITHUB_TOKEN.
+          # No long-lived registry secret is stored on the server.
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+          # pinqops runs the fixed compose pull + up -d against the fixed project.
+          # No repository content is checked out or executed on the server.
+          pinqops deploy --compose-file "$APP_COMPOSE_PATH"
+
+      - name: Log out of GHCR
+        if: always()
+        run: docker logout ghcr.io || true
