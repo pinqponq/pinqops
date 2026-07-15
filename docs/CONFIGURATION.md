@@ -79,6 +79,27 @@ pinqops install-runner --repo-url <url> --token <token> [options]
 | `--dir` | — | `/opt/actions-runner` | Install directory |
 | `--user` | — | current user | User the systemd service runs as |
 
+## `pinqops setup` options
+
+```
+pinqops setup --repo-url <url> [options]
+```
+
+| Option | Default | Purpose |
+|---|---|---|
+| `--repo-url` | — (prompted) | `https://github.com/<owner>/<repo>` (or env `REPO_URL`) |
+| `--pat` | — | GitHub PAT to mint a registration token via the API (or env `GITHUB_PAT`) |
+| `--token` | — | A registration token you already have (or env `RUNNER_TOKEN`) |
+| `--compose-file` | `/opt/pinqops/docker-compose.yml` | App compose path to reference (or env `APP_COMPOSE_PATH`) |
+| `--no-gh` | gh enabled | Don't use the `gh` CLI to mint a token |
+| `--skip-preflight` | preflight on | Skip the docker/compose/tar/systemd check |
+| `--non-interactive` | auto if stdin redirected | Never prompt; fail if an input is missing |
+| `--labels` / `--name` / `--version` / `--dir` / `--user` | as `install-runner` | Pass-throughs to the runner install |
+
+The token fallback chain is: `--token` → authenticated `gh` CLI → `--pat` via the
+GitHub API → a pasted token. The PAT is used once and never stored. See
+[TOKENS.md](TOKENS.md).
+
 ## Workflow permissions
 
 Set per job in the deploy workflow template

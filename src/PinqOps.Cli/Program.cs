@@ -16,6 +16,7 @@ try
 {
     return command switch
     {
+        "setup" => await RunSetupAsync(rest),
         "deploy" => await RunDeployAsync(rest),
         "install-runner" => await RunInstallRunnerAsync(rest),
         "version" or "--version" or "-v" => PrintVersion(),
@@ -27,6 +28,39 @@ catch (Exception exception)
 {
     Console.Error.WriteLine($"error: {exception.Message}");
     return 1;
+}
+
+async Task<int> RunSetupAsync(string[] setupArgs)
+{
+    var nonInteractive = HasFlag(setupArgs, "--non-interactive") || Console.IsInputRedirected;
+
+    var options = SetupOptions.Create(
+        repositoryUrl: GetOption(setupArgs, "--repo-url") ?? Environment.GetEnvironmentVariable("REPO_URL"),
+        personalAccessToken: GetOption(setupArgs, "--pat") ?? Environment.GetEnvironmentVariable("GITHUB_PAT"),
+        registrationToken: GetOption(setupArgs, "--token") ?? Environment.GetEnvironmentVariable("RUNNER_TOKEN"),
+        composeFilePath: GetOption(setupArgs, "--compose-file") ?? Environment.GetEnvironmentVariable("APP_COMPOSE_PATH"),
+        labels: GetOption(setupArgs, "--labels"),
+        runnerName: GetOption(setupArgs, "--name"),
+        runnerVersion: GetOption(setupArgs, "--version"),
+        installDirectory: GetOption(setupArgs, "--dir"),
+        serviceUser: GetOption(setupArgs, "--user"),
+        nonInteractive: nonInteractive,
+        skipPreflight: HasFlag(setupArgs, "--skip-preflight"),
+        useGhCli: !HasFlag(setupArgs, "--no-gh"));
+
+    var processRunner = new ProcessRunner();
+    using var downloader = new HttpFileDownloader();
+    using var gitHubApiClient = new GitHubApiClient();
+    var prompt = new ConsolePrompt();
+
+    var prerequisiteChecker = new PrerequisiteChecker(processRunner);
+    var ghCli = new GhCli(processRunner, Console.WriteLine);
+    var tokenResolver = new RegistrationTokenResolver(ghCli, gitHubApiClient, prompt, Console.WriteLine);
+    var installer = new RunnerInstaller(processRunner, downloader, Console.WriteLine);
+    var wizard = new SetupWizard(prerequisiteChecker, tokenResolver, installer, prompt, Console.WriteLine);
+
+    var succeeded = await wizard.RunAsync(options);
+    return succeeded ? 0 : 1;
 }
 
 async Task<int> RunDeployAsync(string[] deployArgs)
@@ -84,6 +118,15 @@ int PrintUsage()
         pinqops — minimal DevOps CLI for closed-server Docker deploys
 
         Usage:
+          pinqops setup [--repo-url <url>] [--pat <pat>] [--token <registration-token>]
+                        [--compose-file <path>] [--labels <l>] [--name <name>]
+                        [--version <runner-version>] [--dir <path>] [--user <user>]
+                        [--no-gh] [--skip-preflight] [--non-interactive]
+              Guided onboarding for a fresh server: check prerequisites, obtain a
+              runner registration token (authenticated gh CLI, a PAT via the
+              GitHub API, or a pasted token), install the self-hosted runner, and
+              print the remaining compose steps. Run it and answer the prompts.
+
           pinqops deploy [--compose-file <path>] [--no-prune] [--timeout-seconds <n>]
               Pull the new image and restart the fixed compose project.
               Defaults: --compose-file from $APP_COMPOSE_PATH or /opt/pinqops/docker-compose.yml

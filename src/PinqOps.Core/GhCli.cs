@@ -1,0 +1,73 @@
+namespace PinqOps;
+
+/// <summary>
+/// Thin wrapper over the <c>gh</c> CLI for the setup wizard's first token
+/// branch: detect that gh is installed and authenticated, then mint a runner
+/// registration token using gh's own stored credentials.
+/// </summary>
+public sealed class GhCli
+{
+    private const string Executable = "gh";
+
+    private readonly IProcessRunner _processRunner;
+    private readonly Action<string>? _log;
+
+    public GhCli(IProcessRunner processRunner, Action<string>? log = null)
+    {
+        _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
+        _log = log;
+    }
+
+    /// <summary>True when the gh CLI is installed and on PATH.</summary>
+    public Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default) =>
+        SucceedsAsync(new[] { "--version" }, cancellationToken);
+
+    /// <summary>True when gh is logged in (<c>gh auth status</c> exits 0).</summary>
+    public Task<bool> IsAuthenticatedAsync(CancellationToken cancellationToken = default) =>
+        SucceedsAsync(new[] { "auth", "status" }, cancellationToken);
+
+    /// <summary>Mints a registration token via <c>gh api</c>. Throws on failure.</summary>
+    public async Task<string> CreateRegistrationTokenAsync(
+        GitHubRepository repository,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(repository);
+
+        var arguments = new[]
+        {
+            "api",
+            "-X", "POST",
+            $"repos/{repository.Owner}/{repository.Name}/actions/runners/registration-token",
+            "--jq", ".token",
+        };
+
+        var result = await _processRunner
+            .RunAsync(Executable, arguments, workingDirectory: null, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!result.Succeeded)
+        {
+            throw new GitHubApiException(0, $"gh could not mint a registration token: {result.StandardError.Trim()}");
+        }
+
+        return result.StandardOutput.Trim();
+    }
+
+    private async Task<bool> SucceedsAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _processRunner
+                .RunAsync(Executable, arguments, workingDirectory: null, cancellationToken)
+                .ConfigureAwait(false);
+            return result.Succeeded;
+        }
+        catch (Exception exception)
+        {
+            // gh is not installed: Process.Start throws (Win32Exception) rather
+            // than returning an exit code. A launch failure means "gh unavailable".
+            _log?.Invoke($"gh not available: {exception.Message}");
+            return false;
+        }
+    }
+}

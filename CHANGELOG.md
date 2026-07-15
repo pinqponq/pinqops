@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to a rolling release model (latest `master` only).
 
+## [Unreleased]
+
+### Added
+
+- **`pinqops setup`** — a guided, one-command onboarding wizard for a fresh
+  server: it checks prerequisites (docker, docker compose, tar, systemd) and
+  prints exact install commands when any are missing, obtains a runner
+  registration token (authenticated `gh` CLI → a PAT via the GitHub API → a
+  pasted token), installs and registers the self-hosted runner, and prints the
+  remaining compose steps. Scriptable via flags/env and `--non-interactive`.
+- **[docs/TOKENS.md](docs/TOKENS.md)** — centralizes registration-token vs PAT
+  guidance and explains why deploys need no git token on the server.
+
+### Changed
+
+- **README** slimmed to a one-screen quickstart centered on `pinqops setup`,
+  with deeper material linked under `docs/`.
+- **docs/SETUP.md** now features `pinqops setup` as the primary path, keeping the
+  manual step-by-step as the equivalent/advanced route.
+
 ## [0.1.0] - 2026-07-15
 
 ### Added

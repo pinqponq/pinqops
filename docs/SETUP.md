@@ -3,6 +3,7 @@
 End-to-end setup, from an empty server to a working `master`-merge deploy — with
 **no inbound ports** on the server.
 
+- [The one-command path: `pinqops setup`](#the-one-command-path-pinqops-setup)
 - [1. Branch protection](#1-branch-protection)
 - [2. Application Dockerfile](#2-application-dockerfile)
 - [3. Server: bare-server bootstrap (Docker + a runner user)](#3-server-bare-server-bootstrap-docker--a-runner-user)
@@ -14,6 +15,32 @@ End-to-end setup, from an empty server to a working `master`-merge deploy — wi
 - [Troubleshooting](#troubleshooting)
 
 ---
+
+## The one-command path: `pinqops setup`
+
+Once Docker is installed (section 3.2) and the `pinqops` binary is on the server
+(section 4), a single command does the rest — it checks prerequisites, obtains a
+runner registration token, installs and registers the self-hosted runner, and
+prints the remaining compose steps:
+
+```bash
+pinqops setup --repo-url https://github.com/<owner>/<repo>
+```
+
+Answer the prompts and you're done. For the registration token, setup tries the
+authenticated `gh` CLI first, then a personal access token you paste, then a
+registration token you paste — see [TOKENS.md](TOKENS.md). It never installs
+Docker for you; if a prerequisite is missing it prints the exact command and
+stops.
+
+Useful flags: `--pat <pat>` / `--token <registration-token>` (skip the prompt),
+`--no-gh` (ignore the gh CLI), `--skip-preflight`, `--non-interactive` (for
+scripted runs; also reads `REPO_URL` / `GITHUB_PAT` / `RUNNER_TOKEN` /
+`APP_COMPOSE_PATH` from the environment), plus the runner pass-throughs
+`--labels/--name/--version/--dir/--user`.
+
+The rest of this guide is the **manual, step-by-step path** — do it yourself, or
+read it to understand what `pinqops setup` automates (sections 5–6).
 
 ## 1. Branch protection
 
@@ -120,6 +147,10 @@ pinqops version
 (If you prefer to build it yourself, see [CONTRIBUTING.md](../CONTRIBUTING.md).)
 
 ## 5. Server: install the self-hosted runner
+
+> `pinqops setup` ([above](#the-one-command-path-pinqops-setup)) does this step
+> and step 6 for you, including obtaining the token. The manual steps below are
+> the equivalent.
 
 Get a registration token from **repo → Settings → Actions → Runners → New
 self-hosted runner** (the token is short-lived — use it right away), then let
