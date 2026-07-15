@@ -138,6 +138,11 @@ the host. Keep the repository private and review the trade-offs in
 - Ability to install a systemd service and enable branch protection.
 - **For development of pinqops itself:** the .NET 10 SDK.
 
+> Starting from a **bare server** with nothing installed? Docker and the base
+> tools aren't assumed — [`docs/SETUP.md`](docs/SETUP.md#3-server-bare-server-bootstrap-docker--a-runner-user)
+> §3 has the full copy-paste bootstrap (apt tools + Docker from its official
+> repository).
+
 ## Quick start
 
 ### 1. GitHub side
@@ -150,6 +155,11 @@ the host. Keep the repository private and review the trade-offs in
    provided automatically.
 
 ### 2. Server side
+
+> **Bare server first.** If Docker isn't installed yet, run the bootstrap in
+> [`docs/SETUP.md`](docs/SETUP.md#3-server-bare-server-bootstrap-docker--a-runner-user)
+> §3 before the steps below (base tools, Docker Engine + Compose plugin, and the
+> `docker`-group runner user).
 
 ```bash
 # Install the pinqops CLI (self-contained binary from the latest release).
@@ -257,6 +267,8 @@ path stays deliberately minimal.
 |---|---|---|
 | `deploy` job stuck "Waiting for a runner" | Runner offline or label mismatch | Check `svc.sh status`; ensure the runner label matches `runs-on` |
 | `pinqops: command not found` on the runner | Binary not on PATH | Install to `/usr/local/bin/pinqops` (see Quick start) |
+| `docker: command not found` / can't reach the daemon | Docker not installed on a bare server | Run the bootstrap in [`docs/SETUP.md`](docs/SETUP.md#3-server-bare-server-bootstrap-docker--a-runner-user) §3 |
+| `install-runner` fails on a missing library (e.g. `libicu`) | Runner's native deps absent on a minimal server | `sudo /opt/actions-runner/bin/installdependencies.sh`, then re-run `install-runner` |
 | Pull fails / old image keeps running | GHCR permission | Ensure the package is linked to the repo so `GITHUB_TOKEN` (`packages: read`) can pull |
 | `permission denied` on docker | Runner user not in `docker` group | `sudo usermod -aG docker <user>` and restart the runner service |
 | Deploy runs on a non-master push | — | It can't: the workflow triggers only on `push` to `master` |
@@ -283,6 +295,13 @@ preserved.
 **Is the source code copied to the server?** No. The `deploy` job does not check
 out the repository; it only runs `pinqops deploy`, which pulls the pre-built
 image.
+
+**Do I need a git token for a private repo?** No. The server never clones your
+repository, so there is no git PAT or SSH key to configure. The private image is
+pulled from GHCR with the per-job, ephemeral `GITHUB_TOKEN` (`packages: read`);
+the only token you handle on the server is the short-lived runner registration
+token for `install-runner`. See
+[Private repos & tokens](docs/SETUP.md#private-repos--tokens-which-token-goes-where).
 
 ## Contributing
 

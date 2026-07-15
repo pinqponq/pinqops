@@ -5,11 +5,12 @@ End-to-end setup, from an empty server to a working `master`-merge deploy — wi
 
 - [1. Branch protection](#1-branch-protection)
 - [2. Application Dockerfile](#2-application-dockerfile)
-- [3. Server: Docker and a runner user](#3-server-docker-and-a-runner-user)
+- [3. Server: bare-server bootstrap (Docker + a runner user)](#3-server-bare-server-bootstrap-docker--a-runner-user)
 - [4. Server: install the pinqops CLI](#4-server-install-the-pinqops-cli)
 - [5. Server: install the self-hosted runner](#5-server-install-the-self-hosted-runner)
 - [6. Server: the application compose project](#6-server-the-application-compose-project)
 - [7. Verify end-to-end](#7-verify-end-to-end)
+- [Private repos & tokens: which token goes where](#private-repos--tokens-which-token-goes-where)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -38,19 +39,68 @@ See [`../examples/app/Dockerfile.example`](../examples/app/Dockerfile.example).
 No repository secrets are needed: the `build` job pushes to GHCR with the
 automatic `GITHUB_TOKEN`.
 
-## 3. Server: Docker and a runner user
+## 3. Server: bare-server bootstrap (Docker + a runner user)
 
-On the production server:
+This section assumes a **freshly provisioned Ubuntu/Debian server with nothing
+installed** — a bare SSH box. Run these steps as a normal sudo-capable user.
+(For other distributions, follow the equivalent steps from
+[docs.docker.com/engine/install](https://docs.docker.com/engine/install/).)
+
+### 3.1 Base tools
 
 ```bash
-# Install Docker Engine + the Compose plugin (see docs.docker.com if needed).
-docker version
-docker compose version
-
-# Use a non-root user for the runner, and add it to the docker group.
-sudo usermod -aG docker "$USER"
-# Log out/in (or `newgrp docker`) so the group change takes effect.
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl tar
 ```
+
+`curl` fetches the pinqops binary (step 4), `tar` extracts the runner archive
+(step 5), and `ca-certificates` lets the box trust `github.com` / `ghcr.io`.
+
+### 3.2 Docker Engine + the Compose plugin
+
+Install from Docker's **official apt repository** (recommended over distro
+packages, which are often outdated and may lack the Compose v2 plugin):
+
+```bash
+# Add Docker's official GPG key.
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add the repository to apt sources.
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+  https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update
+sudo apt-get install -y \
+  docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+> **On Debian**, replace both `ubuntu` occurrences above with `debian`.
+
+### 3.3 Enable Docker and verify
+
+```bash
+sudo systemctl enable --now docker
+docker version              # Docker Engine is installed and running
+docker compose version      # the Compose v2 plugin is present (note: `docker compose`, not `docker-compose`)
+```
+
+### 3.4 A runner user in the `docker` group
+
+Run the runner as a non-root user, and add it to the `docker` group so it can
+reach the daemon:
+
+```bash
+sudo usermod -aG docker "$USER"
+# Log out/in (or run `newgrp docker`) so the group change takes effect,
+# then confirm you can talk to Docker without sudo:
+docker ps
+```
+
+The `docker` group is **root-equivalent** on the host — see [`../SECURITY.md`](../SECURITY.md).
 
 The server needs **outbound** HTTPS (443) to `github.com` and `ghcr.io`. It does
 **not** need any inbound port open.
@@ -92,6 +142,18 @@ pinqops install-runner \
 sudo /opt/actions-runner/svc.sh status
 ```
 
+> **On a minimal server**, the runner's `config.sh` may fail with a missing
+> native dependency (for example `libicu`), because the GitHub Actions runner is
+> a .NET application. If `install-runner` fails during registration, install the
+> runner's own dependencies and re-run it:
+> ```bash
+> sudo /opt/actions-runner/bin/installdependencies.sh
+> ```
+> (This script ships inside the runner archive, so it only exists after the
+> download in this step. Use `--dir` to match if you changed the install
+> directory. The pinqops binary itself needs no such dependencies — it is
+> published self-contained with invariant globalization.)
+
 The runner should appear as **Idle** under Settings → Actions → Runners.
 
 > The label `pinqops-prod` must match `runs-on: [self-hosted, pinqops-prod]` in
@@ -124,8 +186,53 @@ accordingly — Settings → Secrets and variables → Actions → Variables.)
    docker compose -f /opt/pinqops/docker-compose.yml ps
    ```
 
+## Private repos & tokens: which token goes where
+
+A common question when the app repository is **private**: *"Where do I enter a
+git token?"* You don't — and here is why.
+
+- **The server never clones your repository.** No source is ever checked out or
+  executed on the box. So there is **no git PAT and no SSH key to configure** for
+  the deploy. The `deploy` job only runs `pinqops deploy`, which pulls a
+  pre-built image and restarts the fixed compose project.
+- **The private image is pulled from GHCR with the per-job `GITHUB_TOKEN`.** The
+  workflow does `docker login ghcr.io` with the ephemeral, per-run token (scoped
+  `packages: read`) and logs out afterwards — see
+  [`../examples/workflows/deploy.yml`](../examples/workflows/deploy.yml). Nothing
+  long-lived is stored on the server. This works as long as the GHCR package is
+  linked to the repository, which happens automatically after the first
+  successful `build` job.
+- **The only token you handle on the server is the runner registration token.**
+  It is short-lived, obtained from **repo → Settings → Actions → Runners → New
+  self-hosted runner**, and passed once to `pinqops install-runner --token` (step
+  5). It is not a git credential and is not persisted as a secret.
+
+**Optional — pulling the private image by hand.** If you want to test the image
+pull directly on the server (outside the workflow), authenticate with a
+**personal access token** that has the `read:packages` scope:
+
+```bash
+echo "<your-PAT>" | docker login ghcr.io -u "<your-github-username>" --password-stdin
+docker pull ghcr.io/<owner>/<repo>:latest
+docker logout ghcr.io
+```
+
+This is only a manual debugging aid — the automated deploy never needs it.
+
 ## Troubleshooting
 
+- **`docker: command not found` or "Cannot connect to the Docker daemon"** —
+  Docker isn't installed or isn't running on the server. Complete the bare-server
+  bootstrap in [section 3](#3-server-bare-server-bootstrap-docker--a-runner-user)
+  (`sudo systemctl enable --now docker`, then `docker version`).
+- **`install-runner` fails during registration with a missing library (e.g.
+  `libicu`)** — the GitHub Actions runner needs native dependencies the minimal
+  server lacks. Run `sudo /opt/actions-runner/bin/installdependencies.sh` and
+  re-run `install-runner` (see [section 5](#5-server-install-the-self-hosted-runner)).
+- **"How do I authenticate to a private repo?"** — you don't configure a git
+  token; the server never clones the repo and the private image is pulled with
+  the per-job `GITHUB_TOKEN`. See
+  [Private repos & tokens](#private-repos--tokens-which-token-goes-where).
 - **`deploy` job stuck on "Waiting for a runner"** — the runner is offline or the
   label doesn't match. Check `sudo /opt/actions-runner/svc.sh status` and that
   the runner's labels include `pinqops-prod`.
