@@ -129,6 +129,10 @@ td.mono{font-family:var(--mono);font-size:12px}
     <div class="logo">pinq<em>ops</em></div>
     <p class="sub" id="lock-sub">Dashboard login</p>
     <form id="lock-form">
+      <div id="lock-code-wrap" class="hidden">
+        <label for="lock-code">Setup code <span class="muted">(printed on the server console)</span></label>
+        <input id="lock-code" autocomplete="off" spellcheck="false">
+      </div>
       <label for="lock-pass">Password</label>
       <input id="lock-pass" type="password" autocomplete="current-password" required>
       <div id="lock-pass2-wrap" class="hidden">
@@ -384,9 +388,10 @@ function showLock(setup){
   $("#app").classList.add("hidden");$("#lock").classList.remove("hidden");
   $("#lock-sub").textContent=setup?"First run — create the dashboard password.":"Dashboard login";
   $("#lock-pass2-wrap").classList.toggle("hidden",!setup);
+  $("#lock-code-wrap").classList.toggle("hidden",!setup);
   $("#lock-btn").textContent=setup?"Create password":"Sign in";
-  $("#lock-error").textContent="";$("#lock-pass").value="";$("#lock-pass2").value="";
-  $("#lock-pass").focus();
+  $("#lock-error").textContent="";$("#lock-pass").value="";$("#lock-pass2").value="";$("#lock-code").value="";
+  (setup?$("#lock-code"):$("#lock-pass")).focus();
 }
 $("#lock-form").addEventListener("submit",async e=>{
   e.preventDefault();const err=$("#lock-error");err.textContent="";
@@ -395,7 +400,7 @@ $("#lock-form").addEventListener("submit",async e=>{
     if(needsSetup){
       if(pass.length<8){err.textContent="At least 8 characters.";return;}
       if(pass!==$("#lock-pass2").value){err.textContent="Passwords do not match.";return;}
-      const r=await api("/api/auth/setup",{method:"POST",body:JSON.stringify({password:pass})});
+      const r=await api("/api/auth/setup",{method:"POST",body:JSON.stringify({password:pass,setupCode:$("#lock-code").value.trim()})});
       token=r.token;
     }else{
       const r=await api("/api/auth/login",{method:"POST",body:JSON.stringify({password:pass})});
@@ -705,7 +710,9 @@ $("#password-form").addEventListener("submit",async e=>{
   e.preventDefault();
   try{await api("/api/auth/change-password",{method:"POST",body:JSON.stringify({
       currentPassword:$("#pw-current").value,newPassword:$("#pw-new").value})});
-    $("#pw-current").value="";$("#pw-new").value="";toast("Password changed","ok");}
+    $("#pw-current").value="";$("#pw-new").value="";
+    toast("Password changed — sign in again","ok");
+    token="";localStorage.removeItem("pinqops.token");showLock(false);}
   catch(ex){toast(ex.message,"err");}
 });
 
@@ -724,7 +731,6 @@ $("#btn-deploy").onclick=()=>openModal("Deploy now",
 (async function boot(){
   try{
     const s=await api("/api/auth/state");
-    ghConfigured=s.githubConfigured;
     if(s.needsSetup){showLock(true);return;}
     if(!token){showLock(false);return;}
     try{await enterApp();}catch{showLock(false);}

@@ -1,3 +1,7 @@
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Threading.RateLimiting;
 using PinqOps;
 using PinqOps.Web;
 
@@ -6,23 +10,92 @@ using PinqOps.Web;
 
 var port = GetOption(args, "--port") ?? Environment.GetEnvironmentVariable("PINQOPS_UI_PORT") ?? "7467";
 var host = GetOption(args, "--host") ?? Environment.GetEnvironmentVariable("PINQOPS_UI_HOST") ?? "0.0.0.0";
+var certPath = GetOption(args, "--cert") ?? Environment.GetEnvironmentVariable("PINQOPS_UI_CERT");
+var certPassword = GetOption(args, "--cert-password") ?? Environment.GetEnvironmentVariable("PINQOPS_UI_CERT_PASSWORD");
+var useTls = !string.IsNullOrWhiteSpace(certPath);
 
 var builder = WebApplication.CreateBuilder();
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
-builder.WebHost.UseUrls($"http://{host}:{port}");
+builder.WebHost.UseUrls($"{(useTls ? "https" : "http")}://{host}:{port}");
+builder.WebHost.ConfigureKestrel(kestrel =>
+{
+    // No endpoint accepts more than a small JSON body; cap requests hard.
+    kestrel.Limits.MaxRequestBodySize = 64 * 1024;
+    kestrel.AddServerHeader = false;
+    if (useTls)
+    {
+        kestrel.ConfigureHttpsDefaults(https =>
+            https.ServerCertificate = X509CertificateLoader.LoadPkcs12FromFile(certPath!, certPassword));
+    }
+});
 
 builder.Services.AddSingleton<IProcessRunner, ProcessRunner>();
 builder.Services.AddSingleton<UiConfigStore>();
 builder.Services.AddSingleton<SessionStore>();
+builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<GitHubDashboardService>();
 builder.Services.AddSingleton<LocalRunnerService>();
 builder.Services.AddSingleton<SystemInfoService>();
 
+// Blunt per-client request ceiling on top of the login throttle, so a single
+// client cannot hammer the API (or the process-spawning docker endpoints).
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ClientKey(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 300,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+});
+
 var app = builder.Build();
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
 var deployGate = new SemaphoreSlim(1, 1);
+
+// The dashboard page is one embedded file; cache its bytes and pin its inline
+// script with a CSP hash so no other script can ever execute on the page.
+var indexBytes = LoadIndexBytes();
+var contentSecurityPolicy =
+    $"default-src 'none'; script-src '{HashInlineScript(indexBytes)}'; style-src 'unsafe-inline'; "
+    + "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+
+// First-run bootstrap secret: creating the dashboard password requires this
+// code from the server console, so whoever reaches the port first cannot
+// claim an unconfigured dashboard.
+var setupCode = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(4));
+
+app.UseRateLimiter();
+
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "no-referrer";
+    headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    headers["X-Robots-Tag"] = "noindex";
+    headers["Cross-Origin-Opener-Policy"] = "same-origin";
+    headers["Cross-Origin-Resource-Policy"] = "same-origin";
+    if (context.Request.IsHttps)
+    {
+        headers["Strict-Transport-Security"] = "max-age=31536000";
+    }
+
+    if (context.Request.Path.StartsWithSegments("/api"))
+    {
+        headers.CacheControl = "no-store";
+    }
+
+    await next();
+});
 
 // Every /api route except the auth handshake requires a valid session token.
 string[] anonymousPaths = ["/api/auth/state", "/api/auth/setup", "/api/auth/login"];
@@ -46,35 +119,55 @@ app.Use(async (context, next) =>
 
 // ---- Dashboard page (embedded single file) --------------------------------
 
-app.MapGet("/", () => Results.Stream(OpenIndexHtml(), "text/html; charset=utf-8"));
+app.MapGet("/", (HttpContext context) =>
+{
+    context.Response.Headers.ContentSecurityPolicy = contentSecurityPolicy;
+    return Results.Bytes(indexBytes, "text/html; charset=utf-8");
+});
 
 // ---- Auth ------------------------------------------------------------------
 
-app.MapGet("/api/auth/state", (UiConfigStore store, GitHubDashboardService gitHub) => Results.Json(new
+app.MapGet("/api/auth/state", (UiConfigStore store) => Results.Json(new
 {
     needsSetup = string.IsNullOrEmpty(store.Current.PasswordHash),
-    githubConfigured = gitHub.IsConfigured,
 }));
 
 app.MapPost("/api/auth/setup", async (HttpContext context, UiConfigStore store, SessionStore sessions) =>
 {
-    var request = await context.Request.ReadFromJsonAsync<PasswordRequest>();
-    if (request?.Password is not { Length: >= 8 } password)
-    {
-        return Error(400, "Choose a password of at least 8 characters.");
-    }
-
+    var request = await context.Request.ReadFromJsonAsync<SetupRequest>();
     if (!string.IsNullOrEmpty(store.Current.PasswordHash))
     {
         return Error(409, "A password is already set — log in instead.");
     }
 
+    if (!CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(request?.SetupCode?.Trim().ToLowerInvariant() ?? ""),
+            Encoding.UTF8.GetBytes(setupCode)))
+    {
+        logger.LogWarning("Dashboard setup attempt with a wrong setup code from {Client}", ClientKey(context));
+        await Task.Delay(500);
+        return Error(401, "Wrong setup code — it is printed on the server console where pinqops-ui runs.");
+    }
+
+    if (request?.Password is not { Length: >= 8 } password)
+    {
+        return Error(400, "Choose a password of at least 8 characters.");
+    }
+
     store.Update(config => config.PasswordHash = PasswordHasher.Hash(password));
+    logger.LogWarning("Dashboard password created from {Client}", ClientKey(context));
     return Results.Json(new { token = sessions.Create() });
 });
 
-app.MapPost("/api/auth/login", async (HttpContext context, UiConfigStore store, SessionStore sessions) =>
+app.MapPost("/api/auth/login", async (HttpContext context, UiConfigStore store, SessionStore sessions, LoginThrottle throttle) =>
 {
+    var client = ClientKey(context);
+    if (throttle.RetryAfter(client) is { } wait)
+    {
+        context.Response.Headers.RetryAfter = ((int)Math.Ceiling(wait.TotalSeconds)).ToString();
+        return Error(429, $"Too many failed attempts — try again in {(int)Math.Ceiling(wait.TotalMinutes)} minute(s).");
+    }
+
     var request = await context.Request.ReadFromJsonAsync<PasswordRequest>();
     var hash = store.Current.PasswordHash;
     if (hash is null)
@@ -84,8 +177,16 @@ app.MapPost("/api/auth/login", async (HttpContext context, UiConfigStore store, 
 
     if (request?.Password is not { } password || !PasswordHasher.Verify(password, hash))
     {
-        await Task.Delay(500); // blunt brute-force throttle
+        throttle.RecordFailure(client);
+        logger.LogWarning("Failed dashboard login from {Client}", client);
+        await Task.Delay(500); // keep failures slow even before the lockout kicks in
         return Error(401, "Wrong password.");
+    }
+
+    throttle.RecordSuccess(client);
+    if (PasswordHasher.NeedsRehash(hash))
+    {
+        store.Update(config => config.PasswordHash = PasswordHasher.Hash(password));
     }
 
     return Results.Json(new { token = sessions.Create() });
@@ -101,12 +202,22 @@ app.MapPost("/api/auth/logout", (HttpContext context, SessionStore sessions) =>
     return Results.Json(new { ok = true });
 });
 
-app.MapPost("/api/auth/change-password", async (HttpContext context, UiConfigStore store) =>
+app.MapPost("/api/auth/change-password", async (HttpContext context, UiConfigStore store, SessionStore sessions, LoginThrottle throttle) =>
 {
+    var client = ClientKey(context);
+    if (throttle.RetryAfter(client) is { } wait)
+    {
+        context.Response.Headers.RetryAfter = ((int)Math.Ceiling(wait.TotalSeconds)).ToString();
+        return Error(429, $"Too many failed attempts — try again in {(int)Math.Ceiling(wait.TotalMinutes)} minute(s).");
+    }
+
     var request = await context.Request.ReadFromJsonAsync<ChangePasswordRequest>();
     var hash = store.Current.PasswordHash;
     if (hash is null || request?.CurrentPassword is not { } current || !PasswordHasher.Verify(current, hash))
     {
+        throttle.RecordFailure(client);
+        logger.LogWarning("Failed password change (wrong current password) from {Client}", client);
+        await Task.Delay(500);
         return Error(401, "Current password is wrong.");
     }
 
@@ -115,7 +226,10 @@ app.MapPost("/api/auth/change-password", async (HttpContext context, UiConfigSto
         return Error(400, "New password must be at least 8 characters.");
     }
 
+    throttle.RecordSuccess(client);
     store.Update(config => config.PasswordHash = PasswordHasher.Hash(fresh));
+    sessions.RevokeAll(); // every device must sign in again with the new password
+    logger.LogWarning("Dashboard password changed from {Client}; all sessions revoked", client);
     return Results.Json(new { ok = true });
 });
 
@@ -174,7 +288,7 @@ app.MapPost("/api/settings", (HttpContext context, UiConfigStore store, GitHubDa
         return new
         {
             ok = true,
-            fullName = repo.TryGetProperty("full_name", out var name) ? name.GetString() : repository.ToString(),
+            fullName = repo.TryGetProperty("full_name", out var name) ? name.GetString() : repository.ToUrl(),
             isPrivate = repo.TryGetProperty("private", out var isPrivate) && isPrivate.GetBoolean(),
         };
     }));
@@ -300,7 +414,18 @@ app.MapGet("/api/runner/local", (UiConfigStore store, LocalRunnerService runner)
 
 app.MapGet("/api/system", (SystemInfoService system) => Results.Json(system.GetInfo()));
 
-Console.WriteLine($"pinqops-ui listening on http://{host}:{port}");
+Console.WriteLine($"pinqops-ui listening on {(useTls ? "https" : "http")}://{host}:{port}");
+var configStore = app.Services.GetRequiredService<UiConfigStore>();
+if (string.IsNullOrEmpty(configStore.Current.PasswordHash))
+{
+    Console.WriteLine($"first-run setup code: {setupCode}   (required once, to create the dashboard password)");
+}
+
+if (!useTls)
+{
+    Console.WriteLine("note: serving plain HTTP. Bind --host 127.0.0.1 and tunnel in, or pass --cert <pfx> for TLS.");
+}
+
 app.Run();
 
 // ---- Helpers ---------------------------------------------------------------------
@@ -332,15 +457,42 @@ static async Task<IResult> Safe(Func<Task<object?>> action)
 static IResult Error(int statusCode, string message) =>
     Results.Json(new { error = message }, statusCode: statusCode);
 
+static string ClientKey(HttpContext context) =>
+    context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
 static string? ReadBearerToken(HttpContext context)
 {
     var header = context.Request.Headers.Authorization.ToString();
     return header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? header[7..] : null;
 }
 
-static Stream OpenIndexHtml() =>
-    typeof(Program).Assembly.GetManifestResourceStream("index.html")
-    ?? throw new InvalidOperationException("Embedded dashboard page is missing.");
+static byte[] LoadIndexBytes()
+{
+    using var stream = typeof(Program).Assembly.GetManifestResourceStream("index.html")
+        ?? throw new InvalidOperationException("Embedded dashboard page is missing.");
+    using var buffer = new MemoryStream();
+    stream.CopyTo(buffer);
+    return buffer.ToArray();
+}
+
+/// <summary>
+/// CSP source for the page's single inline script block: the SHA-256 of the
+/// exact bytes between <c>&lt;script&gt;</c> and <c>&lt;/script&gt;</c>.
+/// </summary>
+static string HashInlineScript(byte[] indexBytes)
+{
+    var html = Encoding.UTF8.GetString(indexBytes);
+    var start = html.IndexOf("<script>", StringComparison.Ordinal);
+    var end = html.IndexOf("</script>", StringComparison.Ordinal);
+    if (start < 0 || end < 0 || end <= start)
+    {
+        throw new InvalidOperationException("Embedded dashboard page has no inline script to hash.");
+    }
+
+    var script = html[(start + "<script>".Length)..end];
+    var hash = SHA256.HashData(Encoding.UTF8.GetBytes(script));
+    return $"sha256-{Convert.ToBase64String(hash)}";
+}
 
 static string? GetOption(string[] args, string name)
 {

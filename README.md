@@ -44,13 +44,14 @@ sudo chmod +x /usr/local/bin/pinqops-ui
 pinqops-ui        # open http://<server>:7467
 ```
 
-On first visit, create a dashboard password. Then, in **Settings**, paste
-your repository URL and a token — a PAT alone, or a username + token. Use
-`--port <n>` / `--host <addr>` to change where it listens.
+On first visit, enter the **setup code from the server console** and create a
+dashboard password. Then, in **Settings**, paste your repository URL and a
+token — a PAT alone, or a username + token. Use `--port <n>` / `--host <addr>`
+to change where it listens, and `--cert <pfx>` to serve HTTPS.
 
 > Heads-up: the UI opens one inbound port on an otherwise closed server.
 > Keep it off, firewall it, or bind it to `127.0.0.1` and reach it through a
-> tunnel if that matters to you.
+> tunnel if that matters to you. Details: [SECURITY.md](SECURITY.md).
 
 ## CLI
 
