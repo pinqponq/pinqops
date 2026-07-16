@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to a rolling release model (latest `master` only).
 
+## [0.2.1] - 2026-07-15
+
+### Fixed
+
+- **Runner registration failed with "cannot start process './config.sh'".** The
+  installer invoked the runner's `config.sh` by a relative path, but .NET
+  resolves a relative executable against the current process's directory, not the
+  child working directory — so it was not found unless pinqops ran from
+  `/opt/actions-runner`. It is now invoked by its full path. Affected both
+  `pinqops setup` and `pinqops install-runner`.
+- **Registering as root now works.** The installer sets `RUNNER_ALLOW_RUNASROOT=1`
+  (ignored for non-root users), so `config.sh` no longer refuses on a root-only
+  server.
+
 ## [0.2.0] - 2026-07-15
 
 ### Added

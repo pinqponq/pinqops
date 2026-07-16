@@ -41,7 +41,7 @@ public class SetupWizardTests : IDisposable
 
         Assert.True(result);
         Assert.Contains(runner.Invocations, invocation =>
-            invocation.CommandLine.Contains("./config.sh") && invocation.CommandLine.Contains("--token reg-token-from-gh"));
+            invocation.CommandLine.Contains("config.sh") && invocation.CommandLine.Contains("--token reg-token-from-gh"));
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public class SetupWizardTests : IDisposable
                 return new ProcessResult(0, "reg-token", string.Empty);
             }
 
-            return fileName == "./config.sh"
+            return fileName.EndsWith("config.sh")
                 ? new ProcessResult(1, string.Empty, "registration failed")
                 : new ProcessResult(0, string.Empty, string.Empty);
         });

@@ -35,7 +35,7 @@ public class RunnerInstallerTests : IDisposable
         // Extract → configure → install service → start service, in order.
         var commandLines = runner.Invocations.Select(invocation => invocation.CommandLine).ToArray();
         Assert.Contains(commandLines, line => line.StartsWith("tar xzf"));
-        Assert.Contains(commandLines, line => line.Contains("./config.sh") && line.Contains("--token token-123"));
+        Assert.Contains(commandLines, line => line.Contains("config.sh") && line.Contains("--token token-123"));
         Assert.Contains("sudo ./svc.sh install deployer", commandLines);
         Assert.Contains("sudo ./svc.sh start", commandLines);
     }
@@ -44,7 +44,7 @@ public class RunnerInstallerTests : IDisposable
     public async Task InstallAsync_ConfigFailure_StopsAndReturnsFalse()
     {
         var runner = new FakeProcessRunner((fileName, _) =>
-            fileName == "./config.sh"
+            fileName.EndsWith("config.sh")
                 ? new ProcessResult(1, string.Empty, "registration failed")
                 : new ProcessResult(0, string.Empty, string.Empty));
         var downloader = new FakeFileDownloader(createFile: true);

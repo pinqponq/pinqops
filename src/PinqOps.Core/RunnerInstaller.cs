@@ -48,7 +48,16 @@ public sealed class RunnerInstaller
         }
 
         _log?.Invoke($"registering runner '{options.RunnerName}' with labels '{options.Labels}'");
-        if (!await RunAsync("./config.sh", options.ConfigureArguments(), options.InstallDirectory, cancellationToken).ConfigureAwait(false))
+
+        // Let config.sh register when setup runs as root; the runner otherwise
+        // refuses. The variable is ignored for non-root users, and the child
+        // process inherits it.
+        Environment.SetEnvironmentVariable("RUNNER_ALLOW_RUNASROOT", "1");
+
+        // Invoke config.sh by its full path: .NET resolves a relative executable
+        // against the current process's directory, not the child WorkingDirectory,
+        // so "./config.sh" is not found when pinqops runs from another directory.
+        if (!await RunAsync(configScript, options.ConfigureArguments(), options.InstallDirectory, cancellationToken).ConfigureAwait(false))
         {
             return false;
         }
