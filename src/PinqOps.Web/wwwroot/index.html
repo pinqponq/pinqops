@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pinqops — dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23e255a1'/%3E%3Cstop offset='1' stop-color='%237c5cff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Ctext x='16' y='22' font-family='sans-serif' font-size='16' font-weight='800' fill='%23fff' text-anchor='middle'%3Ep%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0b0e14;--bg2:#11151f;--bg3:#171c29;--line:#232a3b;
+  --text:#dbe2f0;--muted:#7c8698;--accent:#e255a1;--accent2:#7c5cff;
+  --ok:#3ecf8e;--warn:#f5b83d;--err:#f4587a;--info:#4da3ff;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--info);text-decoration:none}
+a:hover{text-decoration:underline}
+.hidden{display:none!important}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--bg3);color:var(--text);border-radius:8px;padding:7px 14px;transition:filter .15s}
+button:hover{filter:brightness(1.2)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;font-weight:600}
+button.danger{border-color:var(--err);color:var(--err);background:transparent}
+button.small{padding:3px 9px;font-size:12px;border-radius:6px}
+input,select{font:inherit;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;width:100%}
+input:focus,select:focus{outline:none;border-color:var(--accent2)}
+label{display:block;font-size:12px;color:var(--muted);margin:12px 0 4px;font-weight:600;letter-spacing:.02em}
+code{font-family:var(--mono);font-size:12px;background:var(--bg3);padding:1px 6px;border-radius:5px}
+
+/* lock screen */
+.lock{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:radial-gradient(1200px 600px at 20% -10%,rgba(124,92,255,.18),transparent),
+             radial-gradient(1000px 500px at 90% 110%,rgba(226,85,161,.14),transparent)}
+.lock-card{width:380px;max-width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:32px}
+.logo{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.logo em{font-style:normal;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lock-card p.sub{color:var(--muted);font-size:13px;margin-top:6px}
+.lock-card button{width:100%;margin-top:18px;padding:10px}
+.form-error{color:var(--err);font-size:13px;margin-top:10px;min-height:18px}
+
+/* app shell */
+.app{display:flex;min-height:100vh}
+.sidebar{width:210px;flex:none;background:var(--bg2);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.sidebar .logo{padding:20px 20px 14px}
+.nav{flex:1;overflow-y:auto;padding:6px 10px}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:none;padding:9px 12px;border-radius:8px;color:var(--muted);font-weight:500;margin-bottom:2px}
+.nav button:hover{background:var(--bg3);color:var(--text);filter:none}
+.nav button.active{background:var(--bg3);color:var(--text);box-shadow:inset 2px 0 0 var(--accent)}
+.nav .icon{width:18px;text-align:center;flex:none}
+.side-foot{padding:14px 20px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--line);background:var(--bg2);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.topbar h1{font-size:16px;font-weight:700;margin-right:auto}
+.repo-chip{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.dot.ok{background:var(--ok)}.dot.err{background:var(--err)}.dot.warn{background:var(--warn)}
+.topbar select{width:auto;padding:5px 8px;font-size:12px}
+.content{padding:24px;max-width:1400px;width:100%}
+
+/* cards, grids, tables */
+.grid{display:grid;gap:14px}
+.grid.cards{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h3{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase;margin-bottom:10px}
+.stat{font-size:24px;font-weight:750;letter-spacing:-.02em}
+.stat small{font-size:13px;color:var(--muted);font-weight:500}
+.stat-sub{font-size:12px;color:var(--muted);margin-top:4px}
+.section{margin-top:22px}
+.section-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.section-head h2{font-size:14px;font-weight:700}
+.section-head .spacer{flex:1}
+.tablewrap{overflow-x:auto;background:var(--bg2);border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.015)}
+td.mono{font-family:var(--mono);font-size:12px}
+.empty{padding:26px;text-align:center;color:var(--muted);font-size:13px}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 10px;white-space:nowrap}
+.chip.ok{background:rgba(62,207,142,.12);color:var(--ok)}
+.chip.err{background:rgba(244,88,122,.12);color:var(--err)}
+.chip.warn{background:rgba(245,184,61,.14);color:var(--warn)}
+.chip.info{background:rgba(77,163,255,.12);color:var(--info)}
+.chip.mut{background:rgba(124,134,152,.14);color:var(--muted)}
+.lbl{display:inline-block;font-size:11px;font-family:var(--mono);background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:1px 7px;margin:1px 3px 1px 0}
+
+/* bars */
+.bar{height:8px;border-radius:6px;background:var(--bg3);overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--accent2),var(--accent))}
+
+/* logs */
+.logbox{background:#070a10;border:1px solid var(--line);border-radius:12px;padding:14px;font-family:var(--mono);font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;color:#b9c4d8}
+
+/* toasts */
+#toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:60}
+.toast{background:var(--bg3);border:1px solid var(--line);border-left:3px solid var(--info);border-radius:10px;padding:10px 16px;font-size:13px;max-width:380px;box-shadow:0 8px 30px rgba(0,0,0,.45);animation:pop .18s ease-out}
+.toast.ok{border-left-color:var(--ok)}.toast.err{border-left-color:var(--err)}
+@keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(4,6,10,.7);display:flex;align-items:center;justify-content:center;z-index:50;padding:24px}
+.modal-card{background:var(--bg2);border:1px solid var(--line);border-radius:14px;width:760px;max-width:100%;max-height:86vh;display:flex;flex-direction:column}
+.modal-head{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.modal-head h3{font-size:14px;flex:1}
+.modal-body{padding:18px;overflow:auto}
+.modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--line)}
+
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
+.form-grid .full{grid-column:1/-1}
+.actions-cell{display:flex;gap:5px;flex-wrap:wrap}
+.banner{border:1px solid var(--warn);background:rgba(245,184,61,.08);color:var(--warn);border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:16px}
+.muted{color:var(--muted)}
+.kv{display:grid;grid-template-columns:170px 1fr;gap:6px 14px;font-size:13px}
+.kv dt{color:var(--muted)}
+.kv dd{word-break:break-word}
+@media(max-width:820px){.sidebar{width:60px}.sidebar .logo{padding:16px 0;text-align:center;font-size:14px}.sidebar .logo em{display:none}.nav button span.txt{display:none}.nav button{justify-content:center}.side-foot{display:none}.form-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ============ lock screen (setup / login) ============ -->
+<div id="lock" class="lock hidden">
+  <div class="lock-card">
+    <div class="logo">pinq<em>ops</em></div>
+    <p class="sub" id="lock-sub">Dashboard login</p>
+    <form id="lock-form">
+      <label for="lock-pass">Password</label>
+      <input id="lock-pass" type="password" autocomplete="current-password" required>
+      <div id="lock-pass2-wrap" class="hidden">
+        <label for="lock-pass2">Repeat password</label>
+        <input id="lock-pass2" type="password" autocomplete="new-password">
+      </div>
+      <div class="form-error" id="lock-error"></div>
+      <button class="primary" id="lock-btn" type="submit">Sign in</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============ app shell ============ -->
+<div id="app" class="app hidden">
+  <aside class="sidebar">
+    <div class="logo">pinq<em>ops</em></div>
+    <nav class="nav" id="nav">
+      <button data-view="overview"><span class="icon">◈</span><span class="txt">Overview</span></button>
+      <button data-view="deployments"><span class="icon">⇪</span><span class="txt">Deployments</span></button>
+      <button data-view="runner"><span class="icon">◉</span><span class="txt">Runner</span></button>
+      <button data-view="containers"><span class="icon">▣</span><span class="txt">Containers</span></button>
+      <button data-view="images"><span class="icon">◫</span><span class="txt">Images</span></button>
+      <button data-view="storage"><span class="icon">⛁</span><span class="txt">Storage &amp; Net</span></button>
+      <button data-view="logs"><span class="icon">≣</span><span class="txt">Logs</span></button>
+      <button data-view="system"><span class="icon">⚙</span><span class="txt">System</span></button>
+      <button data-view="settings"><span class="icon">✎</span><span class="txt">Settings</span></button>
+    </nav>
+    <div class="side-foot">pinqops web ui</div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <h1 id="view-title">Overview</h1>
+      <span class="repo-chip"><span class="dot" id="gh-dot"></span><span id="gh-repo-name">not connected</span></span>
+      <select id="refresh-select" title="Auto-refresh">
+        <option value="5000">5s</option>
+        <option value="10000" selected>10s</option>
+        <option value="30000">30s</option>
+        <option value="0">off</option>
+      </select>
+      <button id="btn-refresh" title="Refresh now">↻</button>
+      <button class="primary" id="btn-deploy">Deploy now</button>
+      <button id="btn-logout" title="Sign out">Sign out</button>
+    </header>
+
+    <div class="content">
+      <div id="banner-connect" class="banner hidden">
+        GitHub is not connected — open <a href="#" data-goto="settings">Settings</a> and add your repository URL and token to see runs and runner status.
+      </div>
+
+      <!-- overview -->
+      <section id="view-overview" class="view">
+        <div class="grid cards">
+          <div class="card"><h3>Containers</h3><div class="stat" id="ov-containers">–</div><div class="stat-sub" id="ov-containers-sub"></div></div>
+          <div class="card"><h3>Runner</h3><div class="stat" id="ov-runner">–</div><div class="stat-sub" id="ov-runner-sub"></div></div>
+          <div class="card"><h3>Last runner job</h3><div class="stat" id="ov-lastjob">–</div><div class="stat-sub" id="ov-lastjob-sub"></div></div>
+          <div class="card"><h3>Disk</h3><div class="stat" id="ov-disk">–</div><div class="bar"><i id="ov-disk-bar" style="width:0%"></i></div></div>
+        </div>
+        <div class="section">
+          <div class="section-head"><h2>Compose project</h2><span class="muted" id="ov-compose-file"></span></div>
+          <div class="tablewrap"><table id="ov-compose-table"></table></div>
+        </div>
+        <div class="section">
+          <div class="section-head"><h2>Recent workflow runs</h2><div class="spacer"></div><a href="#" data-goto="deployments">see all →</a></div>
+          <div class="tablewrap"><table id="ov-runs-table"></table></div>
+        </div>
+      </section>
+
+      <!-- deployments -->
+      <section id="view-deployments" class="view hidden">
+        <div class="card" id="lastjob-card" style="margin-bottom:16px">
+          <h3>Runner last executed a job</h3>
+          <div id="lastjob-detail" class="muted">–</div>
+        </div>
+        <div class="section-head"><h2>Workflow runs</h2><div class="spacer"></div><a id="actions-link" href="#" target="_blank" rel="noopener">open GitHub Actions ↗</a></div>
+        <div class="tablewrap"><table id="runs-table"></table></div>
+        <div class="section">
+          <div class="section-head"><h2>Last dashboard deploy</h2></div>
+          <div class="card"><div id="last-local-deploy" class="muted">No deploy has been triggered from this dashboard yet.</div></div>
+        </div>
+      </section>
+
+      <!-- runner -->
+      <section id="view-runner" class="view hidden">
+        <div class="section-head"><h2>GitHub runners (repository)</h2></div>
+        <div class="grid cards" id="runner-cards"></div>
+        <div class="section">
+          <div class="section-head"><h2>Local runner (this machine)</h2></div>
+          <div class="card"><dl class="kv" id="runner-local"></dl></div>
+        </div>
+      </section>
+
+      <!-- containers -->
+      <section id="view-containers" class="view hidden">
+        <div class="tablewrap"><table id="containers-table"></table></div>
+      </section>
+
+      <!-- images -->
+      <section id="view-images" class="view hidden">
+        <div class="section-head"><h2>Images</h2><div class="spacer"></div><button class="small danger" id="btn-prune">Prune dangling images</button></div>
+        <div class="tablewrap"><table id="images-table"></table></div>
+      </section>
+
+      <!-- storage & networks -->
+      <section id="view-storage" class="view hidden">
+        <div class="section-head"><h2>Docker disk usage</h2></div>
+        <div class="tablewrap"><table id="df-table"></table></div>
+        <div class="section"><div class="section-head"><h2>Volumes</h2></div>
+        <div class="tablewrap"><table id="volumes-table"></table></div></div>
+        <div class="section"><div class="section-head"><h2>Networks</h2></div>
+        <div class="tablewrap"><table id="networks-table"></table></div></div>
+      </section>
+
+      <!-- logs -->
+      <section id="view-logs" class="view hidden">
+        <div class="section-head">
+          <select id="log-container" style="width:auto;min-width:220px"></select>
+          <select id="log-tail" style="width:auto"><option>100</option><option selected>200</option><option>500</option><option>1000</option></select>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px"><input type="checkbox" id="log-follow" style="width:auto" checked> follow</label>
+          <div class="spacer"></div>
+          <button class="small" id="btn-log-download">Download</button>
+        </div>
+        <div class="logbox" id="logbox">select a container…</div>
+      </section>
+
+      <!-- system -->
+      <section id="view-system" class="view hidden">
+        <div class="grid cards">
+          <div class="card"><h3>Memory</h3><div class="stat" id="sys-mem">–</div><div class="bar"><i id="sys-mem-bar" style="width:0%"></i></div></div>
+          <div class="card"><h3>Disk /</h3><div class="stat" id="sys-disk">–</div><div class="bar"><i id="sys-disk-bar" style="width:0%"></i></div></div>
+          <div class="card"><h3>Load average</h3><div class="stat" id="sys-load">–</div><div class="stat-sub">1m / 5m / 15m</div></div>
+          <div class="card"><h3>Uptime</h3><div class="stat" id="sys-uptime">–</div></div>
+        </div>
+        <div class="section"><div class="section-head"><h2>Host</h2></div>
+          <div class="card"><dl class="kv" id="sys-host"></dl></div></div>
+        <div class="section"><div class="section-head"><h2>Docker</h2></div>
+          <div class="card"><dl class="kv" id="sys-docker"></dl></div></div>
+      </section>
+
+      <!-- settings -->
+      <section id="view-settings" class="view hidden">
+        <div class="card">
+          <h3>GitHub connection</h3>
+          <p class="muted" style="font-size:13px">Paste the repository URL and a token. A fine-grained PAT needs <code>Actions: read</code> (and <code>Administration: read</code> to list runners); a classic PAT needs <code>repo</code>. With a username set, the token is sent as Basic auth — leave it empty to send the PAT as Bearer.</p>
+          <form id="settings-form" class="form-grid">
+            <div class="full"><label for="set-repo">Repository URL</label>
+            <input id="set-repo" placeholder="https://github.com/owner/repo" required></div>
+            <div><label for="set-user">GitHub username <span class="muted">(optional)</span></label>
+            <input id="set-user" autocomplete="username" placeholder="octocat"></div>
+            <div><label for="set-pat">Token / PAT <span class="muted" id="set-pat-hint">(required)</span></label>
+            <input id="set-pat" type="password" autocomplete="off" placeholder="ghp_… / github_pat_…"></div>
+            <div><label for="set-compose">Compose file path</label>
+            <input id="set-compose" placeholder="/opt/pinqops/docker-compose.yml"></div>
+            <div><label for="set-runnerdir">Runner install directory</label>
+            <input id="set-runnerdir" placeholder="/opt/actions-runner"></div>
+            <div class="full" style="display:flex;gap:10px;margin-top:16px">
+              <button class="primary" type="submit">Save &amp; test connection</button>
+              <button type="button" class="danger" id="btn-disconnect">Disconnect</button>
+            </div>
+          </form>
+          <div class="stat-sub" id="settings-meta" style="margin-top:10px"></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>Registry login (ghcr.io)</h3>
+          <p class="muted" style="font-size:13px">Log the server's Docker daemon into a registry so <em>Deploy now</em> can pull private images outside a workflow run.</p>
+          <form id="registry-form" class="form-grid">
+            <div><label for="reg-registry">Registry</label><input id="reg-registry" value="ghcr.io"></div>
+            <div><label for="reg-user">Username</label><input id="reg-user" placeholder="octocat"></div>
+            <div class="full"><label for="reg-token">Token</label><input id="reg-token" type="password" autocomplete="off" placeholder="PAT with read:packages"></div>
+            <div class="full" style="margin-top:14px"><button type="submit">docker login</button></div>
+          </form>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3>Dashboard password</h3>
+          <form id="password-form" class="form-grid">
+            <div><label for="pw-current">Current password</label><input id="pw-current" type="password" autocomplete="current-password" required></div>
+            <div><label for="pw-new">New password (min 8)</label><input id="pw-new" type="password" autocomplete="new-password" required></div>
+            <div class="full" style="margin-top:14px"><button type="submit">Change password</button></div>
+          </form>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div id="toasts"></div>
+
+<!-- modal -->
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h3 id="modal-title"></h3><button class="small" id="modal-x">✕</button></div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-foot" id="modal-foot"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let token=localStorage.getItem("pinqops.token")||"";
+let view="overview", refreshMs=10000, timer=null, logTimer=null, needsSetup=false, ghConfigured=false;
+const VIEW_TITLES={overview:"Overview",deployments:"Deployments",runner:"Runner",containers:"Containers",images:"Images",storage:"Storage & Networks",logs:"Logs",system:"System",settings:"Settings"};
+
+/* ---------- api ---------- */
+async function api(path,opts={}){
+  const headers=Object.assign({"Content-Type":"application/json"},opts.headers||{});
+  if(token)headers.Authorization="Bearer "+token;
+  const res=await fetch(path,Object.assign({},opts,{headers}));
+  if(res.status===401&&!path.startsWith("/api/auth/")){showLock(false);throw new Error("unauthorized");}
+  const text=await res.text();
+  let data={};try{data=text?JSON.parse(text):{}}catch{data={raw:text}}
+  if(!res.ok)throw new Error(data.error||("HTTP "+res.status));
+  return data;
+}
+
+/* ---------- toasts / modal ---------- */
+function toast(msg,kind){const t=document.createElement("div");t.className="toast "+(kind||"");t.textContent=msg;$("#toasts").appendChild(t);setTimeout(()=>t.remove(),5000);}
+function openModal(title,bodyHtml,buttons){
+  $("#modal-title").textContent=title;$("#modal-body").innerHTML=bodyHtml;
+  const foot=$("#modal-foot");foot.innerHTML="";
+  (buttons||[{label:"Close"}]).forEach(b=>{const btn=document.createElement("button");btn.textContent=b.label;if(b.primary)btn.className="primary";if(b.danger)btn.className="danger";btn.onclick=()=>{if(b.onClick)b.onClick();else closeModal();};foot.appendChild(btn);});
+  $("#modal").classList.remove("hidden");
+}
+function closeModal(){$("#modal").classList.add("hidden");}
+$("#modal-x").onclick=closeModal;
+$("#modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal();});
+
+/* ---------- formatting ---------- */
+function timeAgo(iso){if(!iso)return"–";const d=new Date(iso);if(isNaN(d))return esc(iso);const s=(Date.now()-d.getTime())/1000;
+  if(s<0)return d.toLocaleString();if(s<60)return Math.floor(s)+"s ago";if(s<3600)return Math.floor(s/60)+"m ago";
+  if(s<86400)return Math.floor(s/3600)+"h "+Math.floor(s%3600/60)+"m ago";return Math.floor(s/86400)+"d ago";}
+function fullTime(iso){if(!iso)return"–";const d=new Date(iso);return isNaN(d)?esc(iso):d.toLocaleString();}
+function fmtBytes(n){if(n==null)return"–";const u=["B","KB","MB","GB","TB"];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(n<10&&i>0?1:0)+" "+u[i];}
+function fmtDur(sec){if(sec==null)return"–";sec=Math.floor(sec);const d=Math.floor(sec/86400),h=Math.floor(sec%86400/3600),m=Math.floor(sec%3600/60);
+  return d>0?`${d}d ${h}h`:h>0?`${h}h ${m}m`:`${m}m`;}
+function runChip(status,conclusion){
+  if(status&&status!=="completed")return`<span class="chip info">● ${esc(status.replace(/_/g," "))}</span>`;
+  const map={success:["ok","✓ success"],failure:["err","✕ failure"],cancelled:["mut","⊘ cancelled"],skipped:["mut","↷ skipped"],timed_out:["err","⏱ timed out"],action_required:["warn","! action required"],neutral:["mut","neutral"]};
+  const[k,l]=map[conclusion]||["mut",conclusion||"unknown"];return`<span class="chip ${k}">${esc(l)}</span>`;}
+function stateChip(state){const s=(state||"").toLowerCase();
+  const k=s==="running"?"ok":(s==="paused"||s==="restarting")?"warn":(s==="exited"||s==="dead")?"err":"mut";
+  return`<span class="chip ${k}">${esc(state||"?")}</span>`;}
+function table(el,heads,rows,emptyMsg){
+  if(!rows.length){el.innerHTML=`<tr><td class="empty">${esc(emptyMsg||"Nothing here.")}</td></tr>`;return;}
+  el.innerHTML="<thead><tr>"+heads.map(h=>`<th>${h}</th>`).join("")+"</tr></thead><tbody>"+rows.map(r=>"<tr>"+r.map(c=>`<td${c&&c.cls?` class="${c.cls}"`:""}>${c&&c.h!==undefined?c.h:c}</td>`).join("")+"</tr>").join("")+"</tbody>";}
+
+/* ---------- lock screen ---------- */
+function showLock(setup){
+  needsSetup=setup;
+  $("#app").classList.add("hidden");$("#lock").classList.remove("hidden");
+  $("#lock-sub").textContent=setup?"First run — create the dashboard password.":"Dashboard login";
+  $("#lock-pass2-wrap").classList.toggle("hidden",!setup);
+  $("#lock-btn").textContent=setup?"Create password":"Sign in";
+  $("#lock-error").textContent="";$("#lock-pass").value="";$("#lock-pass2").value="";
+  $("#lock-pass").focus();
+}
+$("#lock-form").addEventListener("submit",async e=>{
+  e.preventDefault();const err=$("#lock-error");err.textContent="";
+  const pass=$("#lock-pass").value;
+  try{
+    if(needsSetup){
+      if(pass.length<8){err.textContent="At least 8 characters.";return;}
+      if(pass!==$("#lock-pass2").value){err.textContent="Passwords do not match.";return;}
+      const r=await api("/api/auth/setup",{method:"POST",body:JSON.stringify({password:pass})});
+      token=r.token;
+    }else{
+      const r=await api("/api/auth/login",{method:"POST",body:JSON.stringify({password:pass})});
+      token=r.token;
+    }
+    localStorage.setItem("pinqops.token",token);
+    await enterApp();
+  }catch(ex){err.textContent=ex.message;}
+});
+
+/* ---------- shell ---------- */
+async function enterApp(){
+  $("#lock").classList.add("hidden");$("#app").classList.remove("hidden");
+  await loadSettingsIntoForm();
+  setView(ghConfigured?view:"settings");
+}
+function setView(v){
+  view=v;$("#view-title").textContent=VIEW_TITLES[v]||v;
+  document.querySelectorAll(".view").forEach(s=>s.classList.add("hidden"));
+  $("#view-"+v).classList.remove("hidden");
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
+  if(v!=="logs"&&logTimer){clearInterval(logTimer);logTimer=null;}
+  refresh();
+}
+$("#nav").addEventListener("click",e=>{const b=e.target.closest("button[data-view]");if(b)setView(b.dataset.view);});
+document.addEventListener("click",e=>{const g=e.target.closest("[data-goto]");if(g){e.preventDefault();setView(g.dataset.goto);}});
+$("#btn-refresh").onclick=()=>refresh();
+$("#refresh-select").onchange=e=>{refreshMs=+e.target.value;armTimer();};
+$("#btn-logout").onclick=async()=>{try{await api("/api/auth/logout",{method:"POST"});}catch{}token="";localStorage.removeItem("pinqops.token");showLock(false);};
+function armTimer(){if(timer)clearInterval(timer);if(refreshMs>0)timer=setInterval(()=>refresh(true),refreshMs);}
+armTimer();
+
+async function refresh(quiet){
+  try{
+    if(view==="overview")await loadOverview();
+    else if(view==="deployments")await loadDeployments();
+    else if(view==="runner")await loadRunner();
+    else if(view==="containers")await loadContainers();
+    else if(view==="images")await loadImages();
+    else if(view==="storage")await loadStorage();
+    else if(view==="logs")await loadLogsView();
+    else if(view==="system")await loadSystem();
+  }catch(ex){if(!quiet&&ex.message!=="unauthorized")toast(ex.message,"err");}
+}
+
+/* ---------- github state chip ---------- */
+function setGhChip(name,ok){
+  $("#gh-repo-name").textContent=name||"not connected";
+  const dot=$("#gh-dot");dot.className="dot "+(name?(ok?"ok":"warn"):"");
+  $("#banner-connect").classList.toggle("hidden",!!name);
+}
+
+/* ---------- overview ---------- */
+let ghCache=null,ghCacheAt=0;
+async function githubOverview(force){
+  if(!ghConfigured)return null;
+  if(!force&&ghCache&&Date.now()-ghCacheAt<8000)return ghCache;
+  ghCache=await api("/api/github/overview");ghCacheAt=Date.now();
+  setGhChip(ghCache.repo.fullName,true);
+  return ghCache;
+}
+async function loadOverview(){
+  const[containersR,composeR,systemR,ghR]=await Promise.allSettled([
+    api("/api/docker/containers"),api("/api/compose"),api("/api/system"),githubOverview()]);
+  if(containersR.status==="fulfilled"){
+    const items=containersR.value.items;
+    const running=items.filter(c=>(c.State||"").toLowerCase()==="running").length;
+    $("#ov-containers").innerHTML=`${running}<small> / ${items.length} running</small>`;
+    const bad=items.filter(c=>["exited","dead"].includes((c.State||"").toLowerCase())).length;
+    $("#ov-containers-sub").textContent=bad?`${bad} stopped`:"all good";
+  }else{$("#ov-containers").textContent="?";$("#ov-containers-sub").textContent=containersR.reason.message;}
+  if(systemR.status==="fulfilled"){
+    const s=systemR.value;
+    if(s.diskTotalBytes){const used=s.diskTotalBytes-s.diskFreeBytes,pct=Math.round(used/s.diskTotalBytes*100);
+      $("#ov-disk").innerHTML=`${pct}%<small> of ${fmtBytes(s.diskTotalBytes)}</small>`;$("#ov-disk-bar").style.width=pct+"%";}
+  }
+  if(ghR.status==="fulfilled"&&ghR.value){
+    const gh=ghR.value;
+    const online=gh.runners.filter(r=>r.status==="online");
+    $("#ov-runner").innerHTML=online.length?`<span style="color:var(--ok)">online</span>`:(gh.runners.length?`<span style="color:var(--err)">offline</span>`:"none");
+    $("#ov-runner-sub").textContent=gh.runners.length?`${online.length}/${gh.runners.length} online${online.some(r=>r.busy)?" · busy now":""}`:"no runners registered";
+    const j=gh.lastRunnerJob;
+    $("#ov-lastjob").textContent=j?timeAgo(j.completedAt||j.startedAt):"never";
+    $("#ov-lastjob-sub").textContent=j?`${j.workflowName} #${j.runNumber} · ${j.conclusion||j.status}`:"no self-hosted job found in recent runs";
+    renderRunsTable($("#ov-runs-table"),gh.runs.slice(0,5));
+  }else if(ghConfigured&&ghR.status==="rejected"){setGhChip($("#gh-repo-name").textContent,false);}
+  if(!ghConfigured){$("#ov-runner").textContent="–";$("#ov-runner-sub").textContent="connect GitHub in Settings";
+    $("#ov-lastjob").textContent="–";$("#ov-lastjob-sub").textContent="connect GitHub in Settings";
+    table($("#ov-runs-table"),[],[], "Connect GitHub to see workflow runs.");}
+  if(composeR.status==="fulfilled"){
+    const c=composeR.value;$("#ov-compose-file").textContent=c.composeFile;
+    if(!c.exists){table($("#ov-compose-table"),[],[],`Compose file not found at ${c.composeFile} — set the path in Settings.`);}
+    else table($("#ov-compose-table"),["Service","Image","State","Status","Ports"],
+      c.items.map(s=>[esc(s.Service||s.Name),{h:esc(s.Image||""),cls:"mono"},stateChip(s.State),esc(s.Status||""),
+        {h:esc((s.Publishers||[]).map(p=>`${p.PublishedPort||""}→${p.TargetPort}/${p.Protocol}`).join(", ")||s.Ports||""),cls:"mono"}]),
+      "No services are up in this compose project.");
+  }else table($("#ov-compose-table"),[],[],composeR.reason.message);
+}
+
+/* ---------- deployments ---------- */
+function renderRunsTable(el,runs){
+  table(el,["Run","Workflow","Commit","Branch","Trigger","Status","Started","Duration",""],
+    runs.map(r=>{
+      const dur=r.runStartedAt&&r.updatedAt?fmtDur((new Date(r.updatedAt)-new Date(r.runStartedAt))/1000):"–";
+      return[`#${r.runNumber}`,esc(r.workflowName||""),esc(r.displayTitle||""),
+        {h:`<span class="lbl">${esc(r.branch||"")}</span>`},esc(r.event||""),runChip(r.status,r.conclusion),
+        {h:`<span title="${fullTime(r.runStartedAt||r.createdAt)}">${timeAgo(r.runStartedAt||r.createdAt)}</span>`},dur,
+        {h:`<a href="${esc(r.htmlUrl)}" target="_blank" rel="noopener">view ↗</a>`}];}),
+    "No workflow runs yet.");
+}
+async function loadDeployments(){
+  const gh=await githubOverview();
+  if(!gh){table($("#runs-table"),[],[],"Connect GitHub in Settings first.");return;}
+  $("#actions-link").href=gh.repo.htmlUrl+"/actions";
+  renderRunsTable($("#runs-table"),gh.runs);
+  const j=gh.lastRunnerJob;
+  $("#lastjob-detail").innerHTML=j
+    ?`<div class="stat" style="font-size:19px;margin-bottom:6px">${timeAgo(j.completedAt||j.startedAt)} ${runChip(j.status,j.conclusion)}</div>
+      <div class="kv"><dt>Workflow</dt><dd>${esc(j.workflowName)} #${j.runNumber} — job <b>${esc(j.jobName)}</b></dd>
+      <dt>Runner</dt><dd>${esc(j.runnerName||"?")} ${(j.labels||[]).map(l=>`<span class="lbl">${esc(l)}</span>`).join("")}</dd>
+      <dt>Started</dt><dd>${fullTime(j.startedAt)}</dd><dt>Finished</dt><dd>${fullTime(j.completedAt)}</dd>
+      <dt>Link</dt><dd><a href="${esc(j.htmlUrl)}" target="_blank" rel="noopener">open job on GitHub ↗</a></dd></div>`
+    :"No job on a self-hosted runner was found in the recent runs.";
+  const s=await api("/api/settings");
+  if(s.lastDeploy)$("#last-local-deploy").innerHTML=`${s.lastDeploy.succeeded?'<span class="chip ok">✓ success</span>':'<span class="chip err">✕ failed</span>'} <span title="${fullTime(s.lastDeploy.at)}">${timeAgo(s.lastDeploy.at)}</span> — triggered from this dashboard`;
+}
+
+/* ---------- runner ---------- */
+async function loadRunner(){
+  const cards=$("#runner-cards");
+  try{
+    const gh=await githubOverview();
+    if(!gh)cards.innerHTML=`<div class="card muted">Connect GitHub in Settings to list repository runners.</div>`;
+    else if(!gh.runners.length)cards.innerHTML=`<div class="card muted">No self-hosted runners are registered on ${esc(gh.repo.fullName)}. Run <code>pinqops setup</code> on the server.</div>`;
+    else cards.innerHTML=gh.runners.map(r=>`<div class="card">
+      <h3>${esc(r.name)}</h3>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <span class="chip ${r.status==="online"?"ok":"err"}">${esc(r.status)}</span>
+        ${r.busy?'<span class="chip warn">busy</span>':'<span class="chip mut">idle</span>'}
+        <span class="chip mut">${esc(r.os||"?")}</span></div>
+      <div>${(r.labels||[]).map(l=>`<span class="lbl">${esc(l)}</span>`).join("")}</div></div>`).join("");
+  }catch(ex){cards.innerHTML=`<div class="card muted">${esc(ex.message)}</div>`;}
+  try{
+    const l=await api("/api/runner/local");
+    const rows=[["Installed",l.installed?"yes":"no (directory "+esc(l.runnerDirectory)+" not found)"],
+      ["Directory",esc(l.runnerDirectory)],["Agent name",esc(l.agentName||"–")],["Registered to",esc(l.gitHubUrl||"–")],
+      ["Service",l.service?`${esc(l.service.unit)} — <span class="chip ${l.service.activeState==="active"?"ok":"err"}">${esc(l.service.activeState||"?")}/${esc(l.service.subState||"?")}</span>${l.service.since?" since "+esc(l.service.since):""}`:"not found (systemd unavailable or service not installed)"],
+      ["Last job executed",l.lastWorkerLogAt?`${timeAgo(l.lastWorkerLogAt)} <span class="muted">(${fullTime(l.lastWorkerLogAt)})</span>`:"never (no Worker logs)"],
+      ["Runner process log",l.lastRunnerLogAt?timeAgo(l.lastRunnerLogAt):"–"]];
+    $("#runner-local").innerHTML=rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("");
+  }catch(ex){$("#runner-local").innerHTML=`<dt>Error</dt><dd>${esc(ex.message)}</dd>`;}
+}
+
+/* ---------- containers ---------- */
+async function loadContainers(){
+  const[psR,statsR]=await Promise.allSettled([api("/api/docker/containers"),api("/api/docker/stats")]);
+  if(psR.status==="rejected"){table($("#containers-table"),[],[],psR.reason.message);return;}
+  const stats={};
+  if(statsR.status==="fulfilled")statsR.value.items.forEach(s=>{stats[s.Name]=s;stats[s.ID]=s;stats[s.Container]=s;});
+  table($("#containers-table"),["Name","Image","State","Status","Ports","CPU","Memory","Actions"],
+    psR.value.items.map(c=>{
+      const name=(c.Names||"").split(",")[0];const st=stats[name]||stats[(c.ID||"").slice(0,12)]||{};
+      const running=(c.State||"").toLowerCase()==="running";
+      return[{h:`<b>${esc(name)}</b>`},{h:esc(c.Image||""),cls:"mono"},stateChip(c.State),esc(c.Status||""),
+        {h:esc(c.Ports||""),cls:"mono"},esc(st.CPUPerc||"–"),esc(st.MemUsage||"–"),
+        {h:`<div class="actions-cell">
+          ${running?`<button class="small" data-act="stop" data-id="${esc(name)}">stop</button>
+                     <button class="small" data-act="restart" data-id="${esc(name)}">restart</button>`
+                   :`<button class="small" data-act="start" data-id="${esc(name)}">start</button>`}
+          <button class="small" data-logs="${esc(name)}">logs</button>
+          <button class="small" data-inspect="${esc(name)}">inspect</button></div>`}];}),
+    "No containers.");
+}
+$("#containers-table").addEventListener("click",async e=>{
+  const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.act){
+    b.disabled=true;
+    try{await api(`/api/docker/containers/${encodeURIComponent(b.dataset.id)}/action`,{method:"POST",body:JSON.stringify({action:b.dataset.act})});
+      toast(`${b.dataset.act} ${b.dataset.id} — ok`,"ok");await loadContainers();}
+    catch(ex){toast(ex.message,"err");b.disabled=false;}
+  }else if(b.dataset.logs){pendingLogTarget=b.dataset.logs;setView("logs");}
+  else if(b.dataset.inspect){
+    try{const r=await api(`/api/docker/containers/${encodeURIComponent(b.dataset.inspect)}/inspect`);
+      openModal("inspect: "+b.dataset.inspect,`<div class="logbox" style="max-height:62vh">${esc(JSON.stringify(r.data,null,2))}</div>`);}
+    catch(ex){toast(ex.message,"err");}
+  }
+});
+
+/* ---------- images / storage ---------- */
+async function loadImages(){
+  try{const r=await api("/api/docker/images");
+    table($("#images-table"),["Repository","Tag","Image ID","Created","Size"],
+      r.items.map(i=>[{h:esc(i.Repository||""),cls:"mono"},{h:`<span class="lbl">${esc(i.Tag||"")}</span>`},
+        {h:esc((i.ID||"").replace("sha256:","").slice(0,12)),cls:"mono"},esc(i.CreatedSince||""),esc(i.Size||"")]),
+      "No images.");}
+  catch(ex){table($("#images-table"),[],[],ex.message);}
+}
+$("#btn-prune").onclick=()=>openModal("Prune images","Remove all dangling images (<code>docker image prune -f</code>)?",[
+  {label:"Cancel"},{label:"Prune",danger:true,onClick:async()=>{closeModal();
+    try{const r=await api("/api/docker/prune",{method:"POST"});toast(r.output||"pruned","ok");loadImages();}
+    catch(ex){toast(ex.message,"err");}}}]);
+async function loadStorage(){
+  const[dfR,volR,netR]=await Promise.allSettled([api("/api/docker/df"),api("/api/docker/volumes"),api("/api/docker/networks")]);
+  if(dfR.status==="fulfilled")table($("#df-table"),["Type","Total","Active","Size","Reclaimable"],
+    dfR.value.items.map(d=>[esc(d.Type||""),esc(String(d.TotalCount??"")),esc(String(d.Active??"")),esc(d.Size||""),esc(d.Reclaimable||"")]),"–");
+  else table($("#df-table"),[],[],dfR.reason.message);
+  if(volR.status==="fulfilled")table($("#volumes-table"),["Name","Driver","Scope","Mountpoint"],
+    volR.value.items.map(v=>[{h:esc(v.Name||""),cls:"mono"},esc(v.Driver||""),esc(v.Scope||""),{h:esc(v.Mountpoint||""),cls:"mono"}]),"No volumes.");
+  else table($("#volumes-table"),[],[],volR.reason.message);
+  if(netR.status==="fulfilled")table($("#networks-table"),["Name","ID","Driver","Scope","Internal"],
+    netR.value.items.map(n=>[esc(n.Name||""),{h:esc((n.ID||"").slice(0,12)),cls:"mono"},esc(n.Driver||""),esc(n.Scope||""),esc(String(n.Internal??""))]),"No networks.");
+  else table($("#networks-table"),[],[],netR.reason.message);
+}
+
+/* ---------- logs ---------- */
+let pendingLogTarget=null;
+async function loadLogsView(){
+  try{
+    const r=await api("/api/docker/containers");
+    const sel=$("#log-container");const prev=pendingLogTarget||sel.value;pendingLogTarget=null;
+    sel.innerHTML=r.items.map(c=>{const n=(c.Names||"").split(",")[0];return`<option>${esc(n)}</option>`;}).join("");
+    if(prev&&[...sel.options].some(o=>o.value===prev))sel.value=prev;
+    if(sel.value)await fetchLogs();
+    if(logTimer)clearInterval(logTimer);
+    logTimer=setInterval(()=>{if($("#log-follow").checked&&view==="logs")fetchLogs();},5000);
+  }catch(ex){$("#logbox").textContent=ex.message;}
+}
+async function fetchLogs(){
+  const name=$("#log-container").value;if(!name)return;
+  try{
+    const r=await api(`/api/docker/containers/${encodeURIComponent(name)}/logs?tail=${$("#log-tail").value}`);
+    const box=$("#logbox");const atBottom=box.scrollTop+box.clientHeight>=box.scrollHeight-30;
+    box.textContent=r.logs||"(no output)";
+    if(atBottom||$("#log-follow").checked)box.scrollTop=box.scrollHeight;
+  }catch(ex){$("#logbox").textContent=ex.message;}
+}
+$("#log-container").onchange=fetchLogs;
+$("#log-tail").onchange=fetchLogs;
+$("#btn-log-download").onclick=()=>{
+  const blob=new Blob([$("#logbox").textContent],{type:"text/plain"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download=($("#log-container").value||"container")+".log";a.click();URL.revokeObjectURL(a.href);};
+
+/* ---------- system ---------- */
+async function loadSystem(){
+  try{
+    const s=await api("/api/system");
+    if(s.memTotalKb){const used=s.memTotalKb-(s.memAvailableKb||0),pct=Math.round(used/s.memTotalKb*100);
+      $("#sys-mem").innerHTML=`${pct}%<small> ${fmtBytes(used*1024)} / ${fmtBytes(s.memTotalKb*1024)}</small>`;$("#sys-mem-bar").style.width=pct+"%";}
+    if(s.diskTotalBytes){const used=s.diskTotalBytes-s.diskFreeBytes,pct=Math.round(used/s.diskTotalBytes*100);
+      $("#sys-disk").innerHTML=`${pct}%<small> ${fmtBytes(used)} / ${fmtBytes(s.diskTotalBytes)}</small>`;$("#sys-disk-bar").style.width=pct+"%";}
+    $("#sys-load").textContent=s.loadAverage?s.loadAverage.map(l=>l.toFixed(2)).join(" / "):"–";
+    $("#sys-uptime").textContent=fmtDur(s.uptimeSeconds);
+    $("#sys-host").innerHTML=[["Hostname",esc(s.hostname)],["OS",esc(s.os)],["Kernel",esc(s.kernel)],["Architecture",esc(s.architecture)],["Server time (UTC)",fullTime(s.serverTimeUtc)]]
+      .map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("");
+  }catch(ex){toast(ex.message,"err");}
+  try{
+    const v=await api("/api/docker/version");
+    const c=v.version&&v.version.Client,srv=v.version&&v.version.Server;
+    $("#sys-docker").innerHTML=[
+      ["Client",c?`${esc(c.Version)} (api ${esc(c.ApiVersion||"?")})`:"–"],
+      ["Server",srv?`${esc((srv.Platform&&srv.Platform.Name)||"docker")} ${esc(srv.Version||"")}`:"– (daemon unreachable?)"]]
+      .map(([k,v2])=>`<dt>${k}</dt><dd>${v2}</dd>`).join("");
+  }catch(ex){$("#sys-docker").innerHTML=`<dt>Docker</dt><dd>${esc(ex.message)}</dd>`;}
+}
+
+/* ---------- settings ---------- */
+async function loadSettingsIntoForm(){
+  try{
+    const s=await api("/api/settings");
+    $("#set-repo").value=s.repoUrl||"";
+    $("#set-user").value=s.username||"";
+    $("#set-compose").value=s.composeFile||"";
+    $("#set-runnerdir").value=s.runnerDirectory||"";
+    $("#set-pat").placeholder=s.patMasked?`saved: ${s.patMasked} — paste to replace`:"ghp_… / github_pat_…";
+    $("#set-pat-hint").textContent=s.patMasked?"(leave empty to keep saved token)":"(required)";
+    $("#settings-meta").textContent=`Config file: ${s.configPath}`;
+    ghConfigured=!!(s.repoUrl&&s.patMasked);
+    if(ghConfigured){const m=(s.repoUrl.match(/github[^/]*\/(.+)$/)||[])[1];setGhChip(m||s.repoUrl,true);}
+    else setGhChip(null);
+  }catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
+}
+$("#settings-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  try{
+    const r=await api("/api/settings",{method:"POST",body:JSON.stringify({
+      repoUrl:$("#set-repo").value.trim(),username:$("#set-user").value.trim()||null,
+      pat:$("#set-pat").value.trim()||null,composeFile:$("#set-compose").value.trim()||null,
+      runnerDirectory:$("#set-runnerdir").value.trim()||null})});
+    $("#set-pat").value="";ghCache=null;
+    toast(`Connected to ${r.fullName}${r.isPrivate?" (private)":""}`,"ok");
+    await loadSettingsIntoForm();
+  }catch(ex){toast(ex.message,"err");}
+});
+$("#btn-disconnect").onclick=()=>openModal("Disconnect GitHub","Remove the stored repository URL and token from this server?",[
+  {label:"Cancel"},{label:"Disconnect",danger:true,onClick:async()=>{closeModal();
+    try{await api("/api/settings/disconnect",{method:"POST"});ghCache=null;toast("Disconnected","ok");await loadSettingsIntoForm();}
+    catch(ex){toast(ex.message,"err");}}}]);
+$("#registry-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  try{const r=await api("/api/docker/login",{method:"POST",body:JSON.stringify({
+      registry:$("#reg-registry").value.trim(),username:$("#reg-user").value.trim(),token:$("#reg-token").value})});
+    $("#reg-token").value="";toast(r.output||"login ok","ok");}
+  catch(ex){toast(ex.message,"err");}
+});
+$("#password-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  try{await api("/api/auth/change-password",{method:"POST",body:JSON.stringify({
+      currentPassword:$("#pw-current").value,newPassword:$("#pw-new").value})});
+    $("#pw-current").value="";$("#pw-new").value="";toast("Password changed","ok");}
+  catch(ex){toast(ex.message,"err");}
+});
+
+/* ---------- deploy ---------- */
+$("#btn-deploy").onclick=()=>openModal("Deploy now",
+  "Run <code>docker compose pull && up -d</code> for the configured compose project? The app restarts with the newest image.",[
+  {label:"Cancel"},{label:"Deploy",primary:true,onClick:async()=>{
+    $("#modal-body").innerHTML='<div class="logbox">deploying…</div>';$("#modal-foot").innerHTML="";
+    try{const r=await api("/api/deploy",{method:"POST"});
+      $("#modal-body").innerHTML=`<div style="margin-bottom:10px">${r.succeeded?'<span class="chip ok">✓ deploy succeeded</span>':'<span class="chip err">✕ deploy failed</span>'}</div><div class="logbox">${esc(r.log||"(no output)")}</div>`;
+    }catch(ex){$("#modal-body").innerHTML=`<div class="logbox">${esc(ex.message)}</div>`;}
+    $("#modal-foot").innerHTML="";const b=document.createElement("button");b.textContent="Close";b.onclick=closeModal;$("#modal-foot").appendChild(b);
+    refresh(true);}}]);
+
+/* ---------- boot ---------- */
+(async function boot(){
+  try{
+    const s=await api("/api/auth/state");
+    ghConfigured=s.githubConfigured;
+    if(s.needsSetup){showLock(true);return;}
+    if(!token){showLock(false);return;}
+    try{await enterApp();}catch{showLock(false);}
+  }catch(ex){
+    document.body.innerHTML=`<div class="lock"><div class="lock-card"><div class="logo">pinq<em>ops</em></div><p class="sub">Cannot reach the API: ${esc(ex.message)}</p></div></div>`;
+  }
+})();
+</script>
+</body>
+</html>

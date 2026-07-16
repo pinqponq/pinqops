@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to a rolling release model (latest `master` only).
 
+## [Unreleased]
+
+### Added
+
+- **`pinqops-ui`** (`src/PinqOps.Web`) — an optional, self-contained web
+  dashboard for the server (default port `7467`). Password-protected; connect
+  it to GitHub with the repo URL plus a PAT (or username + token). Shows
+  containers (start/stop/restart/logs/inspect/stats), images, volumes,
+  networks, Docker disk usage, the compose project, workflow runs, GitHub
+  runner status and the last job the self-hosted runner executed, the local
+  runner's systemd service, host health (disk/memory/load/uptime), and a
+  one-click deploy. Ships as a single binary attached to releases; the CLI
+  works fully without it.
+
+### Changed
+
+- **README** compressed further; a web UI is no longer out of scope.
+- **release.yml** now also publishes the `pinqops-ui` binary.
+
 ## [0.2.1] - 2026-07-15
 
 ### Fixed
