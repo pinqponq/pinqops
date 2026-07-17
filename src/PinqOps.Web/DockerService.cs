@@ -135,6 +135,64 @@ public sealed class DockerService
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
+    /// <summary>Runs a catalog app as a labeled, named container.</summary>
+    public async Task<string> InstallAppAsync(AppSpec app, int? hostPortOverride)
+    {
+        if (hostPortOverride is < 1 or > 65535)
+        {
+            throw new ArgumentException("Host port must be between 1 and 65535.");
+        }
+
+        var arguments = new List<string>
+        {
+            "run", "-d",
+            "--name", $"{AppCatalog.ContainerPrefix}{app.Id}",
+            "--label", $"{AppCatalog.Label}={app.Id}",
+            "--restart", "unless-stopped",
+        };
+
+        for (var index = 0; index < app.Ports.Length; index++)
+        {
+            var (host, container) = app.Ports[index];
+            if (index == 0 && hostPortOverride is { } overridePort)
+            {
+                host = overridePort;
+            }
+
+            arguments.AddRange(["-p", $"{host}:{container}"]);
+        }
+
+        foreach (var env in app.Env)
+        {
+            arguments.AddRange(["-e", env]);
+        }
+
+        foreach (var (volume, path) in app.Volumes)
+        {
+            arguments.AddRange(["-v", $"{AppCatalog.ContainerPrefix}{app.Id}-{volume}:{path}"]);
+        }
+
+        arguments.Add(app.Image);
+        if (!string.IsNullOrWhiteSpace(app.Cmd))
+        {
+            arguments.AddRange(app.Cmd.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        // Image pulls can be slow; give installs a longer leash than normal calls.
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        var result = await _processRunner.RunAsync("docker", [.. arguments], workingDirectory: null, cts.Token)
+            .ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
+    /// <summary>Removes a catalog app's container (its volumes are kept).</summary>
+    public async Task<string> UninstallAppAsync(string appId)
+    {
+        ValidateResourceName(appId);
+        var result = await RunAsync("rm", "-f", $"{AppCatalog.ContainerPrefix}{appId}").ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
     /// <summary>
     /// <c>docker login</c> with the password on stdin so the token never appears
     /// in an argument list or process table.

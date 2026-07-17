@@ -15,6 +15,9 @@ public sealed class LocalRunnerService
 
     public LocalRunnerService(IProcessRunner processRunner) => _processRunner = processRunner;
 
+    public static bool IsInstalled(string runnerDirectory) =>
+        Directory.Exists(runnerDirectory) && File.Exists(Path.Combine(runnerDirectory, ".runner"));
+
     public async Task<object> GetStatusAsync(string runnerDirectory)
     {
         var installed = Directory.Exists(runnerDirectory)

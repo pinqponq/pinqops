@@ -37,6 +37,24 @@ and this project adheres to a rolling release model (latest `master` only).
 - **Professional visual refresh** — grouped sidebar with vector icons, a
   refined dark palette, consistent buttons/inputs/chips, focus states, and
   polished tables/cards across every view.
+- **Portainer-style onboarding.** No repository URL typing: picking a repo
+  from the authorized list connects it immediately, and a new *Deployment
+  readiness* panel checks the whole pipeline — Dockerfile present, deploy
+  workflow present, runner installed/online, compose project present — and
+  fixes what it can: one click commits `.github/workflows/deploy.yml` to the
+  repo, generates the server compose file for the repo's GHCR image, or
+  **installs and registers the self-hosted runner from the dashboard**
+  (registration token via the stored PAT, same code path as
+  `pinqops install-runner`). A missing Dockerfile is called out as the only
+  thing expected from the repo.
+- **App catalog.** ~50 curated one-click installs (Redis, PostgreSQL, MySQL,
+  MongoDB, RabbitMQ, Kafka, Elasticsearch, MinIO, Grafana, Prometheus,
+  Uptime Kuma, Gitea, Jenkins, Keycloak, Vaultwarden, Nextcloud, n8n, …)
+  grouped by category with search, editable host port, open-in-browser links,
+  and safe removal (volumes kept). The API only accepts fixed catalog specs —
+  it can never be used to run an arbitrary image.
+- **Network map.** The Storage & Networks panel renders a live SVG diagram of
+  which containers sit on which Docker networks.
 
 ### Changed
 

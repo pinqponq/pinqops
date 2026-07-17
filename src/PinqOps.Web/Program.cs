@@ -99,6 +99,7 @@ builder.Services.AddRateLimiter(options =>
 var app = builder.Build();
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 var deployGate = new SemaphoreSlim(1, 1);
+var runnerInstallGate = new SemaphoreSlim(1, 1);
 
 // The dashboard page is one embedded file; cache its bytes and pin its inline
 // script with a CSP hash so no other script can ever execute on the page.
@@ -515,6 +516,172 @@ app.MapPost("/api/docker/login", (HttpContext context, DockerService docker) =>
             request?.Username ?? "",
             request?.Token ?? "");
         return new { ok = true, output };
+    }));
+
+// ---- Setup (Portainer-style: pick a repo, the dashboard readies everything) ----
+
+app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        var config = store.Current;
+        if (!gitHub.IsConfigured)
+        {
+            return new { configured = false };
+        }
+
+        var repoTask = gitHub.CheckRepoSetupAsync();
+        var runnersTask = gitHub.GetRunnersSummaryAsync();
+        await Task.WhenAll(repoTask, runnersTask);
+        var (online, total) = runnersTask.Result;
+
+        return (object)new
+        {
+            configured = true,
+            repo = repoTask.Result,
+            runnersOnline = online,
+            runnersTotal = total,
+            runnerInstalled = LocalRunnerService.IsInstalled(config.RunnerDirectory),
+            composeFile = config.ComposeFile,
+            composeExists = File.Exists(config.ComposeFile),
+        };
+    }));
+
+app.MapPost("/api/setup/create-workflow", (GitHubDashboardService gitHub) =>
+    Safe(async () => await gitHub.CreateWorkflowFileAsync(SetupTemplates.DeployWorkflowYaml)));
+
+app.MapPost("/api/setup/create-compose", (UiConfigStore store) =>
+    Safe(async () =>
+    {
+        var config = store.Current;
+        if (string.IsNullOrWhiteSpace(config.RepoUrl))
+        {
+            throw new InvalidOperationException("Connect a repository first.");
+        }
+
+        if (File.Exists(config.ComposeFile))
+        {
+            throw new InvalidOperationException($"{config.ComposeFile} already exists.");
+        }
+
+        var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
+        var directory = Path.GetDirectoryName(config.ComposeFile);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        await File.WriteAllTextAsync(config.ComposeFile, SetupTemplates.ComposeYaml(repository.Owner, repository.Name));
+        return new { ok = true, composeFile = config.ComposeFile };
+    }));
+
+// Full runner install driven from the dashboard: registration token via the
+// stored PAT, then download + config.sh + systemd service (same code path as
+// `pinqops install-runner`).
+app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRunner processRunner) =>
+{
+    if (!await runnerInstallGate.WaitAsync(0))
+    {
+        return Error(409, "A runner install is already in progress.");
+    }
+
+    try
+    {
+        var config = store.Current;
+        if (string.IsNullOrWhiteSpace(config.RepoUrl) || string.IsNullOrWhiteSpace(config.Pat))
+        {
+            return Error(400, "Connect GitHub first.");
+        }
+
+        var lines = new List<string> { "requesting a runner registration token…" };
+        var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
+        string registrationToken;
+        using (var apiClient = new GitHubApiClient())
+        {
+            try
+            {
+                registrationToken = await apiClient.CreateRegistrationTokenAsync(repository, config.Pat);
+            }
+            catch (GitHubApiException exception)
+            {
+                lines.Add("error: " + exception.Message);
+                return Results.Json(new { succeeded = false, log = string.Join('\n', lines) });
+            }
+        }
+
+        lines.Add("token received; installing the runner…");
+        var options = RunnerInstallOptions.Create(config.RepoUrl, registrationToken, installDirectory: config.RunnerDirectory);
+        using var downloader = new HttpFileDownloader();
+        var installer = new RunnerInstaller(processRunner, downloader, lines.Add);
+        var serviceUser = Environment.GetEnvironmentVariable("SUDO_USER") ?? Environment.UserName;
+        var succeeded = await installer.InstallAsync(options, serviceUser);
+        logger.LogWarning("Dashboard runner install finished: {Succeeded}", succeeded);
+        return Results.Json(new { succeeded, log = string.Join('\n', lines) });
+    }
+    catch (Exception exception)
+    {
+        return Error(500, exception.Message);
+    }
+    finally
+    {
+        runnerInstallGate.Release();
+    }
+});
+
+// ---- App catalog (one-click installs) -------------------------------------------
+
+app.MapGet("/api/apps", (DockerService docker) =>
+    Safe(async () =>
+    {
+        var installedById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var container in await docker.ListContainersAsync())
+            {
+                var labels = container.TryGetProperty("Labels", out var l) ? l.GetString() ?? "" : "";
+                var appLabel = labels.Split(',').FirstOrDefault(x => x.StartsWith(AppCatalog.Label + "=", StringComparison.Ordinal));
+                if (appLabel is not null)
+                {
+                    installedById[appLabel[(AppCatalog.Label.Length + 1)..]] =
+                        container.TryGetProperty("State", out var s) ? s.GetString() ?? "" : "";
+                }
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // Docker unreachable — the catalog is still browsable.
+        }
+
+        return new
+        {
+            items = AppCatalog.Apps.Select(a => new
+            {
+                id = a.Id,
+                name = a.Name,
+                category = a.Category,
+                image = a.Image,
+                note = a.Note,
+                ports = a.Ports.Select(p => new { host = p.Host, container = p.Container }).ToArray(),
+                installed = installedById.ContainsKey(a.Id),
+                state = installedById.GetValueOrDefault(a.Id),
+            }),
+        };
+    }));
+
+app.MapPost("/api/apps/install", (HttpContext context, DockerService docker) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<AppInstallRequest>();
+        var appSpec = AppCatalog.Find(request?.Id ?? "")
+            ?? throw new ArgumentException($"Unknown app '{request?.Id}'.");
+        var output = await docker.InstallAppAsync(appSpec, request?.HostPort);
+        return new { ok = true, output };
+    }));
+
+app.MapPost("/api/apps/{id}/uninstall", (string id, DockerService docker) =>
+    Safe(async () =>
+    {
+        _ = AppCatalog.Find(id) ?? throw new ArgumentException($"Unknown app '{id}'.");
+        return new { ok = true, output = await docker.UninstallAppAsync(id) };
     }));
 
 // ---- Compose project ----------------------------------------------------------

@@ -31,12 +31,17 @@ pinqops setup --repo-url https://github.com/<owner>/<repo>
 
 ## Web UI (optional)
 
-A dashboard for the server — containers, images, volumes, network management,
-logs, workflow runs, runner status (down to when it last ran a job), system
-health, and a one-click deploy. English + Turkish. Connect GitHub by signing
-in (OAuth device flow) or pasting a token, then pick your repository from the
-list of repos your account can access. You don't have to install it;
-everything also works from the CLI.
+A dashboard for the server — containers, images, volumes, network management
+with a visual map, logs, workflow runs, runner status (down to when it last
+ran a job), system health, and a one-click deploy. English + Turkish.
+
+Portainer-style onboarding: sign in with GitHub (OAuth device flow) or paste
+a token, **pick your repository from the list** — no URLs — and the readiness
+panel checks what's missing (Dockerfile, deploy workflow, runner, compose
+project) and fixes what it can: it commits the workflow, generates the
+compose file, and **installs the self-hosted runner itself**. Plus a curated
+catalog of ~50 one-click apps (Redis, PostgreSQL, Grafana, MinIO, …). You
+don't have to install the UI; everything also works from the CLI.
 
 ```bash
 sudo curl -fsSL -o /usr/local/bin/pinqops-ui \
