@@ -180,11 +180,6 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
     <header class="topbar">
       <h1 id="view-title"></h1>
       <span class="repo-chip"><span class="dot" id="gh-dot"></span><span id="gh-repo-name"></span></span>
-      <select id="lang-select" title="Language / Dil">
-        <option value="en">EN</option>
-        <option value="tr">TR</option>
-      </select>
-      <select id="refresh-select"></select>
       <button class="icon" id="btn-refresh"></button>
       <button class="primary" id="btn-deploy"></button>
       <button class="ghost" id="btn-logout"></button>
@@ -200,6 +195,14 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
           <div class="card"><h3 id="ov-h-runner"></h3><div class="stat" id="ov-runner">–</div><div class="stat-sub" id="ov-runner-sub"></div></div>
           <div class="card"><h3 id="ov-h-lastjob"></h3><div class="stat" id="ov-lastjob">–</div><div class="stat-sub" id="ov-lastjob-sub"></div></div>
           <div class="card"><h3 id="ov-h-disk"></h3><div class="stat" id="ov-disk">–</div><div class="bar"><i id="ov-disk-bar" style="width:0%"></i></div></div>
+        </div>
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(380px,1fr));margin-top:14px">
+          <div class="card"><h3 id="ov-h-runchart"></h3><div id="chart-runs"></div></div>
+          <div class="card"><h3 id="ov-h-reschart"></h3><div id="chart-res"></div></div>
+        </div>
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-top:14px">
+          <div class="card"><h3 id="ov-h-loadspark"></h3><div class="stat" id="spark-load-val">–</div><div id="spark-load"></div></div>
+          <div class="card"><h3 id="ov-h-memspark"></h3><div class="stat" id="spark-mem-val">–</div><div id="spark-mem"></div></div>
         </div>
         <div class="section">
           <div class="section-head"><h2 data-i18n="ov.compose">Compose project</h2><span class="muted" id="ov-compose-file"></span></div>
@@ -395,6 +398,16 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
         </div>
 
         <div class="card" style="margin-top:16px">
+          <h3 data-i18n="se.prefs">Dashboard preferences</h3>
+          <div class="form-grid">
+            <div><label for="lang-select" data-i18n="se.lang">Language</label>
+              <select id="lang-select"><option value="en">English</option><option value="tr">Türkçe</option></select></div>
+            <div><label for="refresh-select" data-i18n="se.refreshLbl">Auto-refresh</label>
+              <select id="refresh-select"></select></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
           <h3 data-i18n="se.pwCard">Dashboard password</h3>
           <form id="password-form" class="form-grid">
             <div><label for="pw-current" data-i18n="se.pwCur">Current password</label><input id="pw-current" type="password" autocomplete="current-password" required></div>
@@ -446,6 +459,10 @@ en:{
  "ap.port":"port","cat.database":"Databases","cat.search-queue":"Search & Queue","cat.web-storage":"Web & Storage",
  "cat.admin-tool":"Admin Tools","cat.monitoring":"Monitoring","cat.dev-ci":"Dev & CI","cat.auth":"Auth & Security","cat.app":"Applications",
  "st.map":"Network map","st.mapEmpty":"No containers to map.","se.pickFirst":"Pick a repository first.",
+ "se.prefs":"Dashboard preferences","se.lang":"Language","se.refreshLbl":"Auto-refresh",
+ "ov.hRunchart":"Run history — duration","ov.hReschart":"Container resources","ov.hLoadspark":"Load (1m)","ov.hMemspark":"Memory used %",
+ "ch.success":"success","ch.failure":"failure","ch.other":"running / other","ch.cpu":"CPU %","ch.mem":"Memory %",
+ "ch.noStats":"No running containers (or Docker is unreachable).","ch.collecting":"collecting samples…",
  "tb.deploy":"Deploy now","tb.signout":"Sign out","tb.refresh":"Refresh","tb.notConnected":"not connected","tb.off":"off",
  "banner.connect":'GitHub is not connected — open <a href="#" data-goto="settings">Settings</a> and connect your repository to see runs and runner status.',
  "c.cancel":"Cancel","c.close":"Close","c.save":"Save","c.remove":"Remove","c.create":"Create","c.connect":"Connect",
@@ -528,6 +545,10 @@ tr:{
  "ap.port":"port","cat.database":"Veritabanları","cat.search-queue":"Arama ve Kuyruk","cat.web-storage":"Web ve Depolama",
  "cat.admin-tool":"Yönetim Araçları","cat.monitoring":"İzleme","cat.dev-ci":"Geliştirme ve CI","cat.auth":"Kimlik ve Güvenlik","cat.app":"Uygulamalar",
  "st.map":"Ağ haritası","st.mapEmpty":"Haritalanacak konteyner yok.","se.pickFirst":"Önce bir depo seç.",
+ "se.prefs":"Panel tercihleri","se.lang":"Dil","se.refreshLbl":"Otomatik yenileme",
+ "ov.hRunchart":"Çalıştırma geçmişi — süre","ov.hReschart":"Konteyner kaynakları","ov.hLoadspark":"Yük (1dk)","ov.hMemspark":"Kullanılan bellek %",
+ "ch.success":"başarılı","ch.failure":"başarısız","ch.other":"çalışıyor / diğer","ch.cpu":"CPU %","ch.mem":"Bellek %",
+ "ch.noStats":"Çalışan konteyner yok (veya Docker'a ulaşılamıyor).","ch.collecting":"örnekler toplanıyor…",
  "tb.deploy":"Şimdi dağıt","tb.signout":"Çıkış","tb.refresh":"Yenile","tb.notConnected":"bağlı değil","tb.off":"kapalı",
  "banner.connect":`GitHub bağlı değil — <a href="#" data-goto="settings">Ayarlar</a> bölümünden deponu bağla; çalıştırmaları ve runner durumunu orada göreceksin.`,
  "c.cancel":"İptal","c.close":"Kapat","c.save":"Kaydet","c.remove":"Kaldır","c.create":"Oluştur","c.connect":"Bağla",
@@ -713,6 +734,8 @@ function applyLang(){
   $("#lang-select").value=lang;
   $("#ov-h-containers").textContent=t("ov.hContainers");$("#ov-h-runner").textContent=t("ov.hRunner");
   $("#ov-h-lastjob").textContent=t("ov.hLastjob");$("#ov-h-disk").textContent=t("ov.hDisk");
+  $("#ov-h-runchart").textContent=t("ov.hRunchart");$("#ov-h-reschart").textContent=t("ov.hReschart");
+  $("#ov-h-loadspark").textContent=t("ov.hLoadspark");$("#ov-h-memspark").textContent=t("ov.hMemspark");
   $("#net-name").placeholder=t("st.netName");
   $("#repo-search").placeholder=t("se.repoSearch");
   $("#view-title").textContent=t("nav."+view);
@@ -807,6 +830,82 @@ function setGhChip(name,ok){
   $("#banner-connect").classList.toggle("hidden",!!name);
 }
 
+/* ================= charts (inline SVG, CSP-safe) =================
+   Colors: validated pair — indigo #6d5dfc (primary series) / pink #e255a1
+   (secondary), gray for de-emphasized "other"; failures additionally get a
+   hatch texture so state is never encoded by color alone. */
+const CH={a:"#6d5dfc",b:"#e255a1",mut:"#5d6575",grid:"rgba(139,147,165,.16)",txt:"#8b93a5"};
+const HATCH=`<defs><pattern id="hatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="6" stroke="rgba(255,255,255,.5)" stroke-width="1.6"/></pattern></defs>`;
+function chLegend(items){return`<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;color:var(--muted)">`+
+  items.map(([c,l,h])=>`<span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" style="border-radius:3px;overflow:hidden">${h?HATCH:""}<rect width="12" height="12" fill="${c}"/>${h?`<rect width="12" height="12" fill="url(#hatch)"/>`:""}</svg>${esc(l)}</span>`).join("")+`</div>`;}
+function chEmpty(msg){return`<div class="muted" style="font-size:13px;padding:26px 0;text-align:center">${esc(msg)}</div>`;}
+
+function chartRuns(runs){
+  const el=$("#chart-runs");
+  if(!runs||!runs.length){el.innerHTML=chEmpty(ghConfigured?t("dp.noRuns"):t("ov.connectToSee"));return;}
+  const data=runs.slice(0,15).reverse().map(r=>({
+    n:r.runNumber,title:r.displayTitle||r.workflowName||"",c:r.conclusion,s:r.status,
+    dur:r.runStartedAt&&r.updatedAt?Math.max(1,(new Date(r.updatedAt)-new Date(r.runStartedAt))/1000):1}));
+  const W=560,H=190,padL=44,padR=8,padT=12,padB=26;
+  const max=Math.max(...data.map(d=>d.dur))*1.15;
+  const iw=(W-padL-padR)/data.length,bw=Math.min(26,iw-4);
+  let bars="",grid="";
+  // gridlines at 0%, 50%, 100% of max
+  [0,0.5,1].forEach(f=>{const y=padT+(H-padT-padB)*(1-f);
+    grid+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="${CH.grid}" stroke-width="1"/>
+    <text x="${padL-6}" y="${y+4}" text-anchor="end" fill="${CH.txt}" font-size="10">${fmtDur(max*f)}</text>`;});
+  const maxIdx=data.reduce((m,d,i)=>d.dur>data[m].dur?i:m,0);
+  data.forEach((d,i)=>{
+    const h=Math.max(3,(H-padT-padB)*d.dur/max);
+    const x=padL+i*iw+(iw-bw)/2, y=H-padB-h;
+    const running=d.s&&d.s!=="completed";
+    const color=running?CH.mut:d.c==="success"?CH.a:d.c==="failure"?CH.b:CH.mut;
+    bars+=`<g><rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="4" fill="${color}"></rect>`;
+    if(d.c==="failure")bars+=`<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="4" fill="url(#hatch)"></rect>`;
+    bars+=`<rect x="${x-2}" y="${padT}" width="${bw+4}" height="${H-padT-padB}" fill="transparent"><title>#${d.n} · ${esc(d.title)} · ${fmtDur(d.dur)} · ${esc(d.c||d.s||"?")}</title></rect>`;
+    if(i===maxIdx)bars+=`<text x="${x+bw/2}" y="${y-5}" text-anchor="middle" fill="${CH.txt}" font-size="10">${fmtDur(d.dur)}</text>`;
+    bars+=`<text x="${x+bw/2}" y="${H-padB+14}" text-anchor="middle" fill="${CH.txt}" font-size="9.5">#${d.n}</text></g>`;});
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${HATCH}${grid}${bars}</svg>`
+    +chLegend([[CH.a,t("ch.success")],[CH.b,t("ch.failure"),true],[CH.mut,t("ch.other")]]);
+}
+
+function chartRes(stats){
+  const el=$("#chart-res");
+  const rows=(stats||[]).map(s=>({name:s.Name||"?",cpu:parseFloat(s.CPUPerc)||0,mem:parseFloat(s.MemPerc)||0}))
+    .sort((a,b)=>b.cpu-a.cpu).slice(0,8);
+  if(!rows.length){el.innerHTML=chEmpty(t("ch.noStats"));return;}
+  const W=560,rowH=40,padL=150,padR=52,H=rows.length*rowH+8;
+  const max=Math.max(100,...rows.map(r=>Math.max(r.cpu,r.mem)))*1.05;
+  let out="";
+  rows.forEach((r,i)=>{
+    const y=8+i*rowH;
+    const wc=Math.max(2,(W-padL-padR)*r.cpu/max),wm=Math.max(2,(W-padL-padR)*r.mem/max);
+    out+=`<text x="${padL-8}" y="${y+16}" text-anchor="end" fill="#b9c2d4" font-size="11.5" font-family="ui-monospace,monospace">${esc(r.name.length>18?r.name.slice(0,17)+"…":r.name)}</text>
+      <rect x="${padL}" y="${y+2}" width="${wc}" height="9" rx="4" fill="${CH.a}"><title>${esc(r.name)} · CPU ${r.cpu.toFixed(1)}%</title></rect>
+      <text x="${padL+wc+5}" y="${y+10}" fill="${CH.txt}" font-size="9.5">${r.cpu.toFixed(1)}%</text>
+      <rect x="${padL}" y="${y+15}" width="${wm}" height="9" rx="4" fill="${CH.b}"><title>${esc(r.name)} · Mem ${r.mem.toFixed(1)}%</title></rect>
+      <text x="${padL+wm+5}" y="${y+23}" fill="${CH.txt}" font-size="9.5">${r.mem.toFixed(1)}%</text>`;});
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${out}</svg>`
+    +chLegend([[CH.a,t("ch.cpu")],[CH.b,t("ch.mem")]]);
+}
+
+/* client-side sampled host history (kept while the page is open) */
+const hist={load:[],mem:[]};
+function pushSample(arr,v){if(v==null||isNaN(v))return;arr.push(v);if(arr.length>72)arr.shift();}
+function sparkline(el,series){
+  if(!series||series.length<2){el.innerHTML=chEmpty(t("ch.collecting"));return;}
+  const W=280,H=64,pad=4;
+  const min=Math.min(...series),max=Math.max(...series),range=(max-min)||1;
+  const pts=series.map((v,i)=>[pad+(W-pad*2)*i/(series.length-1),H-pad-(H-pad*2)*(v-min)/range]);
+  const line=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+  const area=line+` L ${pts[pts.length-1][0].toFixed(1)} ${H-pad} L ${pts[0][0].toFixed(1)} ${H-pad} Z`;
+  const last=pts[pts.length-1];
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:64px;display:block;margin-top:6px">
+    <path d="${area}" fill="rgba(109,93,252,.14)"/>
+    <path d="${line}" fill="none" stroke="${CH.a}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="3.5" fill="${CH.a}" stroke="#12151d" stroke-width="2"/></svg>`;
+}
+
 /* ================= overview ================= */
 let ghCache=null,ghCacheAt=0;
 async function githubOverview(force){
@@ -817,8 +916,9 @@ async function githubOverview(force){
   return ghCache;
 }
 async function loadOverview(){
-  const[containersR,composeR,systemR,ghR]=await Promise.allSettled([
-    api("/api/docker/containers"),api("/api/compose"),api("/api/system"),githubOverview()]);
+  const[containersR,composeR,systemR,ghR,statsR]=await Promise.allSettled([
+    api("/api/docker/containers"),api("/api/compose"),api("/api/system"),githubOverview(),api("/api/docker/stats")]);
+  chartRes(statsR.status==="fulfilled"?statsR.value.items:null);
   if(containersR.status==="fulfilled"){
     const items=containersR.value.items;
     const running=items.filter(c=>(c.State||"").toLowerCase()==="running").length;
@@ -830,6 +930,11 @@ async function loadOverview(){
     const s=systemR.value;
     if(s.diskTotalBytes){const used=s.diskTotalBytes-s.diskFreeBytes,pct=Math.round(used/s.diskTotalBytes*100);
       $("#ov-disk").innerHTML=`${pct}%<small> ${t("ov.of")} ${fmtBytes(s.diskTotalBytes)}</small>`;$("#ov-disk-bar").style.width=pct+"%";}
+    if(s.loadAverage){pushSample(hist.load,s.loadAverage[0]);$("#spark-load-val").textContent=s.loadAverage[0].toFixed(2);}
+    if(s.memTotalKb){const memPct=Math.round((s.memTotalKb-(s.memAvailableKb||0))/s.memTotalKb*100);
+      pushSample(hist.mem,memPct);$("#spark-mem-val").textContent=memPct+"%";}
+    sparkline($("#spark-load"),hist.load);
+    sparkline($("#spark-mem"),hist.mem);
   }
   if(ghR.status==="fulfilled"&&ghR.value){
     const gh=ghR.value;
@@ -840,10 +945,11 @@ async function loadOverview(){
     $("#ov-lastjob").textContent=j?timeAgo(j.completedAt||j.startedAt):t("c.never");
     $("#ov-lastjob-sub").textContent=j?`${j.workflowName} #${j.runNumber} · ${j.conclusion||j.status}`:t("ov.noSelfJob");
     renderRunsTable($("#ov-runs-table"),gh.runs.slice(0,5));
-  }else if(ghConfigured&&ghR.status==="rejected"){setGhChip($("#gh-repo-name").textContent,false);}
+    chartRuns(gh.runs);
+  }else if(ghConfigured&&ghR.status==="rejected"){setGhChip($("#gh-repo-name").textContent,false);chartRuns(null);}
   if(!ghConfigured){$("#ov-runner").textContent="–";$("#ov-runner-sub").textContent=t("ov.connectGh");
     $("#ov-lastjob").textContent="–";$("#ov-lastjob-sub").textContent=t("ov.connectGh");
-    table($("#ov-runs-table"),[],[],t("ov.connectToSee"));}
+    table($("#ov-runs-table"),[],[],t("ov.connectToSee"));chartRuns(null);}
   if(composeR.status==="fulfilled"){
     const c=composeR.value;$("#ov-compose-file").textContent=c.composeFile;
     if(!c.exists){table($("#ov-compose-table"),[],[],t("ov.composeMissing",{p:c.composeFile}));}
