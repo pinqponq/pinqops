@@ -344,15 +344,7 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
               <div class="device-code" id="gh-user-code"></div>
               <div style="text-align:center;font-size:13px"><span data-i18n="se.enterAt">Enter this code at</span> <a id="gh-verify-link" href="#" target="_blank" rel="noopener"></a> — <span class="muted" data-i18n="se.waiting">waiting for approval…</span></div>
             </div>
-            <div class="divider" data-i18n="se.orToken">or paste a token</div>
-            <form id="token-form" class="form-grid">
-              <div><label for="set-user" data-i18n="se.userOpt">GitHub username (optional)</label>
-              <input id="set-user" autocomplete="username" placeholder="octocat"></div>
-              <div><label for="set-pat"><span data-i18n="se.token">Token / PAT</span> <span class="muted" id="set-pat-hint"></span></label>
-              <input id="set-pat" type="password" autocomplete="off" placeholder="ghp_… / github_pat_…"></div>
-              <div class="full" style="margin-top:12px"><button type="submit" class="small" data-i18n="se.useToken">Connect with token</button>
-              <span class="muted" style="font-size:12px;margin-left:8px" data-i18n="se.tokenHelp">Fine-grained PAT: Actions read (+ Administration read for runners). Classic: repo scope.</span></div>
-            </form>
+            <div style="margin-top:14px"><a href="#" id="link-no-gh" class="muted" style="font-size:12.5px" data-i18n="se.noGhLink">Continue without signing in with GitHub?</a></div>
           </div>
 
           <!-- repository: picked from the account's authorized repos, no URL typing -->
@@ -366,16 +358,21 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
                   <select id="repo-pick" style="min-width:260px;flex:2"></select>
                 </div>
               </div>
-              <div><label for="set-compose" data-i18n="se.compose">Compose file path</label>
-              <input id="set-compose" placeholder="/opt/pinqops/docker-compose.yml"></div>
-              <div><label for="set-runnerdir" data-i18n="se.runnerDir">Runner install directory</label>
-              <input id="set-runnerdir" placeholder="/opt/actions-runner"></div>
             </div>
-            <div style="display:flex;gap:10px;margin-top:18px">
-              <button type="submit" data-i18n="c.save">Save</button>
-            </div>
+            <details style="margin-top:16px">
+              <summary class="muted" style="cursor:pointer;font-size:13px" data-i18n="se.advanced">Advanced</summary>
+              <div class="form-grid">
+                <div><label for="set-compose" data-i18n="se.compose">Compose file path</label>
+                <input id="set-compose" placeholder="/opt/pinqops/docker-compose.yml"></div>
+                <div><label for="set-runnerdir" data-i18n="se.runnerDir">Runner install directory</label>
+                <input id="set-runnerdir" placeholder="/opt/actions-runner"></div>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:14px">
+                <button type="submit" class="small" data-i18n="c.save">Save</button>
+              </div>
+              <div class="stat-sub" id="settings-meta" style="margin-top:10px"></div>
+            </details>
           </form>
-          <div class="stat-sub" id="settings-meta" style="margin-top:12px"></div>
         </div>
 
         <!-- readiness: the dashboard checks the repo + server and fixes what it can -->
@@ -384,17 +381,6 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
           <div id="setup-summary" style="font-size:13px;margin-bottom:6px"></div>
           <div id="setup-list"></div>
           <div class="logbox hidden" id="setup-log" style="margin-top:12px;max-height:280px"></div>
-        </div>
-
-        <div class="card" style="margin-top:16px">
-          <h3 data-i18n="se.registry">Registry login (ghcr.io)</h3>
-          <p class="muted" style="font-size:13px" data-i18n="se.registryHelp">Log the server's Docker daemon into a registry so “Deploy now” can pull private images outside a workflow run.</p>
-          <form id="registry-form" class="form-grid">
-            <div><label for="reg-registry" data-i18n="se.registryLbl">Registry</label><input id="reg-registry" value="ghcr.io"></div>
-            <div><label for="reg-user" data-i18n="se.username">Username</label><input id="reg-user" placeholder="octocat"></div>
-            <div class="full"><label for="reg-token" data-i18n="se.tokenOnly">Token</label><input id="reg-token" type="password" autocomplete="off" data-i18n-ph="se.tokenPh"></div>
-            <div class="full" style="margin-top:14px"><button type="submit">docker login</button></div>
-          </form>
         </div>
 
         <div class="card" style="margin-top:16px">
@@ -460,6 +446,9 @@ en:{
  "cat.admin-tool":"Admin Tools","cat.monitoring":"Monitoring","cat.dev-ci":"Dev & CI","cat.auth":"Auth & Security","cat.app":"Applications",
  "st.map":"Network map","st.mapEmpty":"No containers to map.","se.pickFirst":"Pick a repository first.",
  "se.prefs":"Dashboard preferences","se.lang":"Language","se.refreshLbl":"Auto-refresh",
+ "se.advanced":"Advanced","se.noGhLink":"Continue without signing in with GitHub?",
+ "se.noGhTitle":"Continue without GitHub sign-in?",
+ "se.noGhText":"You can connect with a personal access token instead. Fine-grained PAT: Actions read (+ Administration read to list runners); classic PAT: repo scope. The username is optional (Basic auth).",
  "ov.hRunchart":"Run history — duration","ov.hReschart":"Container resources","ov.hLoadspark":"Load (1m)","ov.hMemspark":"Memory used %",
  "ch.success":"success","ch.failure":"failure","ch.other":"running / other","ch.cpu":"CPU %","ch.mem":"Memory %",
  "ch.noStats":"No running containers (or Docker is unreachable).","ch.collecting":"collecting samples…",
@@ -500,7 +489,7 @@ en:{
  "sy.os":"OS","sy.kernel":"Kernel","sy.arch":"Architecture","sy.time":"Server time (UTC)","sy.client":"Client","sy.server":"Server",
  "sy.daemon":"– (daemon unreachable?)",
  "se.gh":"GitHub connection","se.signIn":"Sign in with GitHub","se.orToken":"or paste a token",
- "se.deviceHelp":"Sign in with GitHub (device flow: you confirm a short code on github.com), or paste a token below. Then pick the repository — the list shows repos your account is authorized for.",
+ "se.deviceHelp":"Sign in with GitHub (you confirm a short code on github.com), then just pick your repository — the readiness check below tells you if anything (like a Dockerfile) is missing.",
  "se.clientId":"OAuth App client ID","se.clientIdHelp":"Create an OAuth App at GitHub → Settings → Developer settings → OAuth Apps (enable device flow). No secret needed; the id is saved for next time.",
  "se.enterAt":"Enter this code at","se.waiting":"waiting for approval…","se.denied":"sign-in was denied.","se.expired":"code expired — try again.",
  "se.signedIn":"Signed in","se.ghDisconnect":"Disconnect","se.useToken":"Connect with token",
@@ -546,6 +535,9 @@ tr:{
  "cat.admin-tool":"Yönetim Araçları","cat.monitoring":"İzleme","cat.dev-ci":"Geliştirme ve CI","cat.auth":"Kimlik ve Güvenlik","cat.app":"Uygulamalar",
  "st.map":"Ağ haritası","st.mapEmpty":"Haritalanacak konteyner yok.","se.pickFirst":"Önce bir depo seç.",
  "se.prefs":"Panel tercihleri","se.lang":"Dil","se.refreshLbl":"Otomatik yenileme",
+ "se.advanced":"Gelişmiş","se.noGhLink":"GitHub ile giriş yapmadan mı devam etmek istiyorsun?",
+ "se.noGhTitle":"GitHub girişi olmadan devam edilsin mi?",
+ "se.noGhText":"Bunun yerine kişisel erişim token'ı (PAT) ile bağlanabilirsin. Fine-grained PAT: Actions okuma (+ runner listesi için Administration okuma); classic PAT: repo kapsamı. Kullanıcı adı opsiyonel (Basic auth).",
  "ov.hRunchart":"Çalıştırma geçmişi — süre","ov.hReschart":"Konteyner kaynakları","ov.hLoadspark":"Yük (1dk)","ov.hMemspark":"Kullanılan bellek %",
  "ch.success":"başarılı","ch.failure":"başarısız","ch.other":"çalışıyor / diğer","ch.cpu":"CPU %","ch.mem":"Bellek %",
  "ch.noStats":"Çalışan konteyner yok (veya Docker'a ulaşılamıyor).","ch.collecting":"örnekler toplanıyor…",
@@ -586,7 +578,7 @@ tr:{
  "sy.os":"İşletim sistemi","sy.kernel":"Çekirdek","sy.arch":"Mimari","sy.time":"Sunucu saati (UTC)","sy.client":"İstemci","sy.server":"Sunucu",
  "sy.daemon":"– (daemon'a ulaşılamıyor?)",
  "se.gh":"GitHub bağlantısı","se.signIn":"GitHub ile giriş yap","se.orToken":"veya token yapıştır",
- "se.deviceHelp":"GitHub ile giriş yap (device flow: github.com'da kısa bir kodu onaylarsın) ya da aşağıya token yapıştır. Sonra depoyu seç — listede hesabının yetkili olduğu depolar görünür.",
+ "se.deviceHelp":"GitHub ile giriş yap (github.com'da kısa bir kodu onaylarsın), sonra sadece deponu seç — aşağıdaki hazırlık kontrolü eksik ne varsa (ör. Dockerfile) sana söyler.",
  "se.clientId":"OAuth App client ID","se.clientIdHelp":"GitHub → Settings → Developer settings → OAuth Apps'ten bir OAuth App oluştur (device flow'u aç). Secret gerekmez; id bir daha sorulmamak üzere kaydedilir.",
  "se.enterAt":"Bu kodu şurada gir:","se.waiting":"onay bekleniyor…","se.denied":"giriş reddedildi.","se.expired":"kodun süresi doldu — tekrar dene.",
  "se.signedIn":"Giriş yapıldı","se.ghDisconnect":"Bağlantıyı kes","se.useToken":"Token ile bağlan",
@@ -1285,16 +1277,15 @@ async function loadSystem(){
 }
 
 /* ================= settings / github ================= */
+let settingsCache=null;
 async function loadSettingsIntoForm(){
   try{
     const s=await api("/api/settings");
+    settingsCache=s;
     $("#set-repo").value=s.repoUrl||"";
-    $("#set-user").value=s.username||"";
     $("#set-compose").value=s.composeFile||"";
     $("#set-runnerdir").value=s.runnerDirectory||"";
     $("#set-clientid").value=s.githubClientId||"";
-    $("#set-pat").placeholder=s.patMasked?t("se.tokenSaved",{m:s.patMasked}):"ghp_… / github_pat_…";
-    $("#set-pat-hint").textContent=s.patMasked?t("se.tokenKeep"):t("se.tokenReq");
     if(s.version)$("#side-foot").textContent=`pinqops web ui v${s.version}`;
     $("#settings-meta").textContent=`${t("se.configFile")}: ${s.configPath}`;
     ghConfigured=!!(s.repoUrl&&s.patMasked);
@@ -1382,15 +1373,29 @@ $("#repo-pick").addEventListener("change",async e=>{
   }catch(ex){toast(ex.message,"err");}
 });
 
-$("#token-form").addEventListener("submit",async e=>{
+/* --- "continue without GitHub sign-in" popup: token (PAT) entry lives here --- */
+$("#link-no-gh").addEventListener("click",e=>{
   e.preventDefault();
-  try{
-    const r=await api("/api/github/token",{method:"POST",body:JSON.stringify({
-      pat:$("#set-pat").value.trim(),username:$("#set-user").value.trim()||null})});
-    $("#set-pat").value="";ghCache=null;
-    toast(`${t("se.signedIn")}: @${r.user.login} — ${t("se.tokenOk")}`,"ok");
-    await loadSettingsIntoForm();
-  }catch(ex){toast(ex.message,"err");}
+  const saved=settingsCache&&settingsCache.patMasked;
+  openModal(t("se.noGhTitle"),
+    `<p class="muted" style="font-size:13px;margin-bottom:4px">${esc(t("se.noGhText"))}</p>
+     <div class="form-grid">
+       <div><label for="adv-user">${esc(t("se.userOpt"))}</label>
+         <input id="adv-user" autocomplete="username" placeholder="octocat" value="${esc((settingsCache&&settingsCache.username)||"")}"></div>
+       <div><label for="adv-pat">${esc(t("se.token"))} <span class="muted">${saved?esc(t("se.tokenKeep")):esc(t("se.tokenReq"))}</span></label>
+         <input id="adv-pat" type="password" autocomplete="off" placeholder="${saved?esc(t("se.tokenSaved",{m:settingsCache.patMasked})):"ghp_… / github_pat_…"}"></div>
+     </div>`,
+    [{label:t("c.cancel")},{label:t("se.useToken"),primary:true,onClick:async()=>{
+      const pat=$("#adv-pat").value.trim();
+      if(!pat){toast(t("se.tokenReq"),"err");return;}
+      try{
+        const r=await api("/api/github/token",{method:"POST",body:JSON.stringify({
+          pat,username:$("#adv-user").value.trim()||null})});
+        closeModal();ghCache=null;
+        toast(`${t("se.signedIn")}: @${r.user.login} — ${t("se.tokenOk")}`,"ok");
+        await loadSettingsIntoForm();
+      }catch(ex){toast(ex.message,"err");}
+    }}]);
 });
 
 /* --- device flow --- */
@@ -1435,21 +1440,14 @@ $("#settings-form").addEventListener("submit",async e=>{
   if(!$("#set-repo").value.trim()){toast(t("se.pickFirst"),"err");return;}
   try{
     const r=await api("/api/settings",{method:"POST",body:JSON.stringify({
-      repoUrl:$("#set-repo").value.trim(),username:$("#set-user").value.trim()||null,
-      pat:$("#set-pat").value.trim()||null,composeFile:$("#set-compose").value.trim()||null,
+      repoUrl:$("#set-repo").value.trim(),
+      composeFile:$("#set-compose").value.trim()||null,
       runnerDirectory:$("#set-runnerdir").value.trim()||null,
       githubClientId:$("#set-clientid").value.trim()})});
-    $("#set-pat").value="";ghCache=null;
+    ghCache=null;
     toast(t("se.connected",{r:r.fullName+(r.isPrivate?" ("+t("se.private")+")":"")}),"ok");
     await loadSettingsIntoForm();
   }catch(ex){toast(ex.message,"err");}
-});
-$("#registry-form").addEventListener("submit",async e=>{
-  e.preventDefault();
-  try{const r=await api("/api/docker/login",{method:"POST",body:JSON.stringify({
-      registry:$("#reg-registry").value.trim(),username:$("#reg-user").value.trim(),token:$("#reg-token").value})});
-    $("#reg-token").value="";toast(r.output||t("se.loginOk"),"ok");}
-  catch(ex){toast(ex.message,"err");}
 });
 $("#password-form").addEventListener("submit",async e=>{
   e.preventDefault();

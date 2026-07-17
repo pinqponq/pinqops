@@ -311,13 +311,21 @@ app.MapPost("/api/settings", (HttpContext context, UiConfigStore store, GitHubDa
             throw new ArgumentException("A token (PAT) is required to connect.");
         }
 
+        // An absent username means "keep the stored one" (it is set via the
+        // token popup); validate with whichever applies.
+        var username = request.Username ?? store.Current.Username;
+
         // Validate the connection before saving anything.
-        var repo = await gitHub.TestConnectionAsync(request.RepoUrl, request.Username, pat);
+        var repo = await gitHub.TestConnectionAsync(request.RepoUrl, username, pat);
 
         store.Update(config =>
         {
             config.RepoUrl = repository.ToUrl();
-            config.Username = string.IsNullOrWhiteSpace(request.Username) ? null : request.Username.Trim();
+            if (request.Username is not null)
+            {
+                config.Username = string.IsNullOrWhiteSpace(request.Username) ? null : request.Username.Trim();
+            }
+
             config.Pat = pat;
             if (!string.IsNullOrWhiteSpace(request.ComposeFile))
             {
@@ -700,7 +708,7 @@ app.MapGet("/api/compose", (UiConfigStore store, DockerService docker) =>
 
 // ---- Deploy --------------------------------------------------------------------
 
-app.MapPost("/api/deploy", async (UiConfigStore store, IProcessRunner processRunner) =>
+app.MapPost("/api/deploy", async (UiConfigStore store, IProcessRunner processRunner, DockerService docker, GitHubDashboardService gitHub) =>
 {
     if (!await deployGate.WaitAsync(0))
     {
@@ -710,6 +718,27 @@ app.MapPost("/api/deploy", async (UiConfigStore store, IProcessRunner processRun
     try
     {
         var lines = new List<string>();
+
+        // Log the daemon into ghcr.io with the stored token first, so private
+        // images pull without the user ever configuring a registry login.
+        var config = store.Current;
+        if (!string.IsNullOrWhiteSpace(config.Pat))
+        {
+            var login = config.Username ?? await gitHub.GetLoginAsync();
+            if (login is not null)
+            {
+                try
+                {
+                    await docker.LoginAsync("ghcr.io", login, config.Pat);
+                    lines.Add($"ghcr.io: logged in as {login}");
+                }
+                catch (Exception exception)
+                {
+                    lines.Add($"ghcr.io login skipped ({exception.Message}) — continuing; public images still pull.");
+                }
+            }
+        }
+
         var deployer = new Deployer(processRunner, lines.Add);
         var succeeded = await deployer.DeployAsync(DeployOptions.Create(store.Current.ComposeFile));
         store.Update(config => config.LastDeploy = new LastDeployInfo(DateTimeOffset.UtcNow, succeeded));
