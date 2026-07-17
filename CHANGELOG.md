@@ -18,6 +18,25 @@ and this project adheres to a rolling release model (latest `master` only).
   runner's systemd service, host health (disk/memory/load/uptime), and a
   one-click deploy. Ships as a single binary attached to releases; the CLI
   works fully without it.
+- **`pinqops-ui install-service`** — installs the dashboard as a systemd
+  service (enabled + started), so it keeps running after the SSH session ends
+  and comes back after a reboot. `uninstall-service` removes it; the first-run
+  setup code is in `journalctl -u pinqops-ui`. Also adds `version` / `help`
+  subcommands.
+- **Sign in with GitHub** — the dashboard can authenticate via the OAuth
+  device flow (bring your own OAuth App client id; no secret, no callback
+  port), or with a pasted token as before. Either way it now shows who is
+  signed in and lets you **pick the repository from the list of repos your
+  account is authorized for** instead of typing a URL.
+- **Turkish localization** — the entire dashboard is available in Türkçe
+  (EN/TR switch in the top bar; auto-detected from the browser, remembered).
+- **Docker network management** — create networks (driver + internal flag),
+  inspect them (subnet, gateway, attached containers), connect/disconnect
+  containers, and remove non-built-in networks, all from the Storage &
+  Networks panel.
+- **Professional visual refresh** — grouped sidebar with vector icons, a
+  refined dark palette, consistent buttons/inputs/chips, focus states, and
+  polished tables/cards across every view.
 
 ### Changed
 
@@ -26,6 +45,11 @@ and this project adheres to a rolling release model (latest `master` only).
 
 ### Fixed
 
+- **Setup screen flipped to the login form mid-paste.** The dashboard's
+  auto-refresh timer ran before sign-in; its 401 responses switched the
+  first-run setup form into the password login form and cleared the inputs
+  (typically while pasting the setup code). Refresh now only runs once signed
+  in, and a 401 only returns to the login screen when a real session expires.
 - **`pinqops version` always reported `1.0.0`.** The release workflow never
   stamped the git tag into the published binaries, so every release carried the
   SDK's default assembly version — updating the binary looked like a no-op even

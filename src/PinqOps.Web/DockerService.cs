@@ -29,6 +29,62 @@ public sealed class DockerService
     public Task<List<JsonElement>> ListNetworksAsync() =>
         JsonLinesAsync("network", "ls", "--format", "{{json .}}");
 
+    public async Task<JsonElement> InspectNetworkAsync(string name)
+    {
+        ValidateResourceName(name);
+        var result = await RunAsync("network", "inspect", name).ConfigureAwait(false);
+        return result.Succeeded ? ParseElement(result.StandardOutput) : throw Failed(result);
+    }
+
+    private static readonly string[] AllowedNetworkDrivers = ["bridge", "overlay", "macvlan", "ipvlan"];
+
+    public async Task<string> CreateNetworkAsync(string name, string? driver, bool isInternal)
+    {
+        ValidateResourceName(name);
+        var arguments = new List<string> { "network", "create" };
+        if (!string.IsNullOrWhiteSpace(driver))
+        {
+            if (!AllowedNetworkDrivers.Contains(driver))
+            {
+                throw new ArgumentException($"Unsupported network driver '{driver}'.");
+            }
+
+            arguments.AddRange(["--driver", driver]);
+        }
+
+        if (isInternal)
+        {
+            arguments.Add("--internal");
+        }
+
+        arguments.Add(name);
+        var result = await RunAsync([.. arguments]).ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
+    public async Task<string> RemoveNetworkAsync(string name)
+    {
+        ValidateResourceName(name);
+        var result = await RunAsync("network", "rm", name).ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
+    public async Task<string> ConnectNetworkAsync(string network, string container)
+    {
+        ValidateResourceName(network);
+        ValidateResourceName(container);
+        var result = await RunAsync("network", "connect", network, container).ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
+    public async Task<string> DisconnectNetworkAsync(string network, string container)
+    {
+        ValidateResourceName(network);
+        ValidateResourceName(container);
+        var result = await RunAsync("network", "disconnect", network, container).ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
     public Task<List<JsonElement>> StatsAsync() =>
         JsonLinesAsync("stats", "--no-stream", "--format", "{{json .}}");
 
@@ -46,7 +102,7 @@ public sealed class DockerService
 
     public async Task<string> ContainerLogsAsync(string containerId, int tail)
     {
-        ValidateContainerId(containerId);
+        ValidateResourceName(containerId);
         var result = await RunAsync("logs", "--tail", tail.ToString(), "--timestamps", containerId).ConfigureAwait(false);
         // Docker writes app output to both streams; show them together like the terminal does.
         return result.Succeeded || result.StandardError.Length > 0 || result.StandardOutput.Length > 0
@@ -56,14 +112,14 @@ public sealed class DockerService
 
     public async Task<JsonElement> InspectContainerAsync(string containerId)
     {
-        ValidateContainerId(containerId);
+        ValidateResourceName(containerId);
         var result = await RunAsync("inspect", containerId).ConfigureAwait(false);
         return result.Succeeded ? ParseElement(result.StandardOutput) : throw Failed(result);
     }
 
     public async Task<string> ContainerActionAsync(string containerId, string action)
     {
-        ValidateContainerId(containerId);
+        ValidateResourceName(containerId);
         if (!AllowedContainerActions.Contains(action))
         {
             throw new ArgumentException($"Unsupported container action '{action}'.");
@@ -174,12 +230,12 @@ public sealed class DockerService
         return document.RootElement.Clone();
     }
 
-    private static void ValidateContainerId(string containerId)
+    private static void ValidateResourceName(string name)
     {
-        if (string.IsNullOrWhiteSpace(containerId)
-            || !containerId.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or '-'))
+        if (string.IsNullOrWhiteSpace(name)
+            || !name.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or '-'))
         {
-            throw new ArgumentException($"'{containerId}' is not a valid container id or name.");
+            throw new ArgumentException($"'{name}' is not a valid container or network name.");
         }
     }
 

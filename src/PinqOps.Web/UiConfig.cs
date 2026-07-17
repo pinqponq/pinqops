@@ -19,8 +19,11 @@ public sealed class UiConfig
     /// <summary>Optional GitHub username; when set the PAT is sent as Basic auth.</summary>
     public string? Username { get; set; }
 
-    /// <summary>GitHub personal access token (or pasted token) for the API.</summary>
+    /// <summary>GitHub personal access token (or OAuth device-flow token) for the API.</summary>
     public string? Pat { get; set; }
+
+    /// <summary>Optional OAuth App client id enabling "Sign in with GitHub" (device flow).</summary>
+    public string? GithubClientId { get; set; }
 
     public string ComposeFile { get; set; } = DefaultComposeFile;
 

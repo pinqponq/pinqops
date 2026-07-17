@@ -11,7 +11,18 @@ public sealed record SettingsRequest(
     string? Username,
     string? Pat,
     string? ComposeFile,
-    string? RunnerDirectory);
+    string? RunnerDirectory,
+    string? GithubClientId);
+
+public sealed record TokenRequest(string? Pat, string? Username);
+
+public sealed record DeviceStartRequest(string? ClientId);
+
+public sealed record DevicePollRequest(string? Handle);
+
+public sealed record NetworkCreateRequest(string? Name, string? Driver, bool Internal);
+
+public sealed record NetworkContainerRequest(string? Container);
 
 public sealed record ContainerActionRequest(string? Action);
 

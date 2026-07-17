@@ -14,6 +14,45 @@ var certPath = GetOption(args, "--cert") ?? Environment.GetEnvironmentVariable("
 var certPassword = GetOption(args, "--cert-password") ?? Environment.GetEnvironmentVariable("PINQOPS_UI_CERT_PASSWORD");
 var useTls = !string.IsNullOrWhiteSpace(certPath);
 
+// Subcommands (no command = run the dashboard in the foreground).
+if (args.Length > 0 && (!args[0].StartsWith('-') || args[0] is "--version" or "-v" or "--help" or "-h"))
+{
+    switch (args[0])
+    {
+        case "install-service":
+            return await new ServiceInstaller(new ProcessRunner(), Console.WriteLine).InstallAsync(
+                port, host, certPath, certPassword,
+                GetOption(args, "--user")
+                    ?? Environment.GetEnvironmentVariable("SUDO_USER")
+                    ?? Environment.UserName);
+        case "uninstall-service":
+            return await new ServiceInstaller(new ProcessRunner(), Console.WriteLine).UninstallAsync();
+        case "version" or "--version" or "-v":
+            Console.WriteLine($"pinqops-ui {PinqOpsVersion.Current}");
+            return 0;
+        case "help" or "--help" or "-h":
+            Console.WriteLine(
+                """
+                pinqops-ui — optional web dashboard for a pinqops server
+
+                Usage:
+                  pinqops-ui [--port <n>] [--host <addr>] [--cert <pfx> [--cert-password <pw>]]
+                      Run the dashboard in the foreground (default port 7467).
+
+                  pinqops-ui install-service [--port <n>] [--host <addr>] [--cert <pfx>] [--user <user>]
+                      Install + start it as a systemd service (survives SSH logout, starts on boot).
+                      The first-run setup code lands in:  journalctl -u pinqops-ui
+
+                  pinqops-ui uninstall-service
+                  pinqops-ui version | help
+                """);
+            return 0;
+        default:
+            Console.Error.WriteLine($"error: unknown command '{args[0]}' — see 'pinqops-ui help'.");
+            return 1;
+    }
+}
+
 var builder = WebApplication.CreateBuilder();
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
@@ -37,6 +76,7 @@ builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<GitHubDashboardService>();
+builder.Services.AddSingleton<GitHubDeviceFlow>();
 builder.Services.AddSingleton<LocalRunnerService>();
 builder.Services.AddSingleton<SystemInfoService>();
 
@@ -65,7 +105,8 @@ var deployGate = new SemaphoreSlim(1, 1);
 var indexBytes = LoadIndexBytes();
 var contentSecurityPolicy =
     $"default-src 'none'; script-src '{HashInlineScript(indexBytes)}'; style-src 'unsafe-inline'; "
-    + "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+    + "img-src 'self' data: https://avatars.githubusercontent.com; "
+    + "connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
 // First-run bootstrap secret: creating the dashboard password requires this
 // code from the server console, so whoever reaches the port first cannot
@@ -248,6 +289,8 @@ app.MapGet("/api/settings", (UiConfigStore store) =>
         configPath = store.Path_,
         lastDeploy = config.LastDeploy,
         version = PinqOpsVersion.Current,
+        githubClientId = config.GithubClientId
+            ?? Environment.GetEnvironmentVariable("PINQOPS_GITHUB_CLIENT_ID"),
     });
 });
 
@@ -284,6 +327,13 @@ app.MapPost("/api/settings", (HttpContext context, UiConfigStore store, GitHubDa
             {
                 config.RunnerDirectory = request.RunnerDirectory.Trim();
             }
+
+            if (request.GithubClientId is not null)
+            {
+                config.GithubClientId = string.IsNullOrWhiteSpace(request.GithubClientId)
+                    ? null
+                    : request.GithubClientId.Trim();
+            }
         });
 
         return new
@@ -310,6 +360,78 @@ app.MapPost("/api/settings/disconnect", (UiConfigStore store) =>
 app.MapGet("/api/github/overview", (GitHubDashboardService gitHub) =>
     Safe(async () => await gitHub.GetOverviewAsync()));
 
+app.MapGet("/api/github/user", (GitHubDashboardService gitHub) =>
+    Safe(async () => await gitHub.GetUserAsync()));
+
+app.MapGet("/api/github/repos", (GitHubDashboardService gitHub) =>
+    Safe(async () => new { items = await gitHub.GetReposAsync() }));
+
+// Stash a pasted token (before a repository is chosen); validated via /user.
+app.MapPost("/api/github/token", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<TokenRequest>();
+        if (request?.Pat is not { Length: > 0 } pat)
+        {
+            throw new ArgumentException("A token is required.");
+        }
+
+        var user = await gitHub.GetUserAsync(request.Username, pat.Trim());
+        store.Update(config =>
+        {
+            config.Pat = pat.Trim();
+            config.Username = string.IsNullOrWhiteSpace(request.Username) ? null : request.Username.Trim();
+        });
+        return new { ok = true, user };
+    }));
+
+// "Sign in with GitHub" (OAuth device flow; needs an OAuth App client id).
+app.MapPost("/api/github/device/start", (HttpContext context, UiConfigStore store, GitHubDeviceFlow deviceFlow) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<DeviceStartRequest>();
+        var clientId = request?.ClientId?.Trim();
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            clientId = store.Current.GithubClientId
+                ?? Environment.GetEnvironmentVariable("PINQOPS_GITHUB_CLIENT_ID");
+        }
+
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            throw new ArgumentException("No OAuth App client id configured for GitHub sign-in.");
+        }
+
+        var started = await deviceFlow.StartAsync(clientId);
+        // Remember a working client id so the next sign-in needs no typing.
+        store.Update(config => config.GithubClientId = clientId);
+        return started;
+    }));
+
+app.MapPost("/api/github/device/poll", (HttpContext context, UiConfigStore store, GitHubDeviceFlow deviceFlow, GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<DevicePollRequest>();
+        if (request?.Handle is not { Length: > 0 } handle)
+        {
+            throw new ArgumentException("Missing device-flow handle.");
+        }
+
+        var (status, token) = await deviceFlow.PollAsync(handle);
+        if (status != "success" || token is null)
+        {
+            return new { status };
+        }
+
+        var user = await gitHub.GetUserAsync(null, token);
+        store.Update(config =>
+        {
+            config.Pat = token;
+            config.Username = null;
+        });
+        return new { status, user };
+    }));
+
 // ---- Docker ------------------------------------------------------------------
 
 app.MapGet("/api/docker/containers", (DockerService docker) =>
@@ -326,6 +448,34 @@ app.MapGet("/api/docker/volumes", (DockerService docker) =>
 
 app.MapGet("/api/docker/networks", (DockerService docker) =>
     Safe(async () => new { items = await docker.ListNetworksAsync() }));
+
+app.MapGet("/api/docker/networks/{name}/inspect", (string name, DockerService docker) =>
+    Safe(async () => new { data = await docker.InspectNetworkAsync(name) }));
+
+app.MapPost("/api/docker/networks", (HttpContext context, DockerService docker) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<NetworkCreateRequest>();
+        var output = await docker.CreateNetworkAsync(request?.Name ?? "", request?.Driver, request?.Internal ?? false);
+        return new { ok = true, output };
+    }));
+
+app.MapPost("/api/docker/networks/{name}/remove", (string name, DockerService docker) =>
+    Safe(async () => new { ok = true, output = await docker.RemoveNetworkAsync(name) }));
+
+app.MapPost("/api/docker/networks/{name}/connect", (string name, HttpContext context, DockerService docker) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<NetworkContainerRequest>();
+        return new { ok = true, output = await docker.ConnectNetworkAsync(name, request?.Container ?? "") };
+    }));
+
+app.MapPost("/api/docker/networks/{name}/disconnect", (string name, HttpContext context, DockerService docker) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<NetworkContainerRequest>();
+        return new { ok = true, output = await docker.DisconnectNetworkAsync(name, request?.Container ?? "") };
+    }));
 
 app.MapGet("/api/docker/df", (DockerService docker) =>
     Safe(async () => new { items = await docker.SystemDiskUsageAsync() }));
@@ -428,6 +578,7 @@ if (!useTls)
 }
 
 app.Run();
+return 0;
 
 // ---- Helpers ---------------------------------------------------------------------
 

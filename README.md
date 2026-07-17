@@ -31,21 +31,27 @@ pinqops setup --repo-url https://github.com/<owner>/<repo>
 
 ## Web UI (optional)
 
-A dashboard for the server — containers, images, volumes, logs, workflow
-runs, runner status (down to when it last ran a job), system health, and a
-one-click deploy. You don't have to install it; everything also works from
-the CLI.
+A dashboard for the server — containers, images, volumes, network management,
+logs, workflow runs, runner status (down to when it last ran a job), system
+health, and a one-click deploy. English + Turkish. Connect GitHub by signing
+in (OAuth device flow) or pasting a token, then pick your repository from the
+list of repos your account can access. You don't have to install it;
+everything also works from the CLI.
 
 ```bash
 sudo curl -fsSL -o /usr/local/bin/pinqops-ui \
   https://github.com/pinqponq/pinqops/releases/latest/download/pinqops-ui
 sudo chmod +x /usr/local/bin/pinqops-ui
 
-pinqops-ui        # open http://<server>:7467
+sudo pinqops-ui install-service   # runs now, survives SSH logout, starts on boot
+sudo journalctl -u pinqops-ui | grep "setup code"   # then open http://<server>:7467
 ```
 
-On first visit, enter the **setup code from the server console** and create a
-dashboard password. Then, in **Settings**, paste your repository URL and a
+(`pinqops-ui` with no command runs it in the foreground instead;
+`uninstall-service` removes the service.)
+
+On first visit, enter the **setup code** (from the journalctl line above, or
+the console when running in the foreground) and create a dashboard password. Then, in **Settings**, paste your repository URL and a
 token — a PAT alone, or a username + token. Use `--port <n>` / `--host <addr>`
 to change where it listens, and `--cert <pfx>` to serve HTTPS.
 

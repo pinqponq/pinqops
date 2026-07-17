@@ -41,6 +41,83 @@ public sealed class GitHubDashboardService : IDisposable
             .ConfigureAwait(false);
     }
 
+    /// <summary>The identity behind a token (works before a repository is chosen).</summary>
+    public async Task<object> GetUserAsync(string? username = null, string? pat = null)
+    {
+        var auth = TokenAuth(username, pat);
+        var user = await GetAsync(null, auth, "/user").ConfigureAwait(false);
+        return new
+        {
+            login = GetString(user, "login"),
+            name = GetString(user, "name"),
+            avatarUrl = GetString(user, "avatar_url"),
+            htmlUrl = GetString(user, "html_url"),
+        };
+    }
+
+    /// <summary>
+    /// Repositories the stored token can reach, so the user can pick one
+    /// instead of typing a URL. Sorted by recent push; capped at 200.
+    /// </summary>
+    public async Task<List<object>> GetReposAsync()
+    {
+        var auth = TokenAuth(null, null);
+        var result = new List<object>();
+        for (var page = 1; page <= 2; page++)
+        {
+            var repos = await GetAsync(
+                    null, auth,
+                    $"/user/repos?per_page=100&page={page}&sort=pushed&affiliation=owner,collaborator,organization_member")
+                .ConfigureAwait(false);
+            if (repos.ValueKind != JsonValueKind.Array)
+            {
+                break;
+            }
+
+            var count = 0;
+            foreach (var repo in repos.EnumerateArray())
+            {
+                count++;
+                var permissions = repo.TryGetProperty("permissions", out var perms) ? perms : default;
+                result.Add(new
+                {
+                    fullName = GetString(repo, "full_name"),
+                    htmlUrl = GetString(repo, "html_url"),
+                    isPrivate = repo.TryGetProperty("private", out var p) && p.GetBoolean(),
+                    pushedAt = GetString(repo, "pushed_at"),
+                    admin = permissions.ValueKind == JsonValueKind.Object
+                            && permissions.TryGetProperty("admin", out var a) && a.GetBoolean(),
+                    push = permissions.ValueKind == JsonValueKind.Object
+                           && permissions.TryGetProperty("push", out var w) && w.GetBoolean(),
+                });
+            }
+
+            if (count < 100)
+            {
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>Auth from an explicit candidate token, falling back to the stored one.</summary>
+    private AuthenticationHeaderValue TokenAuth(string? username, string? pat)
+    {
+        if (string.IsNullOrWhiteSpace(pat))
+        {
+            var config = _configStore.Current;
+            (username, pat) = (config.Username, config.Pat);
+        }
+
+        if (string.IsNullOrWhiteSpace(pat))
+        {
+            throw new InvalidOperationException("GitHub is not connected yet — add the repository and token in Settings.");
+        }
+
+        return Credentials(username, pat);
+    }
+
     /// <summary>
     /// Everything the dashboard shows about GitHub in one call: the repository,
     /// its self-hosted runners, recent workflow runs, and the most recent job
@@ -240,11 +317,12 @@ public sealed class GitHubDashboardService : IDisposable
                 Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{pat}")));
 
     private async Task<JsonElement> GetAsync(
-        GitHubRepository repository,
+        GitHubRepository? repository,
         AuthenticationHeaderValue auth,
         string path)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, ApiBase(repository) + path);
+        var apiBase = repository is null ? "https://api.github.com" : ApiBase(repository);
+        using var request = new HttpRequestMessage(HttpMethod.Get, apiBase + path);
         request.Headers.Authorization = auth;
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         request.Headers.UserAgent.ParseAdd("pinqops-ui");
