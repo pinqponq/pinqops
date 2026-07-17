@@ -1,4 +1,3 @@
-using System.Reflection;
 using PinqOps;
 
 const string DefaultComposePath = "/opt/pinqops/docker-compose.yml";
@@ -99,8 +98,7 @@ async Task<int> RunInstallRunnerAsync(string[] installArgs)
 
 int PrintVersion()
 {
-    var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown";
-    Console.WriteLine($"pinqops {version}");
+    Console.WriteLine($"pinqops {PinqOpsVersion.Current}");
     return 0;
 }
 

@@ -24,6 +24,15 @@ and this project adheres to a rolling release model (latest `master` only).
 - **README** compressed further; a web UI is no longer out of scope.
 - **release.yml** now also publishes the `pinqops-ui` binary.
 
+### Fixed
+
+- **`pinqops version` always reported `1.0.0`.** The release workflow never
+  stamped the git tag into the published binaries, so every release carried the
+  SDK's default assembly version — updating the binary looked like a no-op even
+  though the code changed. `release.yml` now passes `-p:Version=<tag>` to both
+  publishes, the CLI prints the stamped (informational) version, and the web UI
+  shows it in the sidebar footer and its startup line.
+
 ### Security
 
 - **`pinqops-ui` hardening.** First-run password creation requires a one-time

@@ -160,7 +160,7 @@ td.mono{font-family:var(--mono);font-size:12px}
       <button data-view="system"><span class="icon">⚙</span><span class="txt">System</span></button>
       <button data-view="settings"><span class="icon">✎</span><span class="txt">Settings</span></button>
     </nav>
-    <div class="side-foot">pinqops web ui</div>
+    <div class="side-foot" id="side-foot">pinqops web ui</div>
   </aside>
 
   <main>
@@ -678,6 +678,7 @@ async function loadSettingsIntoForm(){
     $("#set-pat").placeholder=s.patMasked?`saved: ${s.patMasked} — paste to replace`:"ghp_… / github_pat_…";
     $("#set-pat-hint").textContent=s.patMasked?"(leave empty to keep saved token)":"(required)";
     $("#settings-meta").textContent=`Config file: ${s.configPath}`;
+    if(s.version)$("#side-foot").textContent=`pinqops web ui v${s.version}`;
     ghConfigured=!!(s.repoUrl&&s.patMasked);
     if(ghConfigured){const m=(s.repoUrl.match(/github[^/]*\/(.+)$/)||[])[1];setGhChip(m||s.repoUrl,true);}
     else setGhChip(null);

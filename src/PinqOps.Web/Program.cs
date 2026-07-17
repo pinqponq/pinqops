@@ -247,6 +247,7 @@ app.MapGet("/api/settings", (UiConfigStore store) =>
         runnerDirectory = config.RunnerDirectory,
         configPath = store.Path_,
         lastDeploy = config.LastDeploy,
+        version = PinqOpsVersion.Current,
     });
 });
 
@@ -414,7 +415,7 @@ app.MapGet("/api/runner/local", (UiConfigStore store, LocalRunnerService runner)
 
 app.MapGet("/api/system", (SystemInfoService system) => Results.Json(system.GetInfo()));
 
-Console.WriteLine($"pinqops-ui listening on {(useTls ? "https" : "http")}://{host}:{port}");
+Console.WriteLine($"pinqops-ui {PinqOpsVersion.Current} listening on {(useTls ? "https" : "http")}://{host}:{port}");
 var configStore = app.Services.GetRequiredService<UiConfigStore>();
 if (string.IsNullOrEmpty(configStore.Current.PasswordHash))
 {

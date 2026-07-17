@@ -53,6 +53,19 @@ to change where it listens, and `--cert <pfx>` to serve HTTPS.
 > Keep it off, firewall it, or bind it to `127.0.0.1` and reach it through a
 > tunnel if that matters to you. Details: [SECURITY.md](SECURITY.md).
 
+## Updating
+
+Re-run the install commands above — the download URLs always point at the
+latest release. Stop `pinqops-ui` first if it's running, then start it again.
+Check with:
+
+```bash
+pinqops version
+```
+
+> Releases before v0.3.0 always printed `1.0.0` — a version-stamping bug, not
+> a stale binary. From v0.3.0 on, the output matches the release tag.
+
 ## CLI
 
 ```
