@@ -53,6 +53,30 @@ If you need stronger isolation, run the runner in an ephemeral/container mode or
 restrict the host Docker API with a socket proxy. These are out of scope for the
 base project but compatible with it.
 
+## The web UI (`pinqops-ui`)
+
+The optional dashboard is the one component that **does** listen on a port
+(default `7467`), which is why it is optional. If you run it, its built-in
+controls are:
+
+| Threat | Control |
+|---|---|
+| First-visitor claims an unconfigured dashboard | Creating the password requires a one-time **setup code** printed only on the server console |
+| Password brute force | Per-client lockout (5 failures → 15 min) + per-client request rate limit + slow failure responses |
+| Weak password storage | PBKDF2-SHA256, 600k iterations, per-password salt, constant-time compare; legacy hashes upgrade on login |
+| Session theft/abuse | 256-bit random bearer tokens, 24h sliding expiry, capped session table; **all sessions revoked on password change** |
+| XSS / script injection | Strict CSP — only the page's own inline script (pinned by SHA-256 hash) can execute; all rendered values are HTML-escaped |
+| Clickjacking / embedding | `frame-ancestors 'none'` + `X-Frame-Options: DENY` |
+| CSRF | Auth is a Bearer header (never a cookie), so cross-site requests carry no credentials |
+| Token/PAT leakage | PAT stored in a `0600` config file, sent only in Authorization headers, returned to the UI only masked; `docker login` receives the token via stdin |
+| Command injection | Fixed `docker` argument lists; container ids/actions validated against strict allowlists |
+| Oversized/hostile requests | Request bodies capped at 64 KB; process calls time-bounded |
+| Plain-HTTP interception | Optional TLS via `--cert <pfx>` (HSTS enabled); or bind `--host 127.0.0.1` and reach it through a tunnel |
+
+The dashboard still opens one inbound port on an otherwise closed server —
+firewall it to trusted addresses, keep TLS on if it crosses a network you do
+not own, or simply do not run it.
+
 ## Hardening checklist
 
 - [ ] Branch protection blocks direct pushes to `master`.
@@ -61,6 +85,8 @@ base project but compatible with it.
 - [ ] The server has **no** inbound ports open (verify with your firewall/host).
 - [ ] Outbound access is limited to what's needed (`github.com`, `ghcr.io`).
 - [ ] The runner label in the deploy workflow matches the installed runner.
+- [ ] If `pinqops-ui` runs: its port is firewalled to trusted addresses, and it
+      serves TLS (`--cert`) or binds `127.0.0.1` behind a tunnel.
 
 ## Supported versions
 

@@ -5,6 +5,38 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to a rolling release model (latest `master` only).
 
+## [Unreleased]
+
+### Added
+
+- **`pinqops-ui`** (`src/PinqOps.Web`) — an optional, self-contained web
+  dashboard for the server (default port `7467`). Password-protected; connect
+  it to GitHub with the repo URL plus a PAT (or username + token). Shows
+  containers (start/stop/restart/logs/inspect/stats), images, volumes,
+  networks, Docker disk usage, the compose project, workflow runs, GitHub
+  runner status and the last job the self-hosted runner executed, the local
+  runner's systemd service, host health (disk/memory/load/uptime), and a
+  one-click deploy. Ships as a single binary attached to releases; the CLI
+  works fully without it.
+
+### Changed
+
+- **README** compressed further; a web UI is no longer out of scope.
+- **release.yml** now also publishes the `pinqops-ui` binary.
+
+### Security
+
+- **`pinqops-ui` hardening.** First-run password creation requires a one-time
+  setup code printed on the server console; login and password change are
+  brute-force throttled (per-client lockout) on top of a per-client API rate
+  limit; PBKDF2 iterations raised to 600k (legacy hashes upgrade on login);
+  all sessions are revoked on password change; a strict Content-Security-Policy
+  pins the dashboard's inline script by SHA-256 hash; hardened response headers
+  (`X-Frame-Options`, `nosniff`, `Referrer-Policy`, COOP/CORP, HSTS on TLS);
+  request bodies capped at 64 KB; optional HTTPS via `--cert <pfx>`; auth
+  events are logged; the unauthenticated state endpoint no longer reveals
+  whether GitHub is configured. See the new web-UI section in SECURITY.md.
+
 ## [0.2.1] - 2026-07-15
 
 ### Fixed
