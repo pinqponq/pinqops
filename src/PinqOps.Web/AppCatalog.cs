@@ -24,6 +24,12 @@ public static class AppCatalog
     public const string ContainerPrefix = "pinqops-";
     public const string Label = "pinqops.app";
 
+    /// <summary>
+    /// All catalog apps join this user-defined network so they can reach each
+    /// other by container name (the default bridge has no name DNS).
+    /// </summary>
+    public const string SharedNetwork = "pinqops-apps";
+
     public static readonly IReadOnlyList<AppSpec> Apps =
     [
         // --- Databases & caches ---
@@ -70,7 +76,7 @@ public static class AppCatalog
             ["PGADMIN_DEFAULT_EMAIL=admin@pinqops.local", "PGADMIN_DEFAULT_PASSWORD=pinqops"], [("data", "/var/lib/pgadmin")], Note: "admin@pinqops.local / pinqops"),
         new("phpmyadmin", "phpMyAdmin", "admin-tool", "phpmyadmin:latest", [(8082, 80)], ["PMA_ARBITRARY=1"], []),
         new("mongo-express", "Mongo Express", "admin-tool", "mongo-express:latest", [(8093, 8081)],
-            ["ME_CONFIG_MONGODB_URL=mongodb://pinqops-mongo:27017"], [], Note: "needs MongoDB on the same network"),
+            ["ME_CONFIG_MONGODB_URL=mongodb://pinqops-mongo:27017"], [], Note: "install the MongoDB app too"),
         new("redisinsight", "RedisInsight", "admin-tool", "redis/redisinsight:latest", [(5540, 5540)], [], [("data", "/data")]),
 
         // --- Monitoring ---
@@ -87,14 +93,14 @@ public static class AppCatalog
         new("sonarqube", "SonarQube", "dev-ci", "sonarqube:community", [(9003, 9000)], [], [("data", "/opt/sonarqube/data")], Note: "admin / admin"),
 
         // --- Auth & security ---
-        new("keycloak", "Keycloak", "auth", "quay.io/keycloak/keycloak:latest", [(8086, 8080)],
+        new("keycloak", "Keycloak", "auth", "quay.io/keycloak/keycloak:latest", [(8880, 8080)],
             ["KEYCLOAK_ADMIN=admin", "KEYCLOAK_ADMIN_PASSWORD=pinqops"], [], Cmd: "start-dev", Note: "admin / pinqops"),
         new("vaultwarden", "Vaultwarden", "auth", "vaultwarden/server:latest", [(8087, 80)], [], [("data", "/data")]),
 
         // --- Applications ---
         new("wordpress", "WordPress", "app", "wordpress:latest", [(8088, 80)],
             ["WORDPRESS_DB_HOST=pinqops-mysql", "WORDPRESS_DB_USER=root", "WORDPRESS_DB_PASSWORD=pinqops", "WORDPRESS_DB_NAME=wordpress"],
-            [("data", "/var/www/html")], Note: "needs MySQL on the same network"),
+            [("data", "/var/www/html")], Note: "install the MySQL app too"),
         new("ghost", "Ghost", "app", "ghost:5-alpine", [(2368, 2368)],
             ["NODE_ENV=development", "url=http://localhost:2368"], [("data", "/var/lib/ghost/content")]),
         new("nextcloud", "Nextcloud", "app", "nextcloud:apache", [(8089, 80)], [], [("data", "/var/www/html")]),

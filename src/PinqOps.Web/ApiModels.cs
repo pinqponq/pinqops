@@ -24,8 +24,6 @@ public sealed record NetworkCreateRequest(string? Name, string? Driver, bool Int
 
 public sealed record NetworkContainerRequest(string? Container);
 
-public sealed record AppInstallRequest(string? Id, int? HostPort);
+public sealed record AppInstallRequest(string? Id, int? HostPort, int[]? HostPorts);
 
 public sealed record ContainerActionRequest(string? Action);
-
-public sealed record RegistryLoginRequest(string? Registry, string? Username, string? Token);

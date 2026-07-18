@@ -28,9 +28,12 @@ public sealed class GitHubDeviceFlow : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(clientId);
 
+        // The scope must cover everything the dashboard later does with this
+        // token: repo reads, committing .github/workflows/deploy.yml
+        // (`workflow`), and pulling private GHCR images (`read:packages`).
         var payload = await PostAsync(
                 "https://github.com/login/device/code",
-                new Dictionary<string, string> { ["client_id"] = clientId, ["scope"] = "repo" })
+                new Dictionary<string, string> { ["client_id"] = clientId, ["scope"] = "repo workflow read:packages" })
             .ConfigureAwait(false);
 
         if (GetString(payload, "device_code") is not { } deviceCode
@@ -57,18 +60,22 @@ public sealed class GitHubDeviceFlow : IDisposable
         };
     }
 
-    /// <summary>One poll step. Status: pending | success | denied | expired.</summary>
-    public async Task<(string Status, string? Token)> PollAsync(string handle)
+    /// <summary>
+    /// One poll step. Status: pending | success | denied | expired. The
+    /// returned interval is the number of seconds the caller must wait before
+    /// the next poll — it grows when GitHub answers <c>slow_down</c>.
+    /// </summary>
+    public async Task<(string Status, string? Token, int IntervalSeconds)> PollAsync(string handle)
     {
         if (!_pending.TryGetValue(handle, out var pending))
         {
-            return ("expired", null);
+            return ("expired", null, 5);
         }
 
         if (pending.ExpiresAt < DateTimeOffset.UtcNow)
         {
             _pending.TryRemove(handle, out _);
-            return ("expired", null);
+            return ("expired", null, pending.IntervalSeconds);
         }
 
         var payload = await PostAsync(
@@ -84,20 +91,24 @@ public sealed class GitHubDeviceFlow : IDisposable
         if (GetString(payload, "access_token") is { Length: > 0 } token)
         {
             _pending.TryRemove(handle, out _);
-            return ("success", token);
+            return ("success", token, pending.IntervalSeconds);
         }
 
         switch (GetString(payload, "error"))
         {
             case "authorization_pending":
+                return ("pending", null, pending.IntervalSeconds);
             case "slow_down":
-                return ("pending", null);
+                // Spec: add 5 seconds to the interval and keep going.
+                var slowed = pending with { IntervalSeconds = pending.IntervalSeconds + 5 };
+                _pending[handle] = slowed;
+                return ("pending", null, slowed.IntervalSeconds);
             case "access_denied":
                 _pending.TryRemove(handle, out _);
-                return ("denied", null);
+                return ("denied", null, pending.IntervalSeconds);
             default:
                 _pending.TryRemove(handle, out _);
-                return ("expired", null);
+                return ("expired", null, pending.IntervalSeconds);
         }
     }
 

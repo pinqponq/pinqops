@@ -347,9 +347,9 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
             <div style="margin-top:14px"><a href="#" id="link-no-gh" class="muted" style="font-size:12.5px" data-i18n="se.noGhLink">Continue without signing in with GitHub?</a></div>
           </div>
 
-          <!-- repository: picked from the account's authorized repos, no URL typing -->
+          <!-- repository: picked from the account's authorized repos; a manual
+               URL fallback lives under Advanced for repos outside the list -->
           <form id="settings-form">
-            <input id="set-repo" type="hidden">
             <div class="form-grid">
               <div class="full">
                 <label data-i18n="se.repo">Repository</label>
@@ -362,6 +362,8 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
             <details style="margin-top:16px">
               <summary class="muted" style="cursor:pointer;font-size:13px" data-i18n="se.advanced">Advanced</summary>
               <div class="form-grid">
+                <div class="full"><label for="set-repo" data-i18n="se.repoUrl">Repository URL</label>
+                <input id="set-repo" placeholder="https://github.com/owner/repo"></div>
                 <div><label for="set-compose" data-i18n="se.compose">Compose file path</label>
                 <input id="set-compose" placeholder="/opt/pinqops/docker-compose.yml"></div>
                 <div><label for="set-runnerdir" data-i18n="se.runnerDir">Runner install directory</label>
@@ -433,6 +435,7 @@ en:{
  "su.workflowMiss":"Missing — can be created automatically (commits .github/workflows/deploy.yml to the repo).",
  "su.runnerMiss":"Not installed on this machine — one click installs and registers it.",
  "su.runnerOffline":"Installed but offline — check the systemd service on the Runner page.",
+ "su.runnerUnknown":"Installed. Online status could not be checked (token lacks Administration: read).",
  "su.runnerOnline":"{n} online","su.installBtn":"Install runner","su.createBtn":"Create",
  "su.composeMiss":"{p} does not exist — can be generated for this repo's image.",
  "su.allReady":"Everything is ready — merge to master and it deploys itself.",
@@ -442,7 +445,7 @@ en:{
  "ap.search":"search apps…","ap.all":"all categories","ap.open":"Open","ap.install":"Install","ap.uninstall":"Remove",
  "ap.hint":"Apps run as pinqops-<id> containers; data is kept in named volumes.",
  "ap.installOk":"{n} installed","ap.uninstallOk":"{n} removed","ap.rmTitle":"Remove app","ap.rmConfirm":"Remove “{n}”? Its container is deleted; named volumes are kept.",
- "ap.port":"port","cat.database":"Databases","cat.search-queue":"Search & Queue","cat.web-storage":"Web & Storage",
+ "ap.port":"port","ap.portsLbl":"Host ports","cat.database":"Databases","cat.search-queue":"Search & Queue","cat.web-storage":"Web & Storage",
  "cat.admin-tool":"Admin Tools","cat.monitoring":"Monitoring","cat.dev-ci":"Dev & CI","cat.auth":"Auth & Security","cat.app":"Applications",
  "st.map":"Network map","st.mapEmpty":"No containers to map.","se.pickFirst":"Pick a repository first.",
  "se.prefs":"Dashboard preferences","se.lang":"Language","se.refreshLbl":"Auto-refresh",
@@ -500,11 +503,9 @@ en:{
  "se.tokenKeep":"(leave empty to keep the saved token)","se.tokenSaved":"saved: {m}",
  "se.compose":"Compose file path","se.runnerDir":"Runner install directory","se.saveTest":"Save & test connection",
  "se.dcTitle":"Disconnect GitHub","se.dcConfirm":"Remove the stored repository URL and token from this server?","se.disconnected":"Disconnected",
- "se.connected":"Connected to {r}","se.configFile":"Config file","se.registry":"Registry login (ghcr.io)",
- "se.registryHelp":"Log the server's Docker daemon into a registry so “Deploy now” can pull private images outside a workflow run.",
- "se.registryLbl":"Registry","se.username":"Username","se.tokenOnly":"Token","se.tokenPh":"PAT with read:packages",
+ "se.connected":"Connected to {r}","se.configFile":"Config file",
  "se.pwCard":"Dashboard password","se.pwCur":"Current password","se.pwNew":"New password (min 8)","se.pwChange":"Change password",
- "se.pwChanged":"Password changed — sign in again","se.loginOk":"login ok","se.tokenOk":"Token verified — now pick a repository",
+ "se.pwChanged":"Password changed — sign in again","se.tokenOk":"Token verified — now pick a repository",
  "dep.title":"Deploy now","dep.confirm":"Run <code>docker compose pull && up -d</code> for the configured compose project? The app restarts with the newest image.",
  "dep.run":"Deploy","dep.ing":"deploying…","dep.ok":"✓ deploy succeeded","dep.fail":"✕ deploy failed",
  "lk.login":"Dashboard login","lk.setup":"First run — create the dashboard password.","lk.code":"Setup code",
@@ -522,6 +523,7 @@ tr:{
  "su.workflowMiss":"Eksik — otomatik oluşturulabilir (repoya .github/workflows/deploy.yml commit'lenir).",
  "su.runnerMiss":"Bu makinede kurulu değil — tek tıkla kurulur ve kaydedilir.",
  "su.runnerOffline":"Kurulu ama çevrimdışı — Runner sayfasından systemd servisini kontrol et.",
+ "su.runnerUnknown":"Kurulu. Çevrimiçi durumu doğrulanamadı (token'da Administration: read yok).",
  "su.runnerOnline":"{n} çevrimiçi","su.installBtn":"Runner'ı kur","su.createBtn":"Oluştur",
  "su.composeMiss":"{p} yok — bu reponun imajı için otomatik üretilebilir.",
  "su.allReady":"Her şey hazır — master'a merge et, gerisi otomatik.",
@@ -531,7 +533,7 @@ tr:{
  "ap.search":"uygulama ara…","ap.all":"tüm kategoriler","ap.open":"Aç","ap.install":"Kur","ap.uninstall":"Kaldır",
  "ap.hint":"Uygulamalar pinqops-<id> adlı konteynerler olarak çalışır; veriler adlandırılmış volume'larda tutulur.",
  "ap.installOk":"{n} kuruldu","ap.uninstallOk":"{n} kaldırıldı","ap.rmTitle":"Uygulamayı kaldır","ap.rmConfirm":"“{n}” kaldırılsın mı? Konteyner silinir; volume'lar korunur.",
- "ap.port":"port","cat.database":"Veritabanları","cat.search-queue":"Arama ve Kuyruk","cat.web-storage":"Web ve Depolama",
+ "ap.port":"port","ap.portsLbl":"Host portları","cat.database":"Veritabanları","cat.search-queue":"Arama ve Kuyruk","cat.web-storage":"Web ve Depolama",
  "cat.admin-tool":"Yönetim Araçları","cat.monitoring":"İzleme","cat.dev-ci":"Geliştirme ve CI","cat.auth":"Kimlik ve Güvenlik","cat.app":"Uygulamalar",
  "st.map":"Ağ haritası","st.mapEmpty":"Haritalanacak konteyner yok.","se.pickFirst":"Önce bir depo seç.",
  "se.prefs":"Panel tercihleri","se.lang":"Dil","se.refreshLbl":"Otomatik yenileme",
@@ -589,11 +591,9 @@ tr:{
  "se.tokenKeep":"(kayıtlı token'ı korumak için boş bırak)","se.tokenSaved":"kayıtlı: {m}",
  "se.compose":"Compose dosya yolu","se.runnerDir":"Runner kurulum dizini","se.saveTest":"Kaydet ve bağlantıyı test et",
  "se.dcTitle":"GitHub bağlantısını kes","se.dcConfirm":"Kayıtlı depo URL'si ve token bu sunucudan silinsin mi?","se.disconnected":"Bağlantı kesildi",
- "se.connected":"{r} bağlandı","se.configFile":"Yapılandırma dosyası","se.registry":"Registry girişi (ghcr.io)",
- "se.registryHelp":"Sunucudaki Docker daemon'ını registry'ye giriş yaptır; “Şimdi dağıt” workflow dışında da özel imajları çekebilsin.",
- "se.registryLbl":"Registry","se.username":"Kullanıcı adı","se.tokenOnly":"Token","se.tokenPh":"read:packages yetkili PAT",
+ "se.connected":"{r} bağlandı","se.configFile":"Yapılandırma dosyası",
  "se.pwCard":"Panel şifresi","se.pwCur":"Mevcut şifre","se.pwNew":"Yeni şifre (en az 8)","se.pwChange":"Şifreyi değiştir",
- "se.pwChanged":"Şifre değişti — tekrar giriş yap","se.loginOk":"giriş başarılı","se.tokenOk":"Token doğrulandı — şimdi bir depo seç",
+ "se.pwChanged":"Şifre değişti — tekrar giriş yap","se.tokenOk":"Token doğrulandı — şimdi bir depo seç",
  "dep.title":"Şimdi dağıt","dep.confirm":"Ayarlı compose projesi için <code>docker compose pull && up -d</code> çalıştırılsın mı? Uygulama en yeni imajla yeniden başlar.",
  "dep.run":"Dağıt","dep.ing":"dağıtılıyor…","dep.ok":"✓ dağıtım başarılı","dep.fail":"✕ dağıtım başarısız",
  "lk.login":"Panel girişi","lk.setup":"İlk çalıştırma — panel şifresini oluştur.","lk.code":"Kurulum kodu",
@@ -790,6 +790,7 @@ function setView(v){
   $("#view-"+v).classList.remove("hidden");
   document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
   if(v!=="logs"&&logTimer){clearInterval(logTimer);logTimer=null;}
+  if(v!=="settings"&&deviceTimer)stopDeviceFlow(); // don't keep polling GitHub after leaving Settings
   refresh();
 }
 $("#nav").addEventListener("click",e=>{const b=e.target.closest("button[data-view]");if(b)setView(b.dataset.view);});
@@ -812,7 +813,10 @@ async function refresh(quiet){
     else if(view==="storage")await loadStorage();
     else if(view==="logs")await loadLogsView();
     else if(view==="system")await loadSystem();
-    else if(view==="settings")await loadSettingsIntoForm();
+    // Settings talks to the GitHub API (identity, repos, readiness) — refresh
+    // it only on view entry / manual refresh, never on the auto-refresh tick,
+    // to protect the rate limit and the user's in-progress search.
+    else if(view==="settings"&&!quiet)await loadSettingsIntoForm();
   }catch(ex){if(!quiet&&ex.message!=="unauthorized")toast(ex.message,"err");}
 }
 
@@ -829,7 +833,9 @@ function setGhChip(name,ok){
 const CH={a:"#6d5dfc",b:"#e255a1",mut:"#5d6575",grid:"rgba(139,147,165,.16)",txt:"#8b93a5"};
 const HATCH=`<defs><pattern id="hatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="6" stroke="rgba(255,255,255,.5)" stroke-width="1.6"/></pattern></defs>`;
 function chLegend(items){return`<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;color:var(--muted)">`+
-  items.map(([c,l,h])=>`<span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" style="border-radius:3px;overflow:hidden">${h?HATCH:""}<rect width="12" height="12" fill="${c}"/>${h?`<rect width="12" height="12" fill="url(#hatch)"/>`:""}</svg>${esc(l)}</span>`).join("")+`</div>`;}
+  items.map(([c,l,h],i)=>{ // per-swatch pattern ids so no DOM id is duplicated
+    const pid=`hatch-l${i}`;
+    return`<span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" style="border-radius:3px;overflow:hidden">${h?`<defs><pattern id="${pid}" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="6" stroke="rgba(255,255,255,.5)" stroke-width="1.6"/></pattern></defs>`:""}<rect width="12" height="12" fill="${c}"/>${h?`<rect width="12" height="12" fill="url(#${pid})"/>`:""}</svg>${esc(l)}</span>`;}).join("")+`</div>`;}
 function chEmpty(msg){return`<div class="muted" style="font-size:13px;padding:26px 0;text-align:center">${esc(msg)}</div>`;}
 
 function chartRuns(runs){
@@ -1077,8 +1083,10 @@ function renderApps(){
   const q=($("#apps-search").value||"").toLowerCase(),cat=$("#apps-cat").value;
   const shown=appsCache.filter(a=>(!cat||a.category===cat)&&(!q||a.name.toLowerCase().includes(q)||a.id.includes(q)||a.image.includes(q)));
   $("#apps-grid").innerHTML=shown.map(a=>{
-    const p0=a.ports[0]||{};
-    const open=a.installed?`<a href="http://${location.hostname}:${p0.host}" target="_blank" rel="noopener" style="font-size:12px">${t("ap.open")} :${p0.host} ↗</a>`:"";
+    // Open uses the port the container actually binds (server-parsed), which
+    // may differ from the catalog default when the install overrode it.
+    const openPort=a.hostPort||(a.ports[0]||{}).host;
+    const open=a.installed&&openPort?`<a href="http://${location.hostname}:${openPort}" target="_blank" rel="noopener" style="font-size:12px">${t("ap.open")} :${openPort} ↗</a>`:"";
     return`<div class="card">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">
         <b style="font-size:14px">${esc(a.name)}</b>
@@ -1086,12 +1094,12 @@ function renderApps(){
         ${a.installed?stateChip(a.state||"?"):""}
       </div>
       <div class="mono muted" style="font-size:11.5px;word-break:break-all">${esc(a.image)}</div>
+      <div class="mono muted" style="font-size:11px;margin-top:3px">${a.ports.map(p=>`:${p.host}`).join(" ")}</div>
       ${a.note?`<div class="muted" style="font-size:12px;margin-top:5px">${esc(a.note)}</div>`:""}
       <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
         ${a.installed
           ?`${open}<div class="spacer" style="flex:1"></div><button class="small danger" data-app-rm="${esc(a.id)}" data-app-name="${esc(a.name)}">${t("ap.uninstall")}</button>`
-          :`<input type="number" min="1" max="65535" value="${p0.host||""}" id="app-port-${esc(a.id)}" style="width:92px" title="${t("ap.port")}">
-             <button class="small primary" data-app-install="${esc(a.id)}" data-app-name="${esc(a.name)}">${t("ap.install")}</button>`}
+          :`<button class="small primary" data-app-install="${esc(a.id)}">${t("ap.install")}</button>`}
       </div>
     </div>`;}).join("")||`<div class="card muted">—</div>`;
 }
@@ -1100,11 +1108,20 @@ $("#apps-cat").addEventListener("change",renderApps);
 $("#apps-grid").addEventListener("click",async e=>{
   const b=e.target.closest("button");if(!b)return;
   if(b.dataset.appInstall){
-    b.disabled=true;
-    const port=parseInt(($("#app-port-"+b.dataset.appInstall)||{}).value,10);
-    try{await api("/api/apps/install",{method:"POST",body:JSON.stringify({id:b.dataset.appInstall,hostPort:isNaN(port)?null:port})});
-      toast(t("ap.installOk",{n:b.dataset.appName}),"ok");await loadApps();}
-    catch(ex){toast(ex.message,"err");b.disabled=false;}
+    const app=appsCache.find(x=>x.id===b.dataset.appInstall);if(!app)return;
+    // Per-port host inputs so any port (not just the first) can be relocated.
+    openModal(`${app.name} — ${t("ap.install")}`,
+      `<div class="mono muted" style="font-size:12px;margin-bottom:4px">${esc(app.image)}</div>
+       ${app.note?`<div class="muted" style="font-size:12px;margin-bottom:6px">${esc(app.note)}</div>`:""}
+       <label>${t("ap.portsLbl")}</label>
+       ${app.ports.map((p,i)=>`<div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+         <input type="number" min="1" max="65535" value="${p.host}" id="app-port-${i}" style="width:120px">
+         <span class="muted mono" style="font-size:12px">→ ${p.container}</span></div>`).join("")}`,
+      [{label:t("c.cancel")},{label:t("ap.install"),primary:true,onClick:async()=>{
+        const hostPorts=app.ports.map((p,i)=>parseInt(($("#app-port-"+i)||{}).value,10)||p.host);
+        try{await api("/api/apps/install",{method:"POST",body:JSON.stringify({id:app.id,hostPorts})});
+          closeModal();toast(t("ap.installOk",{n:app.name}),"ok");await loadApps();}
+        catch(ex){toast(ex.message,"err");}}}]);
   }else if(b.dataset.appRm){
     openModal(t("ap.rmTitle"),esc(t("ap.rmConfirm",{n:b.dataset.appName})),[
       {label:t("c.cancel")},{label:t("ap.uninstall"),danger:true,onClick:async()=>{closeModal();
@@ -1201,15 +1218,17 @@ async function openNetworkInspect(name){
       <div class="section-head"><h2>${t("st.attached")}</h2></div>
       ${rows?`<div class="tablewrap"><table style="min-width:0"><thead><tr><th>${t("th.name")}</th><th>IP</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
             :`<div class="muted">${t("st.noneAttached")}</div>`}`);
-    $("#modal-body").addEventListener("click",async e=>{
-      const b=e.target.closest("button[data-net-dc]");if(!b)return;
-      b.disabled=true;
-      try{await api(`/api/docker/networks/${encodeURIComponent(b.dataset.netDc)}/disconnect`,{method:"POST",body:JSON.stringify({container:b.dataset.ct})});
-        toast(`${b.dataset.ct} ✓`,"ok");closeModal();loadStorage();}
-      catch(ex){toast(ex.message,"err");b.disabled=false;}
-    });
   }catch(ex){toast(ex.message,"err");}
 }
+// Delegated ONCE for disconnect buttons inside the network-inspect modal —
+// #modal-body persists across opens, so per-open listeners would stack.
+$("#modal-body").addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-net-dc]");if(!b)return;
+  b.disabled=true;
+  try{await api(`/api/docker/networks/${encodeURIComponent(b.dataset.netDc)}/disconnect`,{method:"POST",body:JSON.stringify({container:b.dataset.ct})});
+    toast(`${b.dataset.ct} ✓`,"ok");closeModal();loadStorage();}
+  catch(ex){toast(ex.message,"err");b.disabled=false;}
+});
 async function openNetworkConnect(name){
   try{
     const r=await api("/api/docker/containers");
@@ -1307,13 +1326,17 @@ async function loadSetupStatus(){
     const row=(ok,label,detail,btn)=>`<div style="display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line)">
       <span class="chip ${ok?"ok":"warn"}">${ok?"✓":"!"}</span>
       <div style="flex:1"><b style="font-size:13px">${label}</b><div class="muted" style="font-size:12px">${detail||""}</div></div>${btn||""}</div>`;
-    const runnerOk=s.runnerInstalled&&s.runnersOnline>0;
+    // A token without Administration:read can't list runners — degrade the
+    // runner row to "installed locally, online state unknown", never the card.
+    const runnerOk=s.runnerInstalled&&(s.runnersOnline>0||!!s.runnersError);
+    const runnerDetail=!s.runnerInstalled?t("su.runnerMiss")
+      :s.runnersError?t("su.runnerUnknown")
+      :s.runnersOnline>0?t("su.runnerOnline",{n:s.runnersOnline}):t("su.runnerOffline");
     $("#setup-list").innerHTML=[
       row(s.repo.hasDockerfile,t("su.dockerfile"),s.repo.hasDockerfile?"":t("su.dockerfileMiss")),
       row(s.repo.hasWorkflow,t("su.workflow"),s.repo.hasWorkflow?".github/workflows/deploy.yml":t("su.workflowMiss"),
         s.repo.hasWorkflow?"":`<button class="small primary" id="btn-fix-workflow">${t("su.createBtn")}</button>`),
-      row(runnerOk,t("su.runner"),
-        s.runnerInstalled?(s.runnersOnline>0?t("su.runnerOnline",{n:s.runnersOnline}):t("su.runnerOffline")):t("su.runnerMiss"),
+      row(runnerOk,t("su.runner"),runnerDetail,
         s.runnerInstalled?"":`<button class="small primary" id="btn-fix-runner">${t("su.installBtn")}</button>`),
       row(s.composeExists,t("su.compose"),s.composeExists?esc(s.composeFile):t("su.composeMiss",{p:esc(s.composeFile)}),
         s.composeExists?"":`<button class="small primary" id="btn-fix-compose">${t("su.createBtn")}</button>`),
@@ -1349,7 +1372,7 @@ async function loadIdentityAndRepos(){
   try{
     const r=await api("/api/github/repos");
     repoList=r.items||[];
-    fillRepoPicker(repoList);
+    fillRepoPicker(repoList,$("#repo-search").value);
   }catch{ fillRepoPicker([]); }
 }
 function fillRepoPicker(items,filter){
@@ -1415,20 +1438,29 @@ $("#btn-gh-signin").onclick=async()=>{
     $("#gh-user-code").textContent=r.userCode;
     const link=$("#gh-verify-link");link.href=r.verificationUri;link.textContent=r.verificationUri;
     $("#gh-device-state").textContent="";
-    const every=Math.max(5,r.intervalSeconds||5)*1000;
-    if(deviceTimer)clearInterval(deviceTimer);
-    deviceTimer=setInterval(async()=>{
-      try{
-        const p=await api("/api/github/device/poll",{method:"POST",body:JSON.stringify({handle:deviceHandle})});
-        if(p.status==="success"){stopDeviceFlow();ghCache=null;
-          toast(`${t("se.signedIn")}: @${p.user.login} — ${t("se.tokenOk")}`,"ok");
-          await loadSettingsIntoForm();}
-        else if(p.status==="denied")stopDeviceFlow(t("se.denied"));
-        else if(p.status==="expired")stopDeviceFlow(t("se.expired"));
-      }catch(ex){stopDeviceFlow(ex.message);}
-    },every);
+    armDevicePoll(Math.max(5,r.intervalSeconds||5)*1000);
   }catch(ex){toast(ex.message,"err");}
 };
+let deviceEvery=0;
+function armDevicePoll(ms){
+  if(deviceTimer)clearInterval(deviceTimer);
+  deviceEvery=ms;
+  deviceTimer=setInterval(devicePollOnce,ms);
+}
+async function devicePollOnce(){
+  try{
+    const p=await api("/api/github/device/poll",{method:"POST",body:JSON.stringify({handle:deviceHandle})});
+    if(p.status==="success"){stopDeviceFlow();ghCache=null;
+      toast(`${t("se.signedIn")}: @${p.user.login} — ${t("se.tokenOk")}`,"ok");
+      await loadSettingsIntoForm();}
+    else if(p.status==="denied")stopDeviceFlow(t("se.denied"));
+    else if(p.status==="expired")stopDeviceFlow(t("se.expired"));
+    else{ // honor GitHub's slow_down by re-arming at the server-reported interval
+      const ms=Math.max(5,p.intervalSeconds||5)*1000;
+      if(ms>deviceEvery)armDevicePoll(ms);
+    }
+  }catch(ex){stopDeviceFlow(ex.message);}
+}
 $("#btn-gh-signout").onclick=()=>openModal(t("se.dcTitle"),esc(t("se.dcConfirm")),[
   {label:t("c.cancel")},{label:t("se.ghDisconnect"),danger:true,onClick:async()=>{closeModal();
     try{await api("/api/settings/disconnect",{method:"POST"});ghCache=null;stopDeviceFlow();

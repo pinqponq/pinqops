@@ -135,28 +135,35 @@ public sealed class DockerService
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
-    /// <summary>Runs a catalog app as a labeled, named container.</summary>
-    public async Task<string> InstallAppAsync(AppSpec app, int? hostPortOverride)
+    /// <summary>
+    /// Runs a catalog app as a labeled, named container on the shared
+    /// pinqops-apps network. Each entry in <paramref name="hostPorts"/>
+    /// overrides the corresponding catalog port (0/absent keeps the default).
+    /// </summary>
+    public async Task<string> InstallAppAsync(AppSpec app, IReadOnlyList<int>? hostPorts)
     {
-        if (hostPortOverride is < 1 or > 65535)
+        if (hostPorts is not null && hostPorts.Any(port => port is not 0 and (< 1 or > 65535)))
         {
             throw new ArgumentException("Host port must be between 1 and 65535.");
         }
+
+        await EnsureSharedNetworkAsync().ConfigureAwait(false);
 
         var arguments = new List<string>
         {
             "run", "-d",
             "--name", $"{AppCatalog.ContainerPrefix}{app.Id}",
             "--label", $"{AppCatalog.Label}={app.Id}",
+            "--network", AppCatalog.SharedNetwork,
             "--restart", "unless-stopped",
         };
 
         for (var index = 0; index < app.Ports.Length; index++)
         {
             var (host, container) = app.Ports[index];
-            if (index == 0 && hostPortOverride is { } overridePort)
+            if (hostPorts is not null && index < hostPorts.Count && hostPorts[index] > 0)
             {
-                host = overridePort;
+                host = hostPorts[index];
             }
 
             arguments.AddRange(["-p", $"{host}:{container}"]);
@@ -183,6 +190,20 @@ public sealed class DockerService
         var result = await _processRunner.RunAsync("docker", [.. arguments], workingDirectory: null, cts.Token)
             .ConfigureAwait(false);
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
+    private async Task EnsureSharedNetworkAsync()
+    {
+        var inspect = await RunAsync("network", "inspect", AppCatalog.SharedNetwork).ConfigureAwait(false);
+        if (!inspect.Succeeded)
+        {
+            var create = await RunAsync("network", "create", AppCatalog.SharedNetwork).ConfigureAwait(false);
+            // A concurrent create is fine; anything else should surface.
+            if (!create.Succeeded && !create.StandardError.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+            {
+                throw Failed(create);
+            }
+        }
     }
 
     /// <summary>Removes a catalog app's container (its volumes are kept).</summary>

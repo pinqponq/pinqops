@@ -426,10 +426,10 @@ app.MapPost("/api/github/device/poll", (HttpContext context, UiConfigStore store
             throw new ArgumentException("Missing device-flow handle.");
         }
 
-        var (status, token) = await deviceFlow.PollAsync(handle);
+        var (status, token, intervalSeconds) = await deviceFlow.PollAsync(handle);
         if (status != "success" || token is null)
         {
-            return new { status };
+            return new { status, intervalSeconds };
         }
 
         var user = await gitHub.GetUserAsync(null, token);
@@ -515,17 +515,6 @@ app.MapPost("/api/docker/containers/{id}/action", (string id, HttpContext contex
 app.MapPost("/api/docker/prune", (DockerService docker) =>
     Safe(async () => new { ok = true, output = await docker.PruneImagesAsync() }));
 
-app.MapPost("/api/docker/login", (HttpContext context, DockerService docker) =>
-    Safe(async () =>
-    {
-        var request = await context.Request.ReadFromJsonAsync<RegistryLoginRequest>();
-        var output = await docker.LoginAsync(
-            string.IsNullOrWhiteSpace(request?.Registry) ? "ghcr.io" : request.Registry.Trim(),
-            request?.Username ?? "",
-            request?.Token ?? "");
-        return new { ok = true, output };
-    }));
-
 // ---- Setup (Portainer-style: pick a repo, the dashboard readies everything) ----
 
 app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService gitHub) =>
@@ -539,15 +528,29 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
 
         var repoTask = gitHub.CheckRepoSetupAsync();
         var runnersTask = gitHub.GetRunnersSummaryAsync();
-        await Task.WhenAll(repoTask, runnersTask);
-        var (online, total) = runnersTask.Result;
+        var repo = await repoTask;
+
+        // Listing runners needs repo-admin (Administration: read). A token
+        // without it must only degrade the runner row, not kill the card.
+        var online = 0;
+        var total = 0;
+        string? runnersError = null;
+        try
+        {
+            (online, total) = await runnersTask;
+        }
+        catch (GitHubApiException exception)
+        {
+            runnersError = exception.Message;
+        }
 
         return (object)new
         {
             configured = true,
-            repo = repoTask.Result,
+            repo,
             runnersOnline = online,
             runnersTotal = total,
+            runnersError,
             runnerInstalled = LocalRunnerService.IsInstalled(config.RunnerDirectory),
             composeFile = config.ComposeFile,
             composeExists = File.Exists(config.ComposeFile),
@@ -640,7 +643,7 @@ app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRun
 app.MapGet("/api/apps", (DockerService docker) =>
     Safe(async () =>
     {
-        var installedById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var installedById = new Dictionary<string, (string State, string Ports)>(StringComparer.OrdinalIgnoreCase);
         try
         {
             foreach (var container in await docker.ListContainersAsync())
@@ -649,8 +652,9 @@ app.MapGet("/api/apps", (DockerService docker) =>
                 var appLabel = labels.Split(',').FirstOrDefault(x => x.StartsWith(AppCatalog.Label + "=", StringComparison.Ordinal));
                 if (appLabel is not null)
                 {
-                    installedById[appLabel[(AppCatalog.Label.Length + 1)..]] =
-                        container.TryGetProperty("State", out var s) ? s.GetString() ?? "" : "";
+                    installedById[appLabel[(AppCatalog.Label.Length + 1)..]] = (
+                        container.TryGetProperty("State", out var s) ? s.GetString() ?? "" : "",
+                        container.TryGetProperty("Ports", out var p) ? p.GetString() ?? "" : "");
                 }
             }
         }
@@ -661,16 +665,24 @@ app.MapGet("/api/apps", (DockerService docker) =>
 
         return new
         {
-            items = AppCatalog.Apps.Select(a => new
+            items = AppCatalog.Apps.Select(a =>
             {
-                id = a.Id,
-                name = a.Name,
-                category = a.Category,
-                image = a.Image,
-                note = a.Note,
-                ports = a.Ports.Select(p => new { host = p.Host, container = p.Container }).ToArray(),
-                installed = installedById.ContainsKey(a.Id),
-                state = installedById.GetValueOrDefault(a.Id),
+                var installed = installedById.TryGetValue(a.Id, out var info);
+                // The Open link must use the port the container actually
+                // binds (the user may have overridden the catalog default).
+                var actualHostPort = installed ? ParseFirstHostPort(info.Ports) : null;
+                return new
+                {
+                    id = a.Id,
+                    name = a.Name,
+                    category = a.Category,
+                    image = a.Image,
+                    note = a.Note,
+                    ports = a.Ports.Select(p => new { host = p.Host, container = p.Container }).ToArray(),
+                    installed,
+                    state = installed ? info.State : null,
+                    hostPort = actualHostPort ?? (a.Ports.Length > 0 ? a.Ports[0].Host : (int?)null),
+                };
             }),
         };
     }));
@@ -681,7 +693,9 @@ app.MapPost("/api/apps/install", (HttpContext context, DockerService docker) =>
         var request = await context.Request.ReadFromJsonAsync<AppInstallRequest>();
         var appSpec = AppCatalog.Find(request?.Id ?? "")
             ?? throw new ArgumentException($"Unknown app '{request?.Id}'.");
-        var output = await docker.InstallAppAsync(appSpec, request?.HostPort);
+        var hostPorts = request?.HostPorts
+            ?? (request?.HostPort is { } single ? new[] { single } : null);
+        var output = await docker.InstallAppAsync(appSpec, hostPorts);
         return new { ok = true, output };
     }));
 
@@ -807,6 +821,14 @@ static IResult Error(int statusCode, string message) =>
 
 static string ClientKey(HttpContext context) =>
     context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+/// <summary>First published host port from docker ps's Ports column, e.g.
+/// "0.0.0.0:3005-&gt;3000/tcp, :::3005-&gt;3000/tcp" → 3005.</summary>
+static int? ParseFirstHostPort(string portsColumn)
+{
+    var match = System.Text.RegularExpressions.Regex.Match(portsColumn ?? "", @":(\d+)->");
+    return match.Success && int.TryParse(match.Groups[1].Value, out var port) ? port : null;
+}
 
 static string? ReadBearerToken(HttpContext context)
 {

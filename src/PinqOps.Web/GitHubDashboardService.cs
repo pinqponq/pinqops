@@ -400,6 +400,28 @@ public sealed class GitHubDashboardService : IDisposable
         string path) =>
         SendAsync(repository, auth, HttpMethod.Get, path, jsonBody: null);
 
+    /// <summary>
+    /// API base for calls that have no repository yet (user, repo list): honor
+    /// the configured repository's host when one is stored so GitHub
+    /// Enterprise setups keep working; otherwise public GitHub.
+    /// </summary>
+    private string DefaultApiBase()
+    {
+        var repoUrl = _configStore.Current.RepoUrl;
+        if (!string.IsNullOrWhiteSpace(repoUrl))
+        {
+            try
+            {
+                return ApiBase(GitHubRepositoryParser.Parse(repoUrl));
+            }
+            catch (ArgumentException)
+            {
+            }
+        }
+
+        return "https://api.github.com";
+    }
+
     private async Task<JsonElement> SendAsync(
         GitHubRepository? repository,
         AuthenticationHeaderValue auth,
@@ -407,7 +429,7 @@ public sealed class GitHubDashboardService : IDisposable
         string path,
         string? jsonBody)
     {
-        var apiBase = repository is null ? "https://api.github.com" : ApiBase(repository);
+        var apiBase = repository is null ? DefaultApiBase() : ApiBase(repository);
         using var request = new HttpRequestMessage(method, apiBase + path);
         request.Headers.Authorization = auth;
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));

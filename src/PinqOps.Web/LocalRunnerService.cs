@@ -20,8 +20,9 @@ public sealed class LocalRunnerService
 
     public async Task<object> GetStatusAsync(string runnerDirectory)
     {
-        var installed = Directory.Exists(runnerDirectory)
-            && File.Exists(Path.Combine(runnerDirectory, "config.sh"));
+        // Same definition as the readiness check: "installed" means registered
+        // (.runner exists), not merely downloaded.
+        var installed = IsInstalled(runnerDirectory);
 
         string? agentName = null;
         string? gitHubUrl = null;
