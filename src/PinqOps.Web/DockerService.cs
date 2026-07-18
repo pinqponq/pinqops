@@ -136,6 +136,19 @@ public sealed class DockerService
     }
 
     /// <summary>
+    /// Pulls an app image up front, so install progress can report the slow
+    /// pull phase separately from the (fast) container start.
+    /// </summary>
+    public async Task<string> PullImageAsync(string image)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(image);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        var result = await _processRunner.RunAsync("docker", ["pull", image], workingDirectory: null, cts.Token)
+            .ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
+    /// <summary>
     /// Runs a catalog app as a labeled, named container on the shared
     /// pinqops-apps network. Each entry in <paramref name="hostPorts"/>
     /// overrides the corresponding catalog port (0/absent keeps the default).

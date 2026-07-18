@@ -79,6 +79,7 @@ builder.Services.AddSingleton<GitHubDashboardService>();
 builder.Services.AddSingleton<GitHubDeviceFlow>();
 builder.Services.AddSingleton<LocalRunnerService>();
 builder.Services.AddSingleton<SystemInfoService>();
+builder.Services.AddSingleton<AppInstallJobs>();
 
 // Blunt per-client request ceiling on top of the login throttle, so a single
 // client cannot hammer the API (or the process-spawning docker endpoints).
@@ -686,7 +687,7 @@ app.MapGet("/api/setup/install-runner/progress", () => Results.Json(runnerInstal
 
 // ---- App catalog (one-click installs) -------------------------------------------
 
-app.MapGet("/api/apps", (DockerService docker) =>
+app.MapGet("/api/apps", (DockerService docker, AppInstallJobs jobs) =>
     Safe(async () =>
     {
         var installedById = new Dictionary<string, (string State, string Ports)>(StringComparer.OrdinalIgnoreCase);
@@ -709,6 +710,7 @@ app.MapGet("/api/apps", (DockerService docker) =>
             // Docker unreachable — the catalog is still browsable.
         }
 
+        var installing = jobs.ActiveAppIds();
         return new
         {
             items = AppCatalog.Apps.Select(a =>
@@ -726,6 +728,7 @@ app.MapGet("/api/apps", (DockerService docker) =>
                     note = a.Note,
                     ports = a.Ports.Select(p => new { host = p.Host, container = p.Container }).ToArray(),
                     installed,
+                    installing = installing.Contains(a.Id, StringComparer.OrdinalIgnoreCase),
                     state = installed ? info.State : null,
                     hostPort = actualHostPort ?? (a.Ports.Length > 0 ? a.Ports[0].Host : (int?)null),
                 };
@@ -733,17 +736,67 @@ app.MapGet("/api/apps", (DockerService docker) =>
         };
     }));
 
-app.MapPost("/api/apps/install", (HttpContext context, DockerService docker) =>
-    Safe(async () =>
+// Installs run in the background (docker pull can take minutes): the endpoint
+// returns a job id immediately and the UI polls the job for pulling→starting→
+// done, so progress shows without a page refresh.
+app.MapPost("/api/apps/install", async (HttpContext context, DockerService docker, AppInstallJobs jobs) =>
+{
+    AppInstallRequest? request;
+    try
     {
-        var request = await context.Request.ReadFromJsonAsync<AppInstallRequest>();
-        var appSpec = AppCatalog.Find(request?.Id ?? "")
-            ?? throw new ArgumentException($"Unknown app '{request?.Id}'.");
-        var hostPorts = request?.HostPorts
-            ?? (request?.HostPort is { } single ? new[] { single } : null);
-        var output = await docker.InstallAppAsync(appSpec, hostPorts);
-        return new { ok = true, output };
-    }));
+        request = await context.Request.ReadFromJsonAsync<AppInstallRequest>();
+    }
+    catch (System.Text.Json.JsonException)
+    {
+        return Error(400, "Invalid request body.");
+    }
+
+    var appSpec = AppCatalog.Find(request?.Id ?? "");
+    if (appSpec is null)
+    {
+        return Error(400, $"Unknown app '{request?.Id}'.");
+    }
+
+    var hostPorts = request?.HostPorts
+        ?? (request?.HostPort is { } single ? new[] { single } : null);
+    if (hostPorts is not null && hostPorts.Any(p => p is not 0 and (< 1 or > 65535)))
+    {
+        return Error(400, "Host port must be between 1 and 65535.");
+    }
+
+    var job = jobs.TryStart(appSpec.Id);
+    if (job is null)
+    {
+        return Error(409, "An install for this app is already in progress.");
+    }
+
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            await docker.PullImageAsync(appSpec.Image);
+            job.Phase = "starting";
+            job.Output = await docker.InstallAppAsync(appSpec, hostPorts);
+            job.Phase = "done";
+        }
+        catch (Exception exception)
+        {
+            job.Error = exception.Message;
+            job.Phase = "error";
+            logger.LogWarning("App install '{AppId}' failed: {Message}", appSpec.Id, exception.Message);
+        }
+    });
+
+    return Results.Json(new { jobId = job.Id });
+});
+
+app.MapGet("/api/apps/install/{jobId}", (string jobId, AppInstallJobs jobs) =>
+{
+    var job = jobs.Find(jobId);
+    return job is null
+        ? Error(404, "Unknown install job.")
+        : Results.Json(new { appId = job.AppId, phase = job.Phase, done = job.Done, error = job.Error, output = job.Output });
+});
 
 app.MapPost("/api/apps/{id}/uninstall", (string id, DockerService docker) =>
     Safe(async () =>
