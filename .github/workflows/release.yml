@@ -8,6 +8,14 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual fallback for environments where pushing tags is blocked: dispatch
+  # with a version and the release action creates the tag at this commit.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 0.4.0, without the leading v)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -28,7 +36,8 @@ jobs:
         # Stamp the tag into the binaries so `pinqops version` (and the UI
         # footer) report the release, not the SDK default 1.0.0.
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}"
+          if [ -z "$VERSION" ]; then VERSION="${GITHUB_REF_NAME#v}"; fi
           dotnet publish src/PinqOps.Cli \
             -c Release \
             -r linux-x64 \
@@ -47,6 +56,7 @@ jobs:
       - name: Attach binaries to the release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
           files: |
             publish/pinqops
             publish/pinqops-ui
