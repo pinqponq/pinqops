@@ -122,14 +122,24 @@ public sealed class RunnerInstaller
         {
             // Without (or after a failed) config.sh remove, delete the
             // registration files so config.sh accepts a fresh registration. The
-            // orphaned GitHub-side entry just shows offline until purged.
+            // orphaned GitHub-side entry just shows offline until purged. Each
+            // delete is best-effort too: a root-owned leftover must not turn
+            // cleanup into a hard failure — config.sh will complain if the file
+            // that matters could not be removed.
             _log?.Invoke("could not de-register the old runner cleanly; deleting its local registration files");
             foreach (var name in new[] { ".runner", ".credentials", ".credentials_rsaparams", ".service" })
             {
                 var path = Path.Combine(directory, name);
-                if (File.Exists(path))
+                try
                 {
-                    File.Delete(path);
+                    if (File.Exists(path))
+                    {
+                        File.Delete(path);
+                    }
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    _log?.Invoke($"could not delete {name}: {exception.Message}");
                 }
             }
         }

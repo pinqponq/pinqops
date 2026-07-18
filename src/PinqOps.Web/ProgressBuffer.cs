@@ -3,7 +3,10 @@ namespace PinqOps.Web;
 /// <summary>
 /// Thread-safe log buffer for the single-flight runner install so the UI can
 /// poll live progress while the install POST is still running. One instance is
-/// enough because the install endpoint is gated by a semaphore.
+/// enough because the install endpoint is gated by a semaphore. Each install
+/// bumps <see cref="Generation"/>, so a poller that recorded the generation
+/// before starting its own run can tell this run's result apart from a stale
+/// previous one.
 /// </summary>
 public sealed class ProgressBuffer
 {
@@ -14,6 +17,8 @@ public sealed class ProgressBuffer
 
     public bool? Succeeded { get; private set; }
 
+    public int Generation { get; private set; }
+
     public void Start()
     {
         lock (_gate)
@@ -21,6 +26,7 @@ public sealed class ProgressBuffer
             _lines.Clear();
             Active = true;
             Succeeded = null;
+            Generation++;
         }
     }
 
@@ -45,12 +51,13 @@ public sealed class ProgressBuffer
     {
         lock (_gate)
         {
-            return new { active = Active, succeeded = Succeeded, log = string.Join('\n', _lines) };
+            return new { active = Active, succeeded = Succeeded, generation = Generation, log = Text() };
         }
     }
 
     public string Text()
     {
+        // Monitor is reentrant, so Snapshot's lock and this one compose.
         lock (_gate)
         {
             return string.Join('\n', _lines);

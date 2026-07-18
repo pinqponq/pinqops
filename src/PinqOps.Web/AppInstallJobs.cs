@@ -14,6 +14,10 @@ public sealed class AppInstallJobs
 
     private readonly ConcurrentDictionary<string, Job> _jobs = new();
 
+    // Guards the "no second job for the same app" check-then-add in TryStart;
+    // the dictionary alone can't make that scan-plus-insert atomic.
+    private readonly object _startGate = new();
+
     public sealed class Job
     {
         public required string Id { get; init; }
@@ -35,18 +39,21 @@ public sealed class AppInstallJobs
     public Job? TryStart(string appId)
     {
         Prune();
-        if (_jobs.Values.Any(job => !job.Done && string.Equals(job.AppId, appId, StringComparison.OrdinalIgnoreCase)))
+        lock (_startGate)
         {
-            return null;
-        }
+            if (_jobs.Values.Any(job => !job.Done && string.Equals(job.AppId, appId, StringComparison.OrdinalIgnoreCase)))
+            {
+                return null;
+            }
 
-        var job = new Job
-        {
-            Id = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(8)),
-            AppId = appId,
-        };
-        _jobs[job.Id] = job;
-        return job;
+            var job = new Job
+            {
+                Id = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(8)),
+                AppId = appId,
+            };
+            _jobs[job.Id] = job;
+            return job;
+        }
     }
 
     public Job? Find(string jobId)

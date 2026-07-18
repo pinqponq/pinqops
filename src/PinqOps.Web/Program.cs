@@ -281,15 +281,32 @@ app.MapPost("/api/auth/change-password", async (HttpContext context, UiConfigSto
 app.MapGet("/api/settings", (UiConfigStore store) =>
 {
     var config = store.Current;
+
+    // The canonical owner/repo display name comes from the server-side parser
+    // (works for GHES hosts too) so the UI never re-parses the URL itself.
+    string? fullName = null;
+    if (!string.IsNullOrWhiteSpace(config.RepoUrl))
+    {
+        try
+        {
+            var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
+            fullName = $"{repository.Owner}/{repository.Name}";
+        }
+        catch (ArgumentException)
+        {
+            // A hand-edited invalid URL just means no pretty name.
+        }
+    }
+
     return Results.Json(new
     {
         repoUrl = config.RepoUrl,
+        fullName,
         username = config.Username,
         patMasked = config.Pat is { Length: > 4 } pat ? $"••••••••{pat[^4..]}" : null,
         composeFile = config.ComposeFile,
         runnerDirectory = config.RunnerDirectory,
         configPath = store.Path_,
-        lastDeploy = config.LastDeploy,
         version = PinqOpsVersion.Current,
         githubClientId = config.GithubClientId
             ?? Environment.GetEnvironmentVariable("PINQOPS_GITHUB_CLIENT_ID"),
@@ -547,9 +564,11 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
 
         // "Installed" must mean "registered to THIS repo": a leftover runner
         // from an earlier repository would otherwise short-circuit the setup
-        // flow into starting the wrong repo's runner service.
+        // flow into starting the wrong repo's runner service. One .runner read
+        // answers installed/mismatch/registered-to alike.
         var runnerRegisteredTo = LocalRunnerService.GetRegisteredUrl(config.RunnerDirectory);
-        var runnerInstalled = LocalRunnerService.IsInstalledFor(config.RunnerDirectory, config.RepoUrl);
+        var runnerInstalled = runnerRegisteredTo is not null
+            && LocalRunnerService.MatchesRepo(runnerRegisteredTo, config.RepoUrl);
 
         return (object)new
         {
@@ -559,7 +578,7 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
             runnersTotal = total,
             runnersError,
             runnerInstalled,
-            runnerMismatch = !runnerInstalled && LocalRunnerService.IsInstalled(config.RunnerDirectory),
+            runnerMismatch = !runnerInstalled && runnerRegisteredTo is not null,
             runnerRegisteredTo,
             composeFile = config.ComposeFile,
             composeExists = File.Exists(config.ComposeFile),
@@ -608,7 +627,7 @@ app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRun
     }
 
     runnerInstallProgress.Start();
-    var finished = false;
+    var succeeded = false;
     try
     {
         var config = store.Current;
@@ -630,8 +649,6 @@ app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRun
             catch (GitHubApiException exception)
             {
                 runnerInstallProgress.Add("error: " + exception.Message);
-                runnerInstallProgress.Finish(false);
-                finished = true;
                 return Results.Json(new { succeeded = false, log = runnerInstallProgress.Text() });
             }
 
@@ -660,23 +677,20 @@ app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRun
         using var downloader = new HttpFileDownloader();
         var installer = new RunnerInstaller(processRunner, downloader, runnerInstallProgress.Add);
         var serviceUser = Environment.GetEnvironmentVariable("SUDO_USER") ?? Environment.UserName;
-        var succeeded = await installer.InstallAsync(options, serviceUser);
+        succeeded = await installer.InstallAsync(options, serviceUser);
         logger.LogWarning("Dashboard runner install finished: {Succeeded}", succeeded);
-        runnerInstallProgress.Finish(succeeded);
-        finished = true;
         return Results.Json(new { succeeded, log = runnerInstallProgress.Text() });
     }
     catch (Exception exception)
     {
+        // The wizard may only ever see the progress buffer (when the POST is
+        // severed by a proxy timeout), so the failure reason must land there.
+        runnerInstallProgress.Add("error: " + exception.Message);
         return Error(500, exception.Message);
     }
     finally
     {
-        if (!finished)
-        {
-            runnerInstallProgress.Finish(false);
-        }
-
+        runnerInstallProgress.Finish(succeeded);
         runnerInstallGate.Release();
     }
 });

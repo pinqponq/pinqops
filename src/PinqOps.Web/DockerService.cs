@@ -137,14 +137,14 @@ public sealed class DockerService
 
     /// <summary>
     /// Pulls an app image up front, so install progress can report the slow
-    /// pull phase separately from the (fast) container start.
+    /// pull phase separately from the (fast) container start. Installs run as
+    /// background jobs, so the leash only guards against a truly hung pull —
+    /// large images on slow uplinks legitimately take tens of minutes.
     /// </summary>
     public async Task<string> PullImageAsync(string image)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(image);
-        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-        var result = await _processRunner.RunAsync("docker", ["pull", image], workingDirectory: null, cts.Token)
-            .ConfigureAwait(false);
+        var result = await RunAsync(TimeSpan.FromMinutes(30), "pull", image).ConfigureAwait(false);
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
@@ -227,9 +227,12 @@ public sealed class DockerService
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
-    private async Task<ProcessResult> RunAsync(params string[] arguments)
+    private Task<ProcessResult> RunAsync(params string[] arguments) =>
+        RunAsync(CommandTimeout, arguments);
+
+    private async Task<ProcessResult> RunAsync(TimeSpan timeout, params string[] arguments)
     {
-        using var cts = new CancellationTokenSource(CommandTimeout);
+        using var cts = new CancellationTokenSource(timeout);
         return await _processRunner.RunAsync("docker", arguments, workingDirectory: null, cts.Token).ConfigureAwait(false);
     }
 

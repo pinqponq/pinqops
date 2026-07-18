@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace PinqOps.Web;
 
 /// <summary>
@@ -23,23 +21,19 @@ public sealed class LocalRunnerService
     /// registered to, read from its <c>.runner</c> file — or null when nothing
     /// is registered there (or the file is unreadable).
     /// </summary>
-    public static string? GetRegisteredUrl(string runnerDirectory)
-    {
-        var runnerFile = Path.Combine(runnerDirectory, ".runner");
-        if (!File.Exists(runnerFile))
-        {
-            return null;
-        }
+    public static string? GetRegisteredUrl(string runnerDirectory) =>
+        RunnerRegistration.ReadUrl(runnerDirectory);
 
-        try
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(runnerFile));
-            return GetString(document.RootElement, "gitHubUrl") ?? GetString(document.RootElement, "serverUrl");
-        }
-        catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
+    /// <summary>
+    /// Whether <paramref name="registeredUrl"/> (from a runner's <c>.runner</c>
+    /// file) and <paramref name="repoUrl"/> point at the same repository.
+    /// </summary>
+    public static bool MatchesRepo(string? registeredUrl, string? repoUrl)
+    {
+        var registered = NormalizeRepoUrl(registeredUrl);
+        var expected = NormalizeRepoUrl(repoUrl);
+        return registered is not null && expected is not null
+            && string.Equals(registered, expected, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -49,18 +43,8 @@ public sealed class LocalRunnerService
     /// the wrong repository's runner and report success while the selected repo
     /// stays runner-less on GitHub.
     /// </summary>
-    public static bool IsInstalledFor(string runnerDirectory, string? repoUrl)
-    {
-        if (!IsInstalled(runnerDirectory) || string.IsNullOrWhiteSpace(repoUrl))
-        {
-            return false;
-        }
-
-        var registered = NormalizeRepoUrl(GetRegisteredUrl(runnerDirectory));
-        var expected = NormalizeRepoUrl(repoUrl);
-        return registered is not null && expected is not null
-            && string.Equals(registered, expected, StringComparison.OrdinalIgnoreCase);
-    }
+    public static bool IsInstalledFor(string runnerDirectory, string? repoUrl) =>
+        IsInstalled(runnerDirectory) && MatchesRepo(GetRegisteredUrl(runnerDirectory), repoUrl);
 
     private static string? NormalizeRepoUrl(string? url)
     {
@@ -85,21 +69,8 @@ public sealed class LocalRunnerService
         // (.runner exists), not merely downloaded.
         var installed = IsInstalled(runnerDirectory);
 
-        string? agentName = null;
-        var gitHubUrl = GetRegisteredUrl(runnerDirectory);
-        var runnerFile = Path.Combine(runnerDirectory, ".runner");
-        if (File.Exists(runnerFile))
-        {
-            try
-            {
-                using var document = JsonDocument.Parse(await File.ReadAllTextAsync(runnerFile).ConfigureAwait(false));
-                agentName = GetString(document.RootElement, "agentName");
-            }
-            catch (JsonException)
-            {
-                // A malformed .runner file just means less detail on the dashboard.
-            }
-        }
+        // One read serves the agent name, the registered URL, and the unit scan.
+        var (agentName, gitHubUrl) = RunnerRegistration.Read(runnerDirectory);
 
         var diagDirectory = Path.Combine(runnerDirectory, "_diag");
         var lastWorkerLogAt = LatestWriteTime(diagDirectory, "Worker_*.log");
@@ -112,7 +83,7 @@ public sealed class LocalRunnerService
             agentName,
             gitHubUrl,
             registeredRepoUrl = NormalizeRepoUrl(gitHubUrl),
-            service = await GetServiceStatusAsync(runnerDirectory).ConfigureAwait(false),
+            service = await GetServiceStatusAsync(runnerDirectory, gitHubUrl).ConfigureAwait(false),
             lastWorkerLogAt,
             lastRunnerLogAt,
         };
@@ -127,7 +98,7 @@ public sealed class LocalRunnerService
     {
         var lines = new List<string>();
 
-        var unit = await FindUnitAsync(runnerDirectory).ConfigureAwait(false);
+        var unit = await FindUnitAsync(runnerDirectory, RunnerRegistration.ReadUrl(runnerDirectory)).ConfigureAwait(false);
         if (unit is not null)
         {
             var start = await RunAsync("systemctl", "start", unit).ConfigureAwait(false);
@@ -170,7 +141,7 @@ public sealed class LocalRunnerService
     /// filtered to the repository the directory is registered to — never "the
     /// first actions.runner.* unit", which may belong to another repository.
     /// </summary>
-    private async Task<string?> FindUnitAsync(string runnerDirectory)
+    private async Task<string?> FindUnitAsync(string runnerDirectory, string? registeredUrl)
     {
         var serviceFile = Path.Combine(runnerDirectory, ".service");
         if (File.Exists(serviceFile))
@@ -183,9 +154,10 @@ public sealed class LocalRunnerService
                     return unit;
                 }
             }
-            catch (IOException)
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // Fall through to the scan.
+                // svc.sh writes .service as root; an unreadable file must fall
+                // through to the scan, not break the whole status endpoint.
             }
         }
 
@@ -198,7 +170,7 @@ public sealed class LocalRunnerService
             return null;
         }
 
-        var expectedPrefix = ExpectedUnitPrefix(runnerDirectory);
+        var expectedPrefix = ExpectedUnitPrefix(registeredUrl);
         return list.StandardOutput
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
@@ -207,17 +179,16 @@ public sealed class LocalRunnerService
                 && (expectedPrefix is null || name.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase)));
     }
 
-    private static string? ExpectedUnitPrefix(string runnerDirectory)
+    private static string? ExpectedUnitPrefix(string? registeredUrl)
     {
-        var registered = GetRegisteredUrl(runnerDirectory);
-        if (registered is null)
+        if (registeredUrl is null)
         {
             return null;
         }
 
         try
         {
-            var repository = GitHubRepositoryParser.Parse(registered);
+            var repository = GitHubRepositoryParser.Parse(registeredUrl);
             return $"actions.runner.{repository.Owner}-{repository.Name}.";
         }
         catch (ArgumentException)
@@ -226,9 +197,9 @@ public sealed class LocalRunnerService
         }
     }
 
-    private async Task<object?> GetServiceStatusAsync(string runnerDirectory)
+    private async Task<object?> GetServiceStatusAsync(string runnerDirectory, string? registeredUrl)
     {
-        var unit = await FindUnitAsync(runnerDirectory).ConfigureAwait(false);
+        var unit = await FindUnitAsync(runnerDirectory, registeredUrl).ConfigureAwait(false);
         if (unit is null)
         {
             return null;
@@ -294,9 +265,4 @@ public sealed class LocalRunnerService
 
         return latest;
     }
-
-    private static string? GetString(JsonElement element, string property) =>
-        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()
-            : null;
 }

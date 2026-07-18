@@ -152,9 +152,8 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
 .app-row .acat{flex:none}
 .app-row .aports{color:var(--muted);font-family:var(--mono);font-size:11.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .app-row .aact{margin-left:auto;display:flex;gap:6px;align-items:center;flex:none}
-/* wizard */
-.wiz-bar{height:7px;border-radius:6px;background:#0d1017;overflow:hidden;border:1px solid var(--line);margin-bottom:14px}
-.wiz-bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--brand2),var(--brand1));transition:width .4s ease}
+/* wizard (progress track reuses the shared .bar primitive) */
+.wiz-bar{margin:0 0 14px}
 .wiz-step{display:flex;align-items:flex-start;gap:11px;padding:9px 0;border-bottom:1px solid var(--line)}
 .wiz-step:last-of-type{border-bottom:none}
 .wiz-step .ws-ic{width:22px;height:22px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;font-size:12px;font-weight:700;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
@@ -391,9 +390,10 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
 
         <!-- readiness of the connected repo -->
         <div class="card hidden" id="setup-card" style="margin-top:16px">
-          <h3 style="display:flex;align-items:center"><span data-i18n="su.title">Deployment readiness</span>
+          <h3 style="display:flex;align-items:center;gap:10px"><span data-i18n="su.title">Deployment readiness</span>
             <span style="flex:1"></span>
-            <span class="muted" style="font-weight:500;text-transform:none;letter-spacing:0" id="setup-repo-name"></span></h3>
+            <span class="muted" style="font-weight:500;text-transform:none;letter-spacing:0" id="setup-repo-name"></span>
+            <button class="small" id="btn-wiz-rerun" data-i18n="gh.reinstall">Re-run the wizard</button></h3>
           <div id="setup-summary" style="font-size:13px;margin-bottom:6px"></div>
           <div id="setup-list"></div>
           <div class="logbox hidden" id="setup-log" style="margin-top:12px;max-height:280px"></div>
@@ -497,7 +497,7 @@ en:{
  "ap.pulling":"pulling the image…","ap.starting":"starting the container…","ap.installing":"installing",
  "ap.hint":"Apps run as pinqops-<id> containers; data is kept in named volumes.",
  "ap.installOk":"{n} installed","ap.uninstallOk":"{n} removed","ap.rmTitle":"Remove app","ap.rmConfirm":"Remove “{n}”? Its container is deleted; named volumes are kept.",
- "ap.port":"port","ap.portsLbl":"Host ports","cat.database":"Databases","cat.search-queue":"Search & Queue","cat.web-storage":"Web & Storage",
+ "ap.portsLbl":"Host ports","cat.database":"Databases","cat.search-queue":"Search & Queue","cat.web-storage":"Web & Storage",
  "cat.admin-tool":"Admin Tools","cat.monitoring":"Monitoring","cat.dev-ci":"Dev & CI","cat.auth":"Auth & Security","cat.app":"Applications",
  "st.map":"Network map","st.mapEmpty":"No containers to map.","se.pickFirst":"Pick a repository first.",
  "se.prefs":"Dashboard preferences","se.lang":"Language","se.refreshLbl":"Auto-refresh",
@@ -542,18 +542,16 @@ en:{
  "sy.mem":"Memory","sy.disk":"Disk /","sy.load":"Load average","sy.uptime":"Uptime","sy.host":"Host","sy.hostname":"Hostname",
  "sy.os":"OS","sy.kernel":"Kernel","sy.arch":"Architecture","sy.time":"Server time (UTC)","sy.client":"Client","sy.server":"Server",
  "sy.daemon":"– (daemon unreachable?)",
- "se.gh":"GitHub connection","se.signIn":"Sign in with GitHub","se.orToken":"or paste a token",
+ "se.gh":"GitHub connection","se.signIn":"Sign in with GitHub",
  "se.deviceHelp":"Sign in with GitHub (you confirm a short code on github.com), then just pick your repository — the readiness check below tells you if anything (like a Dockerfile) is missing.",
  "se.clientId":"OAuth App client ID","se.clientIdHelp":"Create an OAuth App at GitHub → Settings → Developer settings → OAuth Apps (enable device flow). No secret needed; the id is saved for next time.",
  "se.enterAt":"Enter this code at","se.waiting":"waiting for approval…","se.denied":"sign-in was denied.","se.expired":"code expired — try again.",
  "se.signedIn":"Signed in","se.ghDisconnect":"Disconnect","se.useToken":"Connect with token",
- "se.tokenHelp":"Fine-grained PAT: Actions read (+ Administration read for runners). Classic PAT: repo scope.",
- "se.repo":"Repository","se.repoSearch":"search repositories…","se.private":"private",
+ "se.repoSearch":"search repositories…","se.private":"private",
  "se.admin":"admin","se.write":"write","se.read":"read",
  "se.repoUrl":"Repository URL","se.userOpt":"GitHub username (optional)","se.token":"Token / PAT","se.tokenReq":"(required)",
  "se.tokenKeep":"(leave empty to keep the saved token)","se.tokenSaved":"saved: {m}",
- "se.compose":"Compose file path","se.runnerDir":"Runner install directory","se.saveTest":"Save & test connection",
- "se.dcTitle":"Disconnect GitHub","se.dcConfirm":"Remove the stored repository URL and token from this server?","se.disconnected":"Disconnected",
+ "se.compose":"Compose file path","se.runnerDir":"Runner install directory", "se.dcTitle":"Disconnect GitHub","se.dcConfirm":"Remove the stored repository URL and token from this server?","se.disconnected":"Disconnected",
  "se.connected":"Connected to {r}","se.configFile":"Config file",
  "se.pwCard":"Dashboard password","se.pwCur":"Current password","se.pwNew":"New password (min 8)","se.pwChange":"Change password",
  "se.pwChanged":"Password changed — sign in again","se.tokenOk":"Token verified — now pick a repository",
@@ -596,7 +594,7 @@ tr:{
  "ap.pulling":"imaj çekiliyor…","ap.starting":"konteyner başlatılıyor…","ap.installing":"kuruluyor",
  "ap.hint":"Uygulamalar pinqops-<id> adlı konteynerler olarak çalışır; veriler adlandırılmış volume'larda tutulur.",
  "ap.installOk":"{n} kuruldu","ap.uninstallOk":"{n} kaldırıldı","ap.rmTitle":"Uygulamayı kaldır","ap.rmConfirm":"“{n}” kaldırılsın mı? Konteyner silinir; volume'lar korunur.",
- "ap.port":"port","ap.portsLbl":"Host portları","cat.database":"Veritabanları","cat.search-queue":"Arama ve Kuyruk","cat.web-storage":"Web ve Depolama",
+ "ap.portsLbl":"Host portları","cat.database":"Veritabanları","cat.search-queue":"Arama ve Kuyruk","cat.web-storage":"Web ve Depolama",
  "cat.admin-tool":"Yönetim Araçları","cat.monitoring":"İzleme","cat.dev-ci":"Geliştirme ve CI","cat.auth":"Kimlik ve Güvenlik","cat.app":"Uygulamalar",
  "st.map":"Ağ haritası","st.mapEmpty":"Haritalanacak konteyner yok.","se.pickFirst":"Önce bir depo seç.",
  "se.prefs":"Panel tercihleri","se.lang":"Dil","se.refreshLbl":"Otomatik yenileme",
@@ -641,18 +639,16 @@ tr:{
  "sy.mem":"Bellek","sy.disk":"Disk /","sy.load":"Yük ortalaması","sy.uptime":"Çalışma süresi","sy.host":"Sunucu","sy.hostname":"Makine adı",
  "sy.os":"İşletim sistemi","sy.kernel":"Çekirdek","sy.arch":"Mimari","sy.time":"Sunucu saati (UTC)","sy.client":"İstemci","sy.server":"Sunucu",
  "sy.daemon":"– (daemon'a ulaşılamıyor?)",
- "se.gh":"GitHub bağlantısı","se.signIn":"GitHub ile giriş yap","se.orToken":"veya token yapıştır",
+ "se.gh":"GitHub bağlantısı","se.signIn":"GitHub ile giriş yap",
  "se.deviceHelp":"GitHub ile giriş yap (github.com'da kısa bir kodu onaylarsın), sonra sadece deponu seç — aşağıdaki hazırlık kontrolü eksik ne varsa (ör. Dockerfile) sana söyler.",
  "se.clientId":"OAuth App client ID","se.clientIdHelp":"GitHub → Settings → Developer settings → OAuth Apps'ten bir OAuth App oluştur (device flow'u aç). Secret gerekmez; id bir daha sorulmamak üzere kaydedilir.",
  "se.enterAt":"Bu kodu şurada gir:","se.waiting":"onay bekleniyor…","se.denied":"giriş reddedildi.","se.expired":"kodun süresi doldu — tekrar dene.",
  "se.signedIn":"Giriş yapıldı","se.ghDisconnect":"Bağlantıyı kes","se.useToken":"Token ile bağlan",
- "se.tokenHelp":"Fine-grained PAT: Actions okuma (+ runner listesi için Administration okuma). Classic PAT: repo kapsamı.",
- "se.repo":"Depo","se.repoSearch":"depolarda ara…","se.private":"özel",
+ "se.repoSearch":"depolarda ara…","se.private":"özel",
  "se.admin":"yönetici","se.write":"yazma","se.read":"okuma",
  "se.repoUrl":"Depo URL'si","se.userOpt":"GitHub kullanıcı adı (opsiyonel)","se.token":"Token / PAT","se.tokenReq":"(zorunlu)",
  "se.tokenKeep":"(kayıtlı token'ı korumak için boş bırak)","se.tokenSaved":"kayıtlı: {m}",
- "se.compose":"Compose dosya yolu","se.runnerDir":"Runner kurulum dizini","se.saveTest":"Kaydet ve bağlantıyı test et",
- "se.dcTitle":"GitHub bağlantısını kes","se.dcConfirm":"Kayıtlı depo URL'si ve token bu sunucudan silinsin mi?","se.disconnected":"Bağlantı kesildi",
+ "se.compose":"Compose dosya yolu","se.runnerDir":"Runner kurulum dizini", "se.dcTitle":"GitHub bağlantısını kes","se.dcConfirm":"Kayıtlı depo URL'si ve token bu sunucudan silinsin mi?","se.disconnected":"Bağlantı kesildi",
  "se.connected":"{r} bağlandı","se.configFile":"Yapılandırma dosyası",
  "se.pwCard":"Panel şifresi","se.pwCur":"Mevcut şifre","se.pwNew":"Yeni şifre (en az 8)","se.pwChange":"Şifreyi değiştir",
  "se.pwChanged":"Şifre değişti — tekrar giriş yap","se.tokenOk":"Token doğrulandı — şimdi bir depo seç",
@@ -702,7 +698,6 @@ const IC={
  box:'<svg class="ic" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
  layers:'<svg class="ic" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
  db:'<svg class="ic" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
- file:'<svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
  activity:'<svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
  sliders:'<svg class="ic" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>',
  refresh:'<svg class="ic" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
@@ -742,11 +737,14 @@ async function api(path,opts={}){
 /* ================= toasts / modal ================= */
 function toast(msg,kind){const el=document.createElement("div");el.className="toast "+(kind||"");el.textContent=msg;$("#toasts").appendChild(el);setTimeout(()=>el.remove(),5000);}
 let modalSticky=false; // sticky modals (the wizard) ignore backdrop/✕ closes
+function setModalButtons(buttons){
+  const foot=$("#modal-foot");foot.innerHTML="";
+  (buttons||[{label:t("c.close")}]).forEach(b=>{const btn=document.createElement("button");btn.textContent=b.label;if(b.primary)btn.className="primary";if(b.danger)btn.className="danger";btn.onclick=()=>{if(b.onClick)b.onClick();else closeModal();};foot.appendChild(btn);});
+}
 function openModal(title,bodyHtml,buttons,opts){
   modalSticky=!!(opts&&opts.sticky);
   $("#modal-title").textContent=title;$("#modal-body").innerHTML=bodyHtml;
-  const foot=$("#modal-foot");foot.innerHTML="";
-  (buttons||[{label:t("c.close")}]).forEach(b=>{const btn=document.createElement("button");btn.textContent=b.label;if(b.primary)btn.className="primary";if(b.danger)btn.className="danger";btn.onclick=()=>{if(b.onClick)b.onClick();else closeModal();};foot.appendChild(btn);});
+  setModalButtons(buttons);
   $("#modal").classList.remove("hidden");
 }
 function closeModal(){modalSticky=false;$("#modal").classList.add("hidden");}
@@ -864,6 +862,9 @@ function setView(v){
   $("#view-"+v).classList.remove("hidden");
   document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
   if(v!=="containers"&&logTimer){clearInterval(logTimer);logTimer=null;}
+  // Coming back to Containers with the log panel still open: resume following
+  // (the timer was cleared on the way out, but the panel and target survive).
+  if(v==="containers"&&logTarget&&!$("#ct-logpanel").classList.contains("hidden")){fetchLogs();armLogTimer();}
   if(v!=="github"&&deviceTimer)stopDeviceFlow(); // don't keep polling GitHub after leaving the view
   refresh();
 }
@@ -1237,32 +1238,43 @@ const pendingInstalls=new Set();
 async function watchInstallJob(app,jobId){
   pendingInstalls.add(app.id);renderApps();
   const phaseText=p=>p==="pulling"?t("ap.pulling"):p==="starting"?t("ap.starting"):p;
+  // "owns" = the modal body still holds OUR progress element; the user may
+  // have hidden the modal or opened a different dialog meanwhile, and that
+  // dialog must never be closed or have its buttons replaced by this job.
+  const owns=()=>!!$("#app-install-progress");
+  const visible=()=>!$("#modal").classList.contains("hidden");
   const showProgress=phase=>{
-    const el=$("#app-install-progress");
-    if(el)el.innerHTML=`<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
+    if(!owns())return;
+    $("#app-install-progress").innerHTML=`<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
         <span class="spin"></span><b style="font-size:13px">${esc(app.name)}</b>
         <span class="muted" style="font-size:12.5px">${esc(phaseText(phase))}</span></div>
       <div class="progress-ind"><i></i></div>`;
   };
   showProgress("pulling");
   try{
+    let failures=0;
     for(;;){
       await new Promise(res=>setTimeout(res,1500));
-      const j=await api(`/api/apps/install/${encodeURIComponent(jobId)}`);
+      let j;
+      try{j=await api(`/api/apps/install/${encodeURIComponent(jobId)}`);failures=0;}
+      catch(ex){ // a single blip must not declare a running install failed
+        if(++failures>=4)throw ex;
+        continue;
+      }
       if(j.phase==="error")throw new Error(j.error||t("c.failed"));
       if(j.phase==="done")break;
       showProgress(j.phase);
     }
     pendingInstalls.delete(app.id);
-    closeModal();toast(t("ap.installOk",{n:app.name}),"ok");await loadApps();
+    if(owns()&&visible())closeModal();
+    toast(t("ap.installOk",{n:app.name}),"ok");await loadApps();
   }catch(ex){
     pendingInstalls.delete(app.id);
-    const el=$("#app-install-progress");
-    if(el)el.innerHTML=`<div class="logbox" style="max-height:180px">${esc(ex.message)}</div>`;
-    else toast(ex.message,"err");
-    const foot=$("#modal-foot");
-    if(foot&&!$("#modal").classList.contains("hidden")){
-      foot.innerHTML="";const cb=document.createElement("button");cb.textContent=t("c.close");cb.onclick=closeModal;foot.appendChild(cb);
+    if(owns()&&visible()){
+      $("#app-install-progress").innerHTML=`<div class="logbox" style="max-height:180px">${esc(ex.message)}</div>`;
+      setModalButtons([{label:t("c.close")}]);
+    }else{
+      toast(app.name+": "+ex.message,"err");
     }
     await loadApps();
   }
@@ -1413,16 +1425,19 @@ async function openNetworkConnect(name){
 
 /* ================= container logs (inline panel in the Containers view) ================= */
 let logTarget=null;
+function armLogTimer(){
+  if(logTimer)clearInterval(logTimer);
+  logTimer=setInterval(()=>{
+    if($("#log-follow").checked&&view==="containers"&&!$("#ct-logpanel").classList.contains("hidden"))fetchLogs();
+  },5000);
+}
 function openLogPanel(name){
   logTarget=name;
   $("#ct-log-title").textContent=name;
   $("#ct-logpanel").classList.remove("hidden");
   $("#logbox").textContent="";
   fetchLogs();
-  if(logTimer)clearInterval(logTimer);
-  logTimer=setInterval(()=>{
-    if($("#log-follow").checked&&view==="containers"&&!$("#ct-logpanel").classList.contains("hidden"))fetchLogs();
-  },5000);
+  armLogTimer();
   $("#ct-logpanel").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 function closeLogPanel(){
@@ -1495,8 +1510,8 @@ async function loadGithubView(){
 /* --- deployment readiness: check the repo + server, fix what we can --- */
 async function loadSetupStatus(){
   const card=$("#setup-card");
-  const repoName=settingsCache&&settingsCache.repoUrl?(settingsCache.repoUrl.match(/github[^/]*\/(.+)$/)||[])[1]||settingsCache.repoUrl:"";
-  $("#setup-repo-name").textContent=repoName;
+  // The server parses the URL (works for GHES hosts too) — no client regex.
+  $("#setup-repo-name").textContent=(settingsCache&&(settingsCache.fullName||settingsCache.repoUrl))||"";
   try{
     const s=await api("/api/setup/status");
     if(!s.configured){card.classList.add("hidden");return;}
@@ -1576,7 +1591,7 @@ function renderRepoList(items,filter){
   list.innerHTML=visible.map(r=>{
     const url=`https://github.com/${r.fullName}`;
     const role=r.admin?t("se.admin"):r.push?t("se.write"):t("se.read");
-    const connected=!!(settingsCache&&settingsCache.repoUrl===url);
+    const connected=!!(settingsCache&&(settingsCache.fullName===r.fullName||settingsCache.repoUrl===url));
     return`<div class="repo-row${url===selectedRepoUrl?" sel":""}" data-repo="${esc(url)}">
       <span class="rname">${esc(r.fullName)}</span>
       ${r.isPrivate?`<span class="chip mut">🔒 ${t("se.private")}</span>`:""}
@@ -1592,16 +1607,24 @@ $("#repo-list").addEventListener("click",e=>{
 });
 $("#repo-search").addEventListener("input",e=>renderRepoList(repoList,e.target.value));
 $("#btn-repo-install").onclick=()=>{if(selectedRepoUrl)runInstallWizard(selectedRepoUrl);};
+$("#btn-wiz-rerun").onclick=()=>{if(settingsCache&&settingsCache.repoUrl)runInstallWizard(settingsCache.repoUrl);};
 
 /* --- repo install wizard: connect → check → fix each piece → verify.
        The modal is sticky (no accidental backdrop close); "run in background"
        just hides it — the steps keep running server-side. --- */
 async function installRunnerWithProgress(say){
+  // The buffer is shared across installs; remember the previous run's
+  // generation so a stale (or concurrent) run's result is never adopted as
+  // this run's outcome, and its old log lines are never replayed.
+  let gen0=0;
+  try{const b=await api("/api/setup/install-runner/progress");gen0=b.generation||0;}catch{}
   let seen=0;
   const poll=async()=>{try{
     const p=await api("/api/setup/install-runner/progress");
-    const lines=(p.log||"").split("\n").filter(Boolean);
-    for(;seen<lines.length;seen++)say(lines[seen]);
+    if((p.generation||0)>gen0){
+      const lines=(p.log||"").split("\n").filter(Boolean);
+      for(;seen<lines.length;seen++)say(lines[seen]);
+    }
     return p;
   }catch{return null;}};
   const timer=setInterval(poll,2000);
@@ -1611,11 +1634,17 @@ async function installRunnerWithProgress(say){
     return r;
   }catch(ex){
     // The POST can die on a proxy timeout while the install keeps running —
-    // fall back to polling the progress buffer until it reports completion.
-    for(let i=0;i<150;i++){
+    // fall back to polling (single cadence: the interval stops first) until
+    // OUR run's buffer reports completion. If the server never even started a
+    // new run, the POST genuinely failed: surface its error.
+    clearInterval(timer);
+    say("✗ "+ex.message);
+    let stale=0;
+    for(let i=0;i<600;i++){ // up to 20 minutes — a runner install includes a large download
       await new Promise(res=>setTimeout(res,2000));
       const p=await poll();
-      if(p&&!p.active)return{succeeded:!!p.succeeded,log:p.log};
+      if(p&&(p.generation||0)>gen0&&!p.active)return{succeeded:!!p.succeeded,log:p.log};
+      if(p&&(p.generation||0)<=gen0&&++stale>=3)break;
     }
     throw ex;
   }finally{clearInterval(timer);}
@@ -1625,26 +1654,29 @@ async function runInstallWizard(repoUrl){
                ["compose",t("wiz.compose")],["runner",t("wiz.runner")],["verify",t("wiz.verify")]];
   openModal(t("wiz.title"),
     `<div class="muted" style="font-family:var(--mono);font-size:12px;margin-bottom:10px">${esc(repoUrl)}</div>
-     <div class="wiz-bar"><i id="wiz-bar" style="width:0%"></i></div>
+     <div class="bar wiz-bar"><i id="wiz-bar" style="width:0%"></i></div>
      ${steps.map(([k,label])=>`<div class="wiz-step" id="wiz-${k}"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b>${esc(label)}</b><div class="ws-detail" id="wiz-${k}-d"></div></div></div>`).join("")}
      <div id="wiz-summary" style="margin-top:12px;font-size:13px"></div>
      <details style="margin-top:8px"><summary class="muted" style="cursor:pointer;font-size:12.5px">${t("wiz.showLog")}</summary>
        <div class="logbox" id="wiz-log" style="margin-top:8px;max-height:220px"></div></details>`,
     [{label:t("wiz.cancel"),onClick:()=>closeModal()}],
     {sticky:true});
-  let done=0;
-  const bar=()=>{const el=$("#wiz-bar");if(el)el.style.width=Math.round(done/steps.length*100)+"%";};
   const say=m=>{const log=$("#wiz-log");if(log){log.textContent+=m+"\n";log.scrollTop=log.scrollHeight;}};
+  // The bar is derived from the step states, so no counter can drift from
+  // what the list shows.
   const mark=(k,state,detail,spin)=>{
     const el=$("#wiz-"+k);if(!el)return;
     el.className="wiz-step "+(state||"");
     const ic=el.querySelector(".ws-ic");
     if(ic)ic.innerHTML=spin?`<span class="spin"></span>`:state==="ok"?"✓":state==="err"?"✕":state==="warn"?"!":"•";
     const d=$("#wiz-"+k+"-d");if(d&&detail!==undefined)d.innerHTML=detail;
+    const bar=$("#wiz-bar");
+    if(bar){const fin=document.querySelectorAll("#modal-body .wiz-step.ok,#modal-body .wiz-step.warn").length;
+      bar.style.width=Math.round(fin/steps.length*100)+"%";}
   };
   const step=async(k,fn)=>{
     mark(k,"run",undefined,true);
-    try{const detail=await fn();mark(k,"ok",detail);done++;bar();return true;}
+    try{const detail=await fn();mark(k,"ok",detail);return true;}
     catch(ex){mark(k,"err",esc(ex.message));say("✗ "+ex.message);return false;}
   };
 
@@ -1663,21 +1695,20 @@ async function runInstallWizard(repoUrl){
   if(s){
     if(s.repo.hasDockerfile)mark("dockerfile","ok",t("wiz.ready"));
     else mark("dockerfile","warn",t("su.dockerfileMiss")); // warn only — the wizard can't write app code
-    done++;bar();
 
-    if(s.repo.hasWorkflow){mark("workflow","ok",t("wiz.ready"));done++;bar();}
+    if(s.repo.hasWorkflow)mark("workflow","ok",t("wiz.ready"));
     else if(!await step("workflow",async()=>{
       await api("/api/setup/create-workflow",{method:"POST"});ghCache=null;
       say("✓ "+t("su.workflowDone"));return t("su.workflowDone");
     }))failedAt=failedAt||t("wiz.workflow");
 
-    if(s.composeExists){mark("compose","ok",t("wiz.ready"));done++;bar();}
+    if(s.composeExists)mark("compose","ok",t("wiz.ready"));
     else if(!await step("compose",async()=>{
       await api("/api/setup/create-compose",{method:"POST"});
       say("✓ "+t("su.composeDone"));return t("su.composeDone");
     }))failedAt=failedAt||t("wiz.compose");
 
-    if(s.runnerInstalled&&(s.runnersError||s.runnersOnline>0)){mark("runner","ok",t("wiz.ready"));done++;bar();}
+    if(s.runnerInstalled&&(s.runnersError||s.runnersOnline>0))mark("runner","ok",t("wiz.ready"));
     else if(!await step("runner",async()=>{
       if(!s.runnerInstalled){
         if(s.runnerMismatch)say("! "+t("wiz.replacingRunner",{r:s.runnerRegisteredTo||"?"}));
@@ -1702,16 +1733,23 @@ async function runInstallWizard(repoUrl){
     }else mark("verify","warn");
   }
 
-  modalSticky=false;
-  const sum=$("#wiz-summary");
-  if(sum)sum.innerHTML=failedAt
-    ?`<span class="chip err">✕</span> <span style="color:var(--err)">${esc(t("wiz.failed",{x:failedAt}))}</span>`
-    :`<span class="chip ok">✓</span> <span style="color:var(--ok)">${esc(t("wiz.done"))}</span>`;
-  const foot=$("#modal-foot");
-  if(foot&&!$("#modal").classList.contains("hidden")){
-    foot.innerHTML="";
-    const b=document.createElement("button");b.textContent=t("c.close");if(!failedAt)b.className="primary";
-    b.onclick=closeModal;foot.appendChild(b);
+  // Finish up — but only touch the modal if its body is still the wizard's
+  // and it is still visible: the user may have hidden it ("run in background")
+  // or opened a different dialog meanwhile, and that dialog's buttons must
+  // not be clobbered.
+  const owns=!!$("#wiz-bar");
+  const visible=!$("#modal").classList.contains("hidden");
+  if(owns){
+    const sum=$("#wiz-summary");
+    if(sum)sum.innerHTML=failedAt
+      ?`<span class="chip err">✕</span> <span style="color:var(--err)">${esc(t("wiz.failed",{x:failedAt}))}</span>`
+      :`<span class="chip ok">✓</span> <span style="color:var(--ok)">${esc(t("wiz.done"))}</span>`;
+  }
+  if(owns&&visible){
+    modalSticky=false;
+    setModalButtons([{label:t("c.close"),primary:!failedAt}]);
+  }else{
+    toast(failedAt?t("wiz.failed",{x:failedAt}):t("wiz.done"),failedAt?"err":"ok");
   }
   ghCache=null;
   await loadGithubView();
