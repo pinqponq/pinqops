@@ -23,15 +23,29 @@ public sealed class GitHubApiClient : IGitHubApiClient, IDisposable
         _ownsClient = httpClient is null;
     }
 
-    public async Task<string> CreateRegistrationTokenAsync(
+    public Task<string> CreateRegistrationTokenAsync(
         GitHubRepository repository,
         string personalAccessToken,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        CreateRunnerTokenAsync(repository, personalAccessToken, remove: false, cancellationToken);
+
+    public Task<string> CreateRemovalTokenAsync(
+        GitHubRepository repository,
+        string personalAccessToken,
+        CancellationToken cancellationToken = default) =>
+        CreateRunnerTokenAsync(repository, personalAccessToken, remove: true, cancellationToken);
+
+    private async Task<string> CreateRunnerTokenAsync(
+        GitHubRepository repository,
+        string personalAccessToken,
+        bool remove,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(repository);
         ArgumentException.ThrowIfNullOrWhiteSpace(personalAccessToken);
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, repository.RegistrationTokenUrl);
+        var url = remove ? repository.RemovalTokenUrl : repository.RegistrationTokenUrl;
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", personalAccessToken);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         request.Headers.UserAgent.ParseAdd(ProductName);
@@ -61,7 +75,7 @@ public sealed class GitHubApiClient : IGitHubApiClient, IDisposable
             }
         }
 
-        throw new GitHubApiException(200, "GitHub returned no registration token in its response.");
+        throw new GitHubApiException(200, "GitHub returned no runner token in its response.");
     }
 
     private static string DescribeFailure(System.Net.HttpStatusCode statusCode, string body)
@@ -78,7 +92,7 @@ public sealed class GitHubApiClient : IGitHubApiClient, IDisposable
 
         var apiMessage = TryReadMessage(body);
         var suffix = string.IsNullOrWhiteSpace(apiMessage) ? string.Empty : $" GitHub says: {apiMessage}.";
-        return $"GitHub rejected the registration-token request ({status}): {hint}{suffix}";
+        return $"GitHub rejected the runner-token request ({status}): {hint}{suffix}";
     }
 
     private static string? TryReadMessage(string body)

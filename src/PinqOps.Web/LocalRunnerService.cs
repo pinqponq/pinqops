@@ -18,6 +18,67 @@ public sealed class LocalRunnerService
     public static bool IsInstalled(string runnerDirectory) =>
         Directory.Exists(runnerDirectory) && File.Exists(Path.Combine(runnerDirectory, ".runner"));
 
+    /// <summary>
+    /// The repository URL the runner in <paramref name="runnerDirectory"/> is
+    /// registered to, read from its <c>.runner</c> file — or null when nothing
+    /// is registered there (or the file is unreadable).
+    /// </summary>
+    public static string? GetRegisteredUrl(string runnerDirectory)
+    {
+        var runnerFile = Path.Combine(runnerDirectory, ".runner");
+        if (!File.Exists(runnerFile))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(runnerFile));
+            return GetString(document.RootElement, "gitHubUrl") ?? GetString(document.RootElement, "serverUrl");
+        }
+        catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether the locally installed runner is registered to <paramref name="repoUrl"/>.
+    /// A runner registered to a different repository (a leftover from an earlier
+    /// setup) must count as NOT installed, otherwise the setup flow would start
+    /// the wrong repository's runner and report success while the selected repo
+    /// stays runner-less on GitHub.
+    /// </summary>
+    public static bool IsInstalledFor(string runnerDirectory, string? repoUrl)
+    {
+        if (!IsInstalled(runnerDirectory) || string.IsNullOrWhiteSpace(repoUrl))
+        {
+            return false;
+        }
+
+        var registered = NormalizeRepoUrl(GetRegisteredUrl(runnerDirectory));
+        var expected = NormalizeRepoUrl(repoUrl);
+        return registered is not null && expected is not null
+            && string.Equals(registered, expected, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? NormalizeRepoUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        try
+        {
+            return GitHubRepositoryParser.Parse(url).ToUrl();
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
     public async Task<object> GetStatusAsync(string runnerDirectory)
     {
         // Same definition as the readiness check: "installed" means registered
@@ -25,7 +86,7 @@ public sealed class LocalRunnerService
         var installed = IsInstalled(runnerDirectory);
 
         string? agentName = null;
-        string? gitHubUrl = null;
+        var gitHubUrl = GetRegisteredUrl(runnerDirectory);
         var runnerFile = Path.Combine(runnerDirectory, ".runner");
         if (File.Exists(runnerFile))
         {
@@ -33,7 +94,6 @@ public sealed class LocalRunnerService
             {
                 using var document = JsonDocument.Parse(await File.ReadAllTextAsync(runnerFile).ConfigureAwait(false));
                 agentName = GetString(document.RootElement, "agentName");
-                gitHubUrl = GetString(document.RootElement, "gitHubUrl") ?? GetString(document.RootElement, "serverUrl");
             }
             catch (JsonException)
             {
@@ -51,7 +111,8 @@ public sealed class LocalRunnerService
             runnerDirectory,
             agentName,
             gitHubUrl,
-            service = await GetServiceStatusAsync().ConfigureAwait(false),
+            registeredRepoUrl = NormalizeRepoUrl(gitHubUrl),
+            service = await GetServiceStatusAsync(runnerDirectory).ConfigureAwait(false),
             lastWorkerLogAt,
             lastRunnerLogAt,
         };
@@ -66,7 +127,7 @@ public sealed class LocalRunnerService
     {
         var lines = new List<string>();
 
-        var unit = await FindUnitAsync().ConfigureAwait(false);
+        var unit = await FindUnitAsync(runnerDirectory).ConfigureAwait(false);
         if (unit is not null)
         {
             var start = await RunAsync("systemctl", "start", unit).ConfigureAwait(false);
@@ -80,7 +141,7 @@ public sealed class LocalRunnerService
         }
         else
         {
-            lines.Add("no actions.runner.* systemd unit found");
+            lines.Add("no systemd unit found for this runner");
         }
 
         if (File.Exists(Path.Combine(runnerDirectory, "svc.sh")))
@@ -102,8 +163,32 @@ public sealed class LocalRunnerService
         return new { succeeded = false, log = string.Join('\n', lines) };
     }
 
-    private async Task<string?> FindUnitAsync()
+    /// <summary>
+    /// Resolves the systemd unit belonging to THIS runner directory. The unit
+    /// name svc.sh wrote into <c>{dir}/.service</c> is authoritative; only when
+    /// that file is missing fall back to scanning <c>actions.runner.*</c> units,
+    /// filtered to the repository the directory is registered to — never "the
+    /// first actions.runner.* unit", which may belong to another repository.
+    /// </summary>
+    private async Task<string?> FindUnitAsync(string runnerDirectory)
     {
+        var serviceFile = Path.Combine(runnerDirectory, ".service");
+        if (File.Exists(serviceFile))
+        {
+            try
+            {
+                var unit = (await File.ReadAllTextAsync(serviceFile).ConfigureAwait(false)).Trim();
+                if (unit.Length > 0)
+                {
+                    return unit;
+                }
+            }
+            catch (IOException)
+            {
+                // Fall through to the scan.
+            }
+        }
+
         var list = await RunAsync(
                 "systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager",
                 "actions.runner.*")
@@ -113,15 +198,37 @@ public sealed class LocalRunnerService
             return null;
         }
 
+        var expectedPrefix = ExpectedUnitPrefix(runnerDirectory);
         return list.StandardOutput
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
-            .FirstOrDefault(name => name is not null && name.StartsWith("actions.runner.", StringComparison.Ordinal));
+            .FirstOrDefault(name => name is not null
+                && name.StartsWith("actions.runner.", StringComparison.Ordinal)
+                && (expectedPrefix is null || name.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase)));
     }
 
-    private async Task<object?> GetServiceStatusAsync()
+    private static string? ExpectedUnitPrefix(string runnerDirectory)
     {
-        var unit = await FindUnitAsync().ConfigureAwait(false);
+        var registered = GetRegisteredUrl(runnerDirectory);
+        if (registered is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var repository = GitHubRepositoryParser.Parse(registered);
+            return $"actions.runner.{repository.Owner}-{repository.Name}.";
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private async Task<object?> GetServiceStatusAsync(string runnerDirectory)
+    {
+        var unit = await FindUnitAsync(runnerDirectory).ConfigureAwait(false);
         if (unit is null)
         {
             return null;

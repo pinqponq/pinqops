@@ -214,44 +214,6 @@ public sealed class DockerService
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
-    /// <summary>
-    /// <c>docker login</c> with the password on stdin so the token never appears
-    /// in an argument list or process table.
-    /// </summary>
-    public async Task<string> LoginAsync(string registry, string username, string token)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(registry);
-        ArgumentException.ThrowIfNullOrWhiteSpace(username);
-        ArgumentException.ThrowIfNullOrWhiteSpace(token);
-
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "docker",
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        foreach (var argument in new[] { "login", registry, "-u", username, "--password-stdin" })
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Failed to start 'docker login'.");
-        await process.StandardInput.WriteAsync(token).ConfigureAwait(false);
-        process.StandardInput.Close();
-
-        using var cts = new CancellationTokenSource(CommandTimeout);
-        var stdout = await process.StandardOutput.ReadToEndAsync(cts.Token).ConfigureAwait(false);
-        var stderr = await process.StandardError.ReadToEndAsync(cts.Token).ConfigureAwait(false);
-        await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
-
-        return process.ExitCode == 0
-            ? stdout.Trim()
-            : throw new InvalidOperationException($"docker login failed: {stderr.Trim()}");
-    }
-
     private async Task<ProcessResult> RunAsync(params string[] arguments)
     {
         using var cts = new CancellationTokenSource(CommandTimeout);

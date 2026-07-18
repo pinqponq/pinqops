@@ -13,6 +13,14 @@ public sealed record RunnerInstallOptions
 
     public required string RepositoryUrl { get; init; }
     public required string RegistrationToken { get; init; }
+
+    /// <summary>
+    /// Optional short-lived token used to de-register a runner already present
+    /// in <see cref="InstallDirectory"/> before configuring the new one. When
+    /// absent, stale registration files are force-deleted instead (the orphaned
+    /// GitHub-side entry goes offline and is purged by GitHub).
+    /// </summary>
+    public string? RemovalToken { get; init; }
     public string Labels { get; init; } = DefaultLabels;
     public string RunnerName { get; init; } = $"{Environment.MachineName}-pinqops";
     public string RunnerVersion { get; init; } = DefaultRunnerVersion;

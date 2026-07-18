@@ -47,12 +47,20 @@ public sealed class RunnerInstaller
             }
         }
 
-        _log?.Invoke($"registering runner '{options.RunnerName}' with labels '{options.Labels}'");
-
         // Let config.sh register when setup runs as root; the runner otherwise
         // refuses. The variable is ignored for non-root users, and the child
         // process inherits it.
         Environment.SetEnvironmentVariable("RUNNER_ALLOW_RUNASROOT", "1");
+
+        // config.sh refuses to configure over an existing registration (even
+        // with --replace), so any leftover — possibly for a different repo —
+        // must be de-registered and its systemd unit uninstalled first.
+        if (File.Exists(Path.Combine(options.InstallDirectory, ".runner")))
+        {
+            await CleanupExistingRegistrationAsync(options, cancellationToken).ConfigureAwait(false);
+        }
+
+        _log?.Invoke($"registering runner '{options.RunnerName}' with labels '{options.Labels}'");
 
         // Invoke config.sh by its full path: .NET resolves a relative executable
         // against the current process's directory, not the child WorkingDirectory,
@@ -76,6 +84,55 @@ public sealed class RunnerInstaller
 
         _log?.Invoke("runner installed and started");
         return true;
+    }
+
+    /// <summary>
+    /// Stops and uninstalls the existing runner service, then de-registers the
+    /// old runner (with <see cref="RunnerInstallOptions.RemovalToken"/> when
+    /// available, otherwise by force-deleting its registration files). All
+    /// steps are best-effort: a half-broken leftover must never block a fresh
+    /// registration.
+    /// </summary>
+    private async Task CleanupExistingRegistrationAsync(
+        RunnerInstallOptions options,
+        CancellationToken cancellationToken)
+    {
+        var directory = options.InstallDirectory;
+        _log?.Invoke("existing runner registration found; removing it first");
+
+        if (File.Exists(Path.Combine(directory, "svc.sh")))
+        {
+            await RunAsync("sudo", new[] { "./svc.sh", "stop" }, directory, cancellationToken).ConfigureAwait(false);
+            await RunAsync("sudo", new[] { "./svc.sh", "uninstall" }, directory, cancellationToken).ConfigureAwait(false);
+        }
+
+        var removed = false;
+        var configScript = Path.Combine(directory, "config.sh");
+        if (!string.IsNullOrWhiteSpace(options.RemovalToken) && File.Exists(configScript))
+        {
+            removed = await RunAsync(
+                    configScript,
+                    new[] { "remove", "--token", options.RemovalToken },
+                    directory,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (!removed)
+        {
+            // Without (or after a failed) config.sh remove, delete the
+            // registration files so config.sh accepts a fresh registration. The
+            // orphaned GitHub-side entry just shows offline until purged.
+            _log?.Invoke("could not de-register the old runner cleanly; deleting its local registration files");
+            foreach (var name in new[] { ".runner", ".credentials", ".credentials_rsaparams", ".service" })
+            {
+                var path = Path.Combine(directory, name);
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+        }
     }
 
     private async Task<bool> RunAsync(

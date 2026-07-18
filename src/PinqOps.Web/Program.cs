@@ -98,8 +98,8 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
-var deployGate = new SemaphoreSlim(1, 1);
 var runnerInstallGate = new SemaphoreSlim(1, 1);
+var runnerInstallProgress = new ProgressBuffer();
 
 // The dashboard page is one embedded file; cache its bytes and pin its inline
 // script with a CSP hash so no other script can ever execute on the page.
@@ -544,6 +544,12 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
             runnersError = exception.Message;
         }
 
+        // "Installed" must mean "registered to THIS repo": a leftover runner
+        // from an earlier repository would otherwise short-circuit the setup
+        // flow into starting the wrong repo's runner service.
+        var runnerRegisteredTo = LocalRunnerService.GetRegisteredUrl(config.RunnerDirectory);
+        var runnerInstalled = LocalRunnerService.IsInstalledFor(config.RunnerDirectory, config.RepoUrl);
+
         return (object)new
         {
             configured = true,
@@ -551,7 +557,9 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
             runnersOnline = online,
             runnersTotal = total,
             runnersError,
-            runnerInstalled = LocalRunnerService.IsInstalled(config.RunnerDirectory),
+            runnerInstalled,
+            runnerMismatch = !runnerInstalled && LocalRunnerService.IsInstalled(config.RunnerDirectory),
+            runnerRegisteredTo,
             composeFile = config.ComposeFile,
             composeExists = File.Exists(config.ComposeFile),
         };
@@ -598,6 +606,8 @@ app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRun
         return Error(409, "A runner install is already in progress.");
     }
 
+    runnerInstallProgress.Start();
+    var finished = false;
     try
     {
         var config = store.Current;
@@ -606,9 +616,10 @@ app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRun
             return Error(400, "Connect GitHub first.");
         }
 
-        var lines = new List<string> { "requesting a runner registration token…" };
+        runnerInstallProgress.Add("requesting a runner registration token…");
         var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
         string registrationToken;
+        string? removalToken = null;
         using (var apiClient = new GitHubApiClient())
         {
             try
@@ -617,19 +628,42 @@ app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRun
             }
             catch (GitHubApiException exception)
             {
-                lines.Add("error: " + exception.Message);
-                return Results.Json(new { succeeded = false, log = string.Join('\n', lines) });
+                runnerInstallProgress.Add("error: " + exception.Message);
+                runnerInstallProgress.Finish(false);
+                finished = true;
+                return Results.Json(new { succeeded = false, log = runnerInstallProgress.Text() });
+            }
+
+            // A leftover runner registered to another repository must be
+            // de-registered first; mint a removal token for THAT repo. Best
+            // effort — cleanup falls back to deleting local files without it.
+            var registeredUrl = LocalRunnerService.GetRegisteredUrl(config.RunnerDirectory);
+            if (registeredUrl is not null)
+            {
+                try
+                {
+                    var oldRepository = GitHubRepositoryParser.Parse(registeredUrl);
+                    runnerInstallProgress.Add($"existing runner is registered to {oldRepository.Owner}/{oldRepository.Name}; requesting a removal token…");
+                    removalToken = await apiClient.CreateRemovalTokenAsync(oldRepository, config.Pat);
+                }
+                catch (Exception exception) when (exception is GitHubApiException or ArgumentException)
+                {
+                    runnerInstallProgress.Add("could not get a removal token for the old runner: " + exception.Message);
+                }
             }
         }
 
-        lines.Add("token received; installing the runner…");
-        var options = RunnerInstallOptions.Create(config.RepoUrl, registrationToken, installDirectory: config.RunnerDirectory);
+        runnerInstallProgress.Add("token received; installing the runner…");
+        var options = RunnerInstallOptions.Create(config.RepoUrl, registrationToken, installDirectory: config.RunnerDirectory)
+            with { RemovalToken = removalToken };
         using var downloader = new HttpFileDownloader();
-        var installer = new RunnerInstaller(processRunner, downloader, lines.Add);
+        var installer = new RunnerInstaller(processRunner, downloader, runnerInstallProgress.Add);
         var serviceUser = Environment.GetEnvironmentVariable("SUDO_USER") ?? Environment.UserName;
         var succeeded = await installer.InstallAsync(options, serviceUser);
         logger.LogWarning("Dashboard runner install finished: {Succeeded}", succeeded);
-        return Results.Json(new { succeeded, log = string.Join('\n', lines) });
+        runnerInstallProgress.Finish(succeeded);
+        finished = true;
+        return Results.Json(new { succeeded, log = runnerInstallProgress.Text() });
     }
     catch (Exception exception)
     {
@@ -637,9 +671,18 @@ app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRun
     }
     finally
     {
+        if (!finished)
+        {
+            runnerInstallProgress.Finish(false);
+        }
+
         runnerInstallGate.Release();
     }
 });
+
+// Polled by the setup wizard while the install POST above is in flight, so the
+// user sees download/extract/configure/service lines live.
+app.MapGet("/api/setup/install-runner/progress", () => Results.Json(runnerInstallProgress.Snapshot()));
 
 // ---- App catalog (one-click installs) -------------------------------------------
 
@@ -722,54 +765,6 @@ app.MapGet("/api/compose", (UiConfigStore store, DockerService docker) =>
 
         return new { composeFile, exists = true, items = await docker.ComposeServicesAsync(composeFile) };
     }));
-
-// ---- Deploy --------------------------------------------------------------------
-
-app.MapPost("/api/deploy", async (UiConfigStore store, IProcessRunner processRunner, DockerService docker, GitHubDashboardService gitHub) =>
-{
-    if (!await deployGate.WaitAsync(0))
-    {
-        return Error(409, "A deploy is already in progress.");
-    }
-
-    try
-    {
-        var lines = new List<string>();
-
-        // Log the daemon into ghcr.io with the stored token first, so private
-        // images pull without the user ever configuring a registry login.
-        var config = store.Current;
-        if (!string.IsNullOrWhiteSpace(config.Pat))
-        {
-            var login = config.Username ?? await gitHub.GetLoginAsync();
-            if (login is not null)
-            {
-                try
-                {
-                    await docker.LoginAsync("ghcr.io", login, config.Pat);
-                    lines.Add($"ghcr.io: logged in as {login}");
-                }
-                catch (Exception exception)
-                {
-                    lines.Add($"ghcr.io login skipped ({exception.Message}) — continuing; public images still pull.");
-                }
-            }
-        }
-
-        var deployer = new Deployer(processRunner, lines.Add);
-        var succeeded = await deployer.DeployAsync(DeployOptions.Create(store.Current.ComposeFile));
-        store.Update(config => config.LastDeploy = new LastDeployInfo(DateTimeOffset.UtcNow, succeeded));
-        return Results.Json(new { succeeded, log = string.Join('\n', lines) });
-    }
-    catch (Exception exception)
-    {
-        return Error(500, exception.Message);
-    }
-    finally
-    {
-        deployGate.Release();
-    }
-});
 
 // ---- Local runner & system ------------------------------------------------------
 
