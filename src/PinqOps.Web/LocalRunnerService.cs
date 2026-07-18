@@ -57,7 +57,52 @@ public sealed class LocalRunnerService
         };
     }
 
-    private async Task<object?> GetServiceStatusAsync()
+    /// <summary>
+    /// Starts the runner's systemd service (fallback: <c>sudo ./svc.sh start</c>
+    /// in the install directory) so the dashboard can bring an offline runner
+    /// back without SSH.
+    /// </summary>
+    public async Task<object> StartServiceAsync(string runnerDirectory)
+    {
+        var lines = new List<string>();
+
+        var unit = await FindUnitAsync().ConfigureAwait(false);
+        if (unit is not null)
+        {
+            var start = await RunAsync("systemctl", "start", unit).ConfigureAwait(false);
+            if (start is { Succeeded: true })
+            {
+                lines.Add($"systemctl start {unit}: ok");
+                return new { succeeded = true, log = string.Join('\n', lines) };
+            }
+
+            lines.Add($"systemctl start {unit} failed: {start?.StandardError.Trim() ?? "systemctl unavailable"}");
+        }
+        else
+        {
+            lines.Add("no actions.runner.* systemd unit found");
+        }
+
+        if (File.Exists(Path.Combine(runnerDirectory, "svc.sh")))
+        {
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                var svc = await _processRunner.RunAsync("sudo", ["./svc.sh", "start"], runnerDirectory, cts.Token)
+                    .ConfigureAwait(false);
+                lines.Add((svc.StandardOutput + svc.StandardError).Trim());
+                return new { succeeded = svc.Succeeded, log = string.Join('\n', lines) };
+            }
+            catch (Exception exception)
+            {
+                lines.Add(exception.Message);
+            }
+        }
+
+        return new { succeeded = false, log = string.Join('\n', lines) };
+    }
+
+    private async Task<string?> FindUnitAsync()
     {
         var list = await RunAsync(
                 "systemctl", "list-units", "--all", "--plain", "--no-legend", "--no-pager",
@@ -68,10 +113,15 @@ public sealed class LocalRunnerService
             return null;
         }
 
-        var unit = list.StandardOutput
+        return list.StandardOutput
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
             .FirstOrDefault(name => name is not null && name.StartsWith("actions.runner.", StringComparison.Ordinal));
+    }
+
+    private async Task<object?> GetServiceStatusAsync()
+    {
+        var unit = await FindUnitAsync().ConfigureAwait(false);
         if (unit is null)
         {
             return null;

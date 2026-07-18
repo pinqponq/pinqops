@@ -560,6 +560,9 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
 app.MapPost("/api/setup/create-workflow", (GitHubDashboardService gitHub) =>
     Safe(async () => await gitHub.CreateWorkflowFileAsync(SetupTemplates.DeployWorkflowYaml)));
 
+app.MapPost("/api/setup/start-runner", (UiConfigStore store, LocalRunnerService runner) =>
+    Safe(async () => await runner.StartServiceAsync(store.Current.RunnerDirectory)));
+
 app.MapPost("/api/setup/create-compose", (UiConfigStore store) =>
     Safe(async () =>
     {

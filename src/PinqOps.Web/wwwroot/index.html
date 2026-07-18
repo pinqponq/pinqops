@@ -122,6 +122,7 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
 .modal-head h3{font-size:14px;flex:1;font-weight:700}
 .modal-body{padding:19px;overflow:auto}
 .modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:13px 19px;border-top:1px solid var(--line)}
+.app-logo{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;flex:none;letter-spacing:.01em;text-shadow:0 1px 2px rgba(0,0,0,.35);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
 .form-grid .full{grid-column:1/-1}
 .actions-cell{display:flex;gap:5px;flex-wrap:wrap}
@@ -379,7 +380,9 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
 
         <!-- readiness: the dashboard checks the repo + server and fixes what it can -->
         <div class="card hidden" id="setup-card" style="margin-top:16px">
-          <h3 data-i18n="su.title">Deployment readiness</h3>
+          <h3 style="display:flex;align-items:center"><span data-i18n="su.title">Deployment readiness</span>
+            <span style="flex:1"></span>
+            <button class="small primary" id="btn-auto-setup" data-i18n="su.autoBtn">Auto-fix everything</button></h3>
           <div id="setup-summary" style="font-size:13px;margin-bottom:6px"></div>
           <div id="setup-list"></div>
           <div class="logbox hidden" id="setup-log" style="margin-top:12px;max-height:280px"></div>
@@ -442,6 +445,8 @@ en:{
  "su.onlyMissing":"Only one thing missing: {x}","su.missingList":"Missing: {x}",
  "su.workflowDone":"Workflow committed to the repository","su.composeDone":"Compose file created",
  "su.runnerDone":"Runner installed and started","su.installing":"installing — this can take a few minutes…",
+ "su.autoFixing":"Setting this repository up — fixing everything that can be fixed automatically…",
+ "su.autoBtn":"Auto-fix everything","su.startBtn":"Start service","su.started":"Runner service started",
  "ap.search":"search apps…","ap.all":"all categories","ap.open":"Open","ap.install":"Install","ap.uninstall":"Remove",
  "ap.hint":"Apps run as pinqops-<id> containers; data is kept in named volumes.",
  "ap.installOk":"{n} installed","ap.uninstallOk":"{n} removed","ap.rmTitle":"Remove app","ap.rmConfirm":"Remove “{n}”? Its container is deleted; named volumes are kept.",
@@ -456,6 +461,7 @@ en:{
  "ch.success":"success","ch.failure":"failure","ch.other":"running / other","ch.cpu":"CPU %","ch.mem":"Memory %",
  "ch.noStats":"No running containers (or Docker is unreachable).","ch.collecting":"collecting samples…",
  "tb.deploy":"Deploy now","tb.signout":"Sign out","tb.refresh":"Refresh","tb.notConnected":"not connected","tb.off":"off",
+ "tb.deployHint":"Pulls the newest image and restarts the app on this server (docker compose pull && up -d). Merging to master does this automatically; use this button to force it by hand.",
  "banner.connect":'GitHub is not connected — open <a href="#" data-goto="settings">Settings</a> and connect your repository to see runs and runner status.',
  "c.cancel":"Cancel","c.close":"Close","c.save":"Save","c.remove":"Remove","c.create":"Create","c.connect":"Connect",
  "c.disconnect":"Disconnect","c.view":"view ↗","c.never":"never","c.yes":"yes","c.no":"no",
@@ -530,6 +536,8 @@ tr:{
  "su.onlyMissing":"Sadece şu eksik: {x}","su.missingList":"Eksikler: {x}",
  "su.workflowDone":"Workflow repoya commit'lendi","su.composeDone":"Compose dosyası oluşturuldu",
  "su.runnerDone":"Runner kuruldu ve başlatıldı","su.installing":"kuruluyor — birkaç dakika sürebilir…",
+ "su.autoFixing":"Bu repo yayına hazırlanıyor — otomatik düzeltilebilen her şey düzeltiliyor…",
+ "su.autoBtn":"Hepsini otomatik tamamla","su.startBtn":"Servisi başlat","su.started":"Runner servisi başlatıldı",
  "ap.search":"uygulama ara…","ap.all":"tüm kategoriler","ap.open":"Aç","ap.install":"Kur","ap.uninstall":"Kaldır",
  "ap.hint":"Uygulamalar pinqops-<id> adlı konteynerler olarak çalışır; veriler adlandırılmış volume'larda tutulur.",
  "ap.installOk":"{n} kuruldu","ap.uninstallOk":"{n} kaldırıldı","ap.rmTitle":"Uygulamayı kaldır","ap.rmConfirm":"“{n}” kaldırılsın mı? Konteyner silinir; volume'lar korunur.",
@@ -544,6 +552,7 @@ tr:{
  "ch.success":"başarılı","ch.failure":"başarısız","ch.other":"çalışıyor / diğer","ch.cpu":"CPU %","ch.mem":"Bellek %",
  "ch.noStats":"Çalışan konteyner yok (veya Docker'a ulaşılamıyor).","ch.collecting":"örnekler toplanıyor…",
  "tb.deploy":"Şimdi dağıt","tb.signout":"Çıkış","tb.refresh":"Yenile","tb.notConnected":"bağlı değil","tb.off":"kapalı",
+ "tb.deployHint":"Bu sunucuda en yeni imajı çekip uygulamayı yeniden başlatır (docker compose pull && up -d). master'a merge zaten bunu otomatik yapar; bu buton elle zorlamak içindir.",
  "banner.connect":`GitHub bağlı değil — <a href="#" data-goto="settings">Ayarlar</a> bölümünden deponu bağla; çalıştırmaları ve runner durumunu orada göreceksin.`,
  "c.cancel":"İptal","c.close":"Kapat","c.save":"Kaydet","c.remove":"Kaldır","c.create":"Oluştur","c.connect":"Bağla",
  "c.disconnect":"Ayır","c.view":"görüntüle ↗","c.never":"hiç","c.yes":"evet","c.no":"hayır",
@@ -719,6 +728,7 @@ function applyLang(){
   document.querySelectorAll("[data-i18n-ph]").forEach(el=>el.placeholder=t(el.dataset.i18nPh));
   $("#banner-connect").innerHTML=t("banner.connect");
   $("#btn-deploy").textContent=t("tb.deploy");
+  $("#btn-deploy").title=t("tb.deployHint");
   $("#btn-logout").innerHTML=IC.logout+`<span>${t("tb.signout")}</span>`;
   $("#btn-refresh").innerHTML=IC.refresh;$("#btn-refresh").title=t("tb.refresh");
   $("#refresh-select").innerHTML=`<option value="5000">5s</option><option value="10000">10s</option><option value="30000">30s</option><option value="0">${t("tb.off")}</option>`;
@@ -731,6 +741,7 @@ function applyLang(){
   $("#net-name").placeholder=t("st.netName");
   $("#repo-search").placeholder=t("se.repoSearch");
   $("#view-title").textContent=t("nav."+view);
+  setGhChip(ghChipName,ghChipOk); // re-render the chip in the new language
   buildNav();
   if(!$("#lock").classList.contains("hidden"))renderLock();
 }
@@ -820,7 +831,9 @@ async function refresh(quiet){
   }catch(ex){if(!quiet&&ex.message!=="unauthorized")toast(ex.message,"err");}
 }
 
+let ghChipName=null,ghChipOk=true;
 function setGhChip(name,ok){
+  ghChipName=name||null;ghChipOk=ok!==false;
   $("#gh-repo-name").textContent=name||t("tb.notConnected");
   const dot=$("#gh-dot");dot.className="dot "+(name?(ok?"ok":"warn"):"");
   $("#banner-connect").classList.toggle("hidden",!!name);
@@ -1067,6 +1080,64 @@ $("#btn-prune").onclick=()=>openModal(t("im.pruneTitle"),t("im.pruneConfirm"),[
     catch(ex){toast(ex.message,"err");}}}]);
 
 /* ================= apps ================= */
+/* Brand color + short description per catalog app (en/tr). */
+const APP_META={
+ redis:{c:"#DC382D",en:"In-memory key-value store and cache",tr:"Bellek içi anahtar-değer deposu ve önbellek"},
+ keydb:{c:"#E6262F",en:"Multithreaded Redis-compatible store",tr:"Çok iş parçacıklı, Redis uyumlu depo"},
+ memcached:{c:"#288D84",en:"Simple high-performance object cache",tr:"Basit, yüksek performanslı nesne önbelleği"},
+ postgres:{c:"#336791",en:"Advanced open-source SQL database",tr:"Gelişmiş açık kaynak SQL veritabanı"},
+ mysql:{c:"#4479A1",en:"The classic relational database",tr:"Klasik ilişkisel veritabanı"},
+ mariadb:{c:"#0B5162",en:"Community MySQL fork",tr:"Topluluk destekli MySQL çatalı"},
+ mongo:{c:"#47A248",en:"Document-oriented NoSQL database",tr:"Doküman tabanlı NoSQL veritabanı"},
+ couchdb:{c:"#E42528",en:"HTTP/JSON document database",tr:"HTTP/JSON doküman veritabanı"},
+ neo4j:{c:"#018BFF",en:"Graph database with Cypher queries",tr:"Cypher sorgulu graf veritabanı"},
+ clickhouse:{c:"#B8860B",en:"Blazing-fast analytics (OLAP) database",tr:"Çok hızlı analitik (OLAP) veritabanı"},
+ influxdb:{c:"#22ADF6",en:"Time-series database for metrics",tr:"Metrikler için zaman serisi veritabanı"},
+ questdb:{c:"#D14671",en:"Fast time-series SQL database",tr:"Hızlı zaman serisi SQL veritabanı"},
+ cassandra:{c:"#1287B1",en:"Wide-column distributed database",tr:"Geniş sütunlu dağıtık veritabanı"},
+ cockroachdb:{c:"#6933FF",en:"Distributed, resilient SQL database",tr:"Dağıtık ve dayanıklı SQL veritabanı"},
+ surrealdb:{c:"#FF00A0",en:"Multi-model database with realtime APIs",tr:"Gerçek zamanlı API'li çok modelli veritabanı"},
+ elasticsearch:{c:"#005571",en:"Full-text search and analytics engine",tr:"Tam metin arama ve analiz motoru"},
+ opensearch:{c:"#005EB8",en:"Open Elasticsearch-compatible search",tr:"Açık, Elasticsearch uyumlu arama"},
+ meilisearch:{c:"#FF5CAA",en:"Lightning-fast typo-tolerant search",tr:"Yazım hatasına dayanıklı, çok hızlı arama"},
+ typesense:{c:"#D52783",en:"Instant search with simple API",tr:"Basit API'li anlık arama"},
+ rabbitmq:{c:"#FF6600",en:"Battle-tested AMQP message broker",tr:"Kanıtlanmış AMQP mesaj kuyruğu"},
+ nats:{c:"#27AAE1",en:"Lightweight cloud-native messaging",tr:"Hafif, bulut yerlisi mesajlaşma"},
+ kafka:{c:"#5F5F5F",en:"Distributed event streaming platform",tr:"Dağıtık olay akışı platformu"},
+ mosquitto:{c:"#3C5280",en:"Tiny MQTT broker for IoT",tr:"IoT için küçük MQTT aracısı"},
+ minio:{c:"#C72E49",en:"S3-compatible object storage",tr:"S3 uyumlu nesne depolama"},
+ nginx:{c:"#009639",en:"Web server and reverse proxy",tr:"Web sunucusu ve ters vekil"},
+ caddy:{c:"#1F88C0",en:"Web server with automatic HTTPS",tr:"Otomatik HTTPS'li web sunucusu"},
+ httpd:{c:"#D22128",en:"Apache HTTP web server",tr:"Apache HTTP web sunucusu"},
+ adminer:{c:"#34567C",en:"Single-file database admin UI",tr:"Tek dosyalık veritabanı yönetim arayüzü"},
+ pgadmin:{c:"#326690",en:"PostgreSQL administration UI",tr:"PostgreSQL yönetim arayüzü"},
+ phpmyadmin:{c:"#6C78AF",en:"MySQL/MariaDB web admin",tr:"MySQL/MariaDB web yönetimi"},
+ "mongo-express":{c:"#4FA847",en:"MongoDB web admin UI",tr:"MongoDB web yönetim arayüzü"},
+ redisinsight:{c:"#A41E22",en:"Official Redis GUI",tr:"Resmî Redis arayüzü"},
+ grafana:{c:"#F46800",en:"Dashboards for any data source",tr:"Her veri kaynağı için panolar"},
+ prometheus:{c:"#E6522C",en:"Metrics collection and alerting",tr:"Metrik toplama ve uyarı"},
+ "uptime-kuma":{c:"#3BAE71",en:"Self-hosted uptime monitoring",tr:"Kendi sunucunda çalışan uptime izleme"},
+ netdata:{c:"#00AB44",en:"Real-time host & container metrics",tr:"Gerçek zamanlı sunucu ve konteyner metrikleri"},
+ gitea:{c:"#609926",en:"Lightweight self-hosted Git service",tr:"Hafif, kendi sunucunda Git servisi"},
+ jenkins:{c:"#D24939",en:"Extensible CI/CD automation server",tr:"Genişletilebilir CI/CD otomasyonu"},
+ "code-server":{c:"#0066B8",en:"VS Code in the browser",tr:"Tarayıcıda VS Code"},
+ verdaccio:{c:"#405236",en:"Private npm registry",tr:"Özel npm kayıt sunucusu"},
+ sonarqube:{c:"#4E9BCD",en:"Static code quality analysis",tr:"Statik kod kalitesi analizi"},
+ keycloak:{c:"#008AAA",en:"Identity and access management (SSO)",tr:"Kimlik ve erişim yönetimi (SSO)"},
+ vaultwarden:{c:"#175DDC",en:"Bitwarden-compatible password server",tr:"Bitwarden uyumlu şifre sunucusu"},
+ wordpress:{c:"#21759B",en:"The most popular CMS/blog",tr:"En popüler CMS/blog"},
+ ghost:{c:"#738A94",en:"Modern publishing platform",tr:"Modern yayıncılık platformu"},
+ nextcloud:{c:"#0082C9",en:"Self-hosted files, calendar, more",tr:"Kendi sunucunda dosya, takvim ve fazlası"},
+ jellyfin:{c:"#8E5FD3",en:"Free media streaming server",tr:"Özgür medya akış sunucusu"},
+ navidrome:{c:"#4A90D9",en:"Personal music streaming server",tr:"Kişisel müzik akış sunucusu"},
+ syncthing:{c:"#0891D1",en:"Peer-to-peer file synchronization",tr:"Uçtan uca dosya eşitleme"},
+ n8n:{c:"#EA4B71",en:"Workflow automation (self-hosted Zapier)",tr:"İş akışı otomasyonu (kendi Zapier'in)"},
+ nodered:{c:"#8F0000",en:"Flow-based automation for IoT",tr:"IoT için akış tabanlı otomasyon"},
+};
+function appMonogram(name){
+  const words=name.split(/[\s-]+/).filter(Boolean);
+  return (words.length>1?words[0][0]+words[1][0]:name.slice(0,2)).toUpperCase();
+}
 let appsCache=[];
 async function loadApps(){
   try{
@@ -1083,19 +1154,29 @@ function renderApps(){
   const q=($("#apps-search").value||"").toLowerCase(),cat=$("#apps-cat").value;
   const shown=appsCache.filter(a=>(!cat||a.category===cat)&&(!q||a.name.toLowerCase().includes(q)||a.id.includes(q)||a.image.includes(q)));
   $("#apps-grid").innerHTML=shown.map(a=>{
+    const meta=APP_META[a.id]||{c:"#6d5dfc"};
+    const desc=lang==="tr"?(meta.tr||meta.en||""):(meta.en||"");
     // Open uses the port the container actually binds (server-parsed), which
     // may differ from the catalog default when the install overrode it.
     const openPort=a.hostPort||(a.ports[0]||{}).host;
     const open=a.installed&&openPort?`<a href="http://${location.hostname}:${openPort}" target="_blank" rel="noopener" style="font-size:12px">${t("ap.open")} :${openPort} ↗</a>`:"";
-    return`<div class="card">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px">
-        <b style="font-size:14px">${esc(a.name)}</b>
-        <span class="chip mut">${t("cat."+a.category)}</span>
-        ${a.installed?stateChip(a.state||"?"):""}
+    return`<div class="card" style="display:flex;flex-direction:column">
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div class="app-logo" style="background:linear-gradient(140deg,${meta.c},color-mix(in srgb,${meta.c},#000 32%))">${esc(appMonogram(a.name))}</div>
+        <div style="min-width:0;flex:1">
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+            <b style="font-size:14px">${esc(a.name)}</b>
+            ${a.installed?stateChip(a.state||"?"):""}
+          </div>
+          <div class="muted" style="font-size:12px;margin-top:1px">${esc(desc)}</div>
+        </div>
       </div>
-      <div class="mono muted" style="font-size:11.5px;word-break:break-all">${esc(a.image)}</div>
-      <div class="mono muted" style="font-size:11px;margin-top:3px">${a.ports.map(p=>`:${p.host}`).join(" ")}</div>
-      ${a.note?`<div class="muted" style="font-size:12px;margin-top:5px">${esc(a.note)}</div>`:""}
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px">
+        <span class="chip mut">${t("cat."+a.category)}</span>
+        ${a.ports.map(p=>`<span class="lbl">:${p.host}</span>`).join("")}
+      </div>
+      <div class="mono muted" style="font-size:11px;margin-top:7px;word-break:break-all">${esc(a.image)}</div>
+      ${a.note?`<div class="muted" style="font-size:11.5px;margin-top:4px">🔑 ${esc(a.note)}</div>`:""}
       <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
         ${a.installed
           ?`${open}<div class="spacer" style="flex:1"></div><button class="small danger" data-app-rm="${esc(a.id)}" data-app-name="${esc(a.name)}">${t("ap.uninstall")}</button>`
@@ -1337,7 +1418,8 @@ async function loadSetupStatus(){
       row(s.repo.hasWorkflow,t("su.workflow"),s.repo.hasWorkflow?".github/workflows/deploy.yml":t("su.workflowMiss"),
         s.repo.hasWorkflow?"":`<button class="small primary" id="btn-fix-workflow">${t("su.createBtn")}</button>`),
       row(runnerOk,t("su.runner"),runnerDetail,
-        s.runnerInstalled?"":`<button class="small primary" id="btn-fix-runner">${t("su.installBtn")}</button>`),
+        !s.runnerInstalled?`<button class="small primary" id="btn-fix-runner">${t("su.installBtn")}</button>`
+        :(!s.runnersError&&s.runnersOnline===0)?`<button class="small primary" id="btn-start-runner">${t("su.startBtn")}</button>`:""),
       row(s.composeExists,t("su.compose"),s.composeExists?esc(s.composeFile):t("su.composeMiss",{p:esc(s.composeFile)}),
         s.composeExists?"":`<button class="small primary" id="btn-fix-compose">${t("su.createBtn")}</button>`),
     ].join("");
@@ -1359,8 +1441,41 @@ async function loadSetupStatus(){
         toast(r.succeeded?t("su.runnerDone"):t("dep.fail"),r.succeeded?"ok":"err");
         if(r.succeeded)loadSetupStatus();else fr.disabled=false;}
       catch(ex){log.textContent=ex.message;toast(ex.message,"err");fr.disabled=false;}};
+    const sr=$("#btn-start-runner");if(sr)sr.onclick=async()=>{sr.disabled=true;
+      const log=$("#setup-log");log.classList.remove("hidden");
+      try{const r=await api("/api/setup/start-runner",{method:"POST"});
+        log.textContent=r.log||"";
+        toast(r.succeeded?t("su.started"):t("dep.fail"),r.succeeded?"ok":"err");
+        loadSetupStatus();}
+      catch(ex){log.textContent=ex.message;toast(ex.message,"err");sr.disabled=false;}};
   }catch(ex){card.classList.remove("hidden");$("#setup-summary").textContent=ex.message;$("#setup-list").innerHTML="";}
 }
+
+/* --- fully automatic publish: fix everything fixable, in sequence --- */
+async function runAutoSetup(){
+  const card=$("#setup-card");card.classList.remove("hidden");
+  const log=$("#setup-log");log.classList.remove("hidden");log.textContent="";
+  const say=m=>{log.textContent+=m+"\n";log.scrollTop=log.scrollHeight;};
+  say(t("su.autoFixing"));
+  let s;
+  try{s=await api("/api/setup/status");}catch(ex){say("✗ "+ex.message);return;}
+  if(!s.configured)return;
+  try{
+    if(!s.repo.hasWorkflow){say("→ "+t("su.workflow")+"…");
+      await api("/api/setup/create-workflow",{method:"POST"});say("✓ "+t("su.workflowDone"));ghCache=null;}
+    if(!s.composeExists){say("→ "+t("su.compose")+"…");
+      await api("/api/setup/create-compose",{method:"POST"});say("✓ "+t("su.composeDone"));}
+    if(!s.runnerInstalled){say("→ "+t("su.installBtn")+" ("+t("su.installing")+")");
+      const r=await api("/api/setup/install-runner",{method:"POST"});
+      if(r.log)say(r.log);say(r.succeeded?"✓ "+t("su.runnerDone"):"✗ "+t("dep.fail"));}
+    else if(!s.runnersError&&s.runnersOnline===0){say("→ "+t("su.startBtn")+"…");
+      const r=await api("/api/setup/start-runner",{method:"POST"});
+      if(r.log)say(r.log);say(r.succeeded?"✓ "+t("su.started"):"✗ "+t("dep.fail"));}
+    if(!s.repo.hasDockerfile)say("! "+t("su.dockerfileMiss"));
+  }catch(ex){say("✗ "+ex.message);}
+  await loadSetupStatus();
+}
+$("#btn-auto-setup").addEventListener("click",()=>runAutoSetup());
 async function loadIdentityAndRepos(){
   try{
     const u=await api("/api/github/user");
@@ -1384,7 +1499,9 @@ function fillRepoPicker(items,filter){
     return`<option value="https://github.com/${esc(r.fullName)}">${esc(r.fullName)}${r.isPrivate?" 🔒":""} · ${role}</option>`;}).join("");
 }
 $("#repo-search").addEventListener("input",e=>fillRepoPicker(repoList,e.target.value));
-// Portainer-style: picking a repository connects it immediately — no URL typing.
+// Portainer-style: picking a repository connects it AND publishes it — the
+// auto-setup pipeline fixes everything fixable (workflow, compose, runner)
+// without further clicks.
 $("#repo-pick").addEventListener("change",async e=>{
   if(!e.target.value)return;
   $("#set-repo").value=e.target.value;
@@ -1393,6 +1510,7 @@ $("#repo-pick").addEventListener("change",async e=>{
     ghCache=null;
     toast(t("se.connected",{r:r.fullName+(r.isPrivate?" ("+t("se.private")+")":"")}),"ok");
     await loadSettingsIntoForm();
+    await runAutoSetup();
   }catch(ex){toast(ex.message,"err");}
 });
 
