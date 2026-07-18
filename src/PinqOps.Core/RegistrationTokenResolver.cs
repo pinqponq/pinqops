@@ -74,6 +74,44 @@ public sealed class RegistrationTokenResolver
             + "Pass --token <registration-token> or --pat <github-pat>, or run pinqops setup interactively.");
     }
 
+    /// <summary>
+    /// Best-effort removal token for de-registering a leftover runner that is
+    /// registered to <paramref name="oldRepository"/>. Uses the same silent
+    /// sources as registration (gh CLI, then a supplied PAT) but never prompts:
+    /// cleanup falls back to deleting local files when no token is available.
+    /// </summary>
+    public async Task<string?> TryResolveRemovalTokenAsync(
+        GitHubRepository oldRepository,
+        SetupOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(oldRepository);
+        ArgumentNullException.ThrowIfNull(options);
+
+        try
+        {
+            if (options.UseGhCli
+                && await _ghCli.IsAvailableAsync(cancellationToken).ConfigureAwait(false)
+                && await _ghCli.IsAuthenticatedAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return await _ghCli.CreateRemovalTokenAsync(oldRepository, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (!string.IsNullOrWhiteSpace(options.PersonalAccessToken))
+            {
+                return await _gitHubApiClient
+                    .CreateRemovalTokenAsync(oldRepository, options.PersonalAccessToken, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+        catch (GitHubApiException exception)
+        {
+            _log?.Invoke($"could not mint a removal token for {oldRepository.Owner}/{oldRepository.Name}: {exception.Message}");
+        }
+
+        return null;
+    }
+
     private async Task<string?> TryResolveWithGhAsync(
         GitHubRepository repository,
         SetupOptions options,

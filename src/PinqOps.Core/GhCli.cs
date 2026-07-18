@@ -27,9 +27,21 @@ public sealed class GhCli
         SucceedsAsync(new[] { "auth", "status" }, cancellationToken);
 
     /// <summary>Mints a registration token via <c>gh api</c>. Throws on failure.</summary>
-    public async Task<string> CreateRegistrationTokenAsync(
+    public Task<string> CreateRegistrationTokenAsync(
         GitHubRepository repository,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        CreateRunnerTokenAsync(repository, "registration-token", cancellationToken);
+
+    /// <summary>Mints a runner removal token via <c>gh api</c>. Throws on failure.</summary>
+    public Task<string> CreateRemovalTokenAsync(
+        GitHubRepository repository,
+        CancellationToken cancellationToken = default) =>
+        CreateRunnerTokenAsync(repository, "remove-token", cancellationToken);
+
+    private async Task<string> CreateRunnerTokenAsync(
+        GitHubRepository repository,
+        string kind,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(repository);
 
@@ -37,7 +49,7 @@ public sealed class GhCli
         {
             "api",
             "-X", "POST",
-            $"repos/{repository.Owner}/{repository.Name}/actions/runners/registration-token",
+            $"repos/{repository.Owner}/{repository.Name}/actions/runners/{kind}",
             "--jq", ".token",
         };
 
@@ -47,7 +59,7 @@ public sealed class GhCli
 
         if (!result.Succeeded)
         {
-            throw new GitHubApiException(0, $"gh could not mint a registration token: {result.StandardError.Trim()}");
+            throw new GitHubApiException(0, $"gh could not mint a {kind}: {result.StandardError.Trim()}");
         }
 
         return result.StandardOutput.Trim();

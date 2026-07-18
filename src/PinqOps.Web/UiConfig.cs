@@ -28,9 +28,4 @@ public sealed class UiConfig
     public string ComposeFile { get; set; } = DefaultComposeFile;
 
     public string RunnerDirectory { get; set; } = DefaultRunnerDirectory;
-
-    /// <summary>The last deploy triggered from this dashboard.</summary>
-    public LastDeployInfo? LastDeploy { get; set; }
 }
-
-public sealed record LastDeployInfo(DateTimeOffset At, bool Succeeded);

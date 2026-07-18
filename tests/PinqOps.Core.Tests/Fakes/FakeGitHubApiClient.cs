@@ -12,6 +12,8 @@ public sealed class FakeGitHubApiClient : IGitHubApiClient
 
     public List<(GitHubRepository Repository, string PersonalAccessToken)> Calls { get; } = new();
 
+    public List<(GitHubRepository Repository, string PersonalAccessToken)> RemovalCalls { get; } = new();
+
     public Task<string> CreateRegistrationTokenAsync(
         GitHubRepository repository,
         string personalAccessToken,
@@ -19,5 +21,14 @@ public sealed class FakeGitHubApiClient : IGitHubApiClient
     {
         Calls.Add((repository, personalAccessToken));
         return Task.FromResult(_token);
+    }
+
+    public Task<string> CreateRemovalTokenAsync(
+        GitHubRepository repository,
+        string personalAccessToken,
+        CancellationToken cancellationToken = default)
+    {
+        RemovalCalls.Add((repository, personalAccessToken));
+        return Task.FromResult("api-removal-token");
     }
 }

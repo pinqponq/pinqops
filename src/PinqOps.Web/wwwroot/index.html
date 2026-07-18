@@ -4,15 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>pinqops — dashboard</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23e255a1'/%3E%3Cstop offset='1' stop-color='%237c5cff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Ctext x='16' y='22' font-family='sans-serif' font-size='16' font-weight='800' fill='%23fff' text-anchor='middle'%3Ep%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23ededed'/%3E%3Ctext x='16' y='22' font-family='sans-serif' font-size='16' font-weight='800' fill='%230a0a0a' text-anchor='middle'%3Ep%3C/text%3E%3C/svg%3E">
 <style>
+/* Ultra-minimal monochrome: near-black surfaces, hairline borders, a white
+   "primary", and muted state colors. No gradients, no glows. */
 :root{
-  --bg:#0b0d12;--panel:#12151d;--panel2:#161b26;--line:#232a39;--line2:#2c3446;
-  --text:#e6eaf2;--muted:#8b93a5;--faint:#5d6575;
-  --primary:#6d5dfc;--primary-h:#7f70ff;--brand1:#e255a1;--brand2:#7c5cff;
-  --ok:#2dd4a0;--warn:#f0b429;--err:#f25c7a;--info:#58a6ff;
+  --bg:#0a0a0a;--panel:#0f0f10;--panel2:#161617;--line:#1f1f21;--line2:#2c2c2f;
+  --text:#ededed;--muted:#8f8f96;--faint:#5b5b62;
+  --primary:#ededed;--primary-h:#ffffff;
+  --ok:#34d399;--warn:#fbbf24;--err:#f87171;--info:#7aa2f7;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --radius:12px;--shadow:0 10px 40px rgba(0,0,0,.45);
+  --radius:8px;--shadow:0 1px 0 rgba(255,255,255,.03);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
@@ -20,7 +22,7 @@ body{background:var(--bg);color:var(--text);font:14px/1.55 -apple-system,BlinkMa
 a{color:var(--info);text-decoration:none}
 a:hover{text-decoration:underline}
 .hidden{display:none!important}
-::selection{background:rgba(109,93,252,.35)}
+::selection{background:rgba(255,255,255,.2)}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:6px;border:2px solid var(--bg)}
 ::-webkit-scrollbar-track{background:transparent}
@@ -31,30 +33,28 @@ svg.ic.brand{fill:currentColor;stroke:none}
 button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:9px;padding:8px 15px;font-weight:500;transition:background .15s,border-color .15s,color .15s,box-shadow .15s;display:inline-flex;align-items:center;gap:7px;justify-content:center}
 button:hover{background:#1c2230;border-color:var(--line2)}
 button:disabled{opacity:.45;cursor:not-allowed}
-button.primary{background:var(--primary);border-color:transparent;color:#fff;font-weight:600;box-shadow:0 2px 12px rgba(109,93,252,.35)}
+button.primary{background:var(--primary);border-color:transparent;color:var(--bg);font-weight:600}
 button.primary:hover{background:var(--primary-h)}
-button.danger{border-color:rgba(242,92,122,.4);color:var(--err);background:transparent}
-button.danger:hover{background:rgba(242,92,122,.08);border-color:var(--err)}
+button.danger{border-color:rgba(248,113,113,.4);color:var(--err);background:transparent}
+button.danger:hover{background:rgba(248,113,113,.08);border-color:var(--err)}
 button.ghost{background:transparent;border-color:transparent;color:var(--muted)}
 button.ghost:hover{color:var(--text);background:var(--panel2);border-color:transparent}
 button.small{padding:4px 10px;font-size:12px;border-radius:7px;gap:5px}
 button.icon{padding:8px;border-radius:9px}
 :focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:6px}
 
-input,select{font:inherit;background:#0d1017;border:1px solid var(--line);color:var(--text);border-radius:9px;padding:9px 12px;width:100%;transition:border-color .15s,box-shadow .15s}
-input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(109,93,252,.18)}
+input,select{font:inherit;background:#111112;border:1px solid var(--line);color:var(--text);border-radius:9px;padding:9px 12px;width:100%;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus{outline:none;border-color:var(--line2);box-shadow:0 0 0 3px rgba(255,255,255,.06)}
 input::placeholder{color:var(--faint)}
 label{display:block;font-size:12px;color:var(--muted);margin:13px 0 5px;font-weight:600;letter-spacing:.02em}
 code{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px solid var(--line);padding:1px 6px;border-radius:6px}
 
 /* ---------- lock screen ---------- */
-.lock{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px;
-  background:radial-gradient(1100px 560px at 15% -10%,rgba(124,92,255,.16),transparent 60%),
-             radial-gradient(900px 480px at 95% 110%,rgba(226,85,161,.12),transparent 60%)}
+.lock{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
 .lock-card{width:400px;max-width:100%;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:34px;box-shadow:var(--shadow)}
 .logo{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:800;letter-spacing:-.02em}
-.logo-mark{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--brand1),var(--brand2));display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:17px;font-weight:800;flex:none}
-.logo em{font-style:normal;background:linear-gradient(135deg,var(--brand1),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.logo-mark{width:30px;height:30px;border-radius:7px;background:var(--primary);display:inline-flex;align-items:center;justify-content:center;color:var(--bg);font-size:16px;font-weight:800;flex:none}
+.logo em{font-style:normal;color:var(--muted)}
 .lock-card p.sub{color:var(--muted);font-size:13px;margin-top:14px}
 .lock-card button{width:100%;margin-top:20px;padding:11px}
 .form-error{color:var(--err);font-size:13px;margin-top:10px;min-height:18px}
@@ -67,16 +67,12 @@ code{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px 
 .nav-cap{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);font-weight:700;margin:16px 10px 6px}
 .nav button{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:none;border:1px solid transparent;padding:8px 11px;border-radius:9px;color:var(--muted);font-weight:500;margin-bottom:1px;font-size:13.5px}
 .nav button:hover{background:var(--panel2);color:var(--text)}
-.nav button.active{background:rgba(109,93,252,.12);color:#c9c2ff;border-color:rgba(109,93,252,.25)}
-.nav button.active svg{color:var(--primary-h)}
+.nav button.active{background:rgba(255,255,255,.06);color:var(--text);border-color:transparent}
+.nav button.active svg{color:var(--text)}
 .side-foot{padding:14px 20px;border-top:1px solid var(--line);font-size:11px;color:var(--faint)}
 main{flex:1;min-width:0;display:flex;flex-direction:column}
-.topbar{display:flex;align-items:center;gap:10px;padding:13px 26px;border-bottom:1px solid var(--line);background:rgba(18,21,29,.85);backdrop-filter:blur(8px);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.topbar{display:flex;align-items:center;gap:10px;padding:13px 26px;border-bottom:1px solid var(--line);background:rgba(10,10,10,.9);backdrop-filter:blur(8px);position:sticky;top:0;z-index:5;flex-wrap:wrap}
 .topbar h1{font-size:15.5px;font-weight:700;margin-right:auto;letter-spacing:-.01em}
-.repo-chip{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:5px 13px;background:var(--panel)}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
-.dot.ok{background:var(--ok);box-shadow:0 0 6px rgba(45,212,160,.7)}
-.dot.err{background:var(--err)}.dot.warn{background:var(--warn)}
 .topbar select{width:auto;padding:6px 9px;font-size:12px;background:var(--panel)}
 .content{padding:26px;max-width:1440px;width:100%}
 
@@ -100,18 +96,18 @@ td{padding:10px 15px;border-bottom:1px solid var(--line);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tbody tr{transition:background .1s}
 tbody tr:hover td{background:rgba(255,255,255,.018)}
-td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
+td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
 .empty{padding:30px;text-align:center;color:var(--muted);font-size:13px}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;border-radius:999px;padding:2.5px 11px;white-space:nowrap;border:1px solid transparent}
-.chip.ok{background:rgba(45,212,160,.1);color:var(--ok);border-color:rgba(45,212,160,.25)}
-.chip.err{background:rgba(242,92,122,.1);color:var(--err);border-color:rgba(242,92,122,.25)}
-.chip.warn{background:rgba(240,180,41,.1);color:var(--warn);border-color:rgba(240,180,41,.25)}
-.chip.info{background:rgba(88,166,255,.1);color:var(--info);border-color:rgba(88,166,255,.25)}
-.chip.mut{background:rgba(139,147,165,.1);color:var(--muted);border-color:rgba(139,147,165,.22)}
-.lbl{display:inline-block;font-size:11px;font-family:var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:1px 7px;margin:1px 3px 1px 0;color:#b9c2d4}
-.bar{height:7px;border-radius:6px;background:#0d1017;overflow:hidden;margin-top:10px;border:1px solid var(--line)}
-.bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--brand2),var(--brand1));transition:width .4s ease}
-.logbox{background:#090b10;border:1px solid var(--line);border-radius:var(--radius);padding:15px;font-family:var(--mono);font-size:12px;line-height:1.65;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;color:#aeb9cd}
+.chip.ok{background:rgba(52,211,153,.09);color:var(--ok);border-color:rgba(52,211,153,.25)}
+.chip.err{background:rgba(248,113,113,.1);color:var(--err);border-color:rgba(248,113,113,.25)}
+.chip.warn{background:rgba(251,191,36,.1);color:var(--warn);border-color:rgba(251,191,36,.25)}
+.chip.info{background:rgba(122,162,247,.1);color:var(--info);border-color:rgba(122,162,247,.25)}
+.chip.mut{background:rgba(143,143,150,.1);color:var(--muted);border-color:rgba(143,143,150,.22)}
+.lbl{display:inline-block;font-size:11px;font-family:var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 7px;margin:1px 3px 1px 0;color:#b9bcc4}
+.bar{height:7px;border-radius:6px;background:#111112;overflow:hidden;margin-top:10px;border:1px solid var(--line)}
+.bar i{display:block;height:100%;border-radius:6px;background:var(--primary);transition:width .4s ease}
+.logbox{background:#0c0c0d;border:1px solid var(--line);border-radius:var(--radius);padding:15px;font-family:var(--mono);font-size:12px;line-height:1.65;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;color:#b0b3ba}
 #toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:60}
 .toast{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--info);border-radius:10px;padding:11px 16px;font-size:13px;max-width:400px;box-shadow:var(--shadow);animation:pop .18s ease-out}
 .toast.ok{border-left-color:var(--ok)}.toast.err{border-left-color:var(--err)}
@@ -126,20 +122,59 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}
 .form-grid .full{grid-column:1/-1}
 .actions-cell{display:flex;gap:5px;flex-wrap:wrap}
-.banner{border:1px solid rgba(240,180,41,.4);background:rgba(240,180,41,.07);color:var(--warn);border-radius:10px;padding:11px 15px;font-size:13px;margin-bottom:18px}
+.banner{border:1px solid rgba(251,191,36,.4);background:rgba(251,191,36,.07);color:var(--warn);border-radius:10px;padding:11px 15px;font-size:13px;margin-bottom:18px}
 .muted{color:var(--muted)}
 .kv{display:grid;grid-template-columns:180px 1fr;gap:7px 16px;font-size:13px}
 .kv dt{color:var(--muted)}
 .kv dd{word-break:break-word}
 .divider{display:flex;align-items:center;gap:12px;color:var(--faint);font-size:12px;margin:18px 0}
 .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+/* nav lock (GitHub not connected) */
+.nav-lock{margin-left:auto;color:var(--warn);display:inline-flex}
+.nav-lock svg{width:13px;height:13px}
+/* repo picker list */
+.repolist{margin-top:12px;border:1px solid var(--line);border-radius:10px;overflow:hidden;max-height:340px;overflow-y:auto}
+.repo-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px}
+.repo-row:last-child{border-bottom:none}
+.repo-row:hover{background:var(--panel2)}
+.repo-row.sel{background:rgba(255,255,255,.06);box-shadow:inset 2px 0 0 var(--primary)}
+.repo-row .rname{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.repo-row .rmeta{margin-left:auto;display:flex;gap:6px;align-items:center;color:var(--muted);font-size:11.5px;flex:none}
+.repolist .more{padding:9px 14px;color:var(--faint);font-size:12px;text-align:center}
+/* compact app list */
+.applist{border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);overflow:hidden}
+.app-row{display:flex;align-items:center;gap:12px;padding:8px 14px;border-bottom:1px solid var(--line);font-size:13px}
+.app-row:last-child{border-bottom:none}
+.app-row:hover{background:rgba(255,255,255,.018)}
+.app-row .app-logo{width:26px;height:26px;border-radius:7px;font-size:11px}
+.app-row .app-logo svg{width:15px!important;height:15px!important}
+.app-row .aname{font-weight:600;flex:none}
+.app-row .acat{flex:none}
+.app-row .aports{color:var(--muted);font-family:var(--mono);font-size:11.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app-row .aact{margin-left:auto;display:flex;gap:6px;align-items:center;flex:none}
+/* wizard (progress track reuses the shared .bar primitive) */
+.wiz-bar{margin:0 0 14px}
+.wiz-step{display:flex;align-items:flex-start;gap:11px;padding:9px 0;border-bottom:1px solid var(--line)}
+.wiz-step:last-of-type{border-bottom:none}
+.wiz-step .ws-ic{width:22px;height:22px;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;font-size:12px;font-weight:700;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+.wiz-step.ok .ws-ic{background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.3);color:var(--ok)}
+.wiz-step.err .ws-ic{background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.35);color:var(--err)}
+.wiz-step.warn .ws-ic{background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.35);color:var(--warn)}
+.wiz-step.run .ws-ic{border-color:var(--line2);color:var(--text)}
+.wiz-step b{font-size:13px}
+.wiz-step .ws-detail{font-size:12px;color:var(--muted)}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line2);border-top-color:var(--text);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.progress-ind{height:7px;border-radius:6px;background:#111112;border:1px solid var(--line);overflow:hidden;position:relative}
+.progress-ind i{position:absolute;inset:0;width:35%;border-radius:6px;background:var(--primary);animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{0%{left:-35%}100%{left:100%}}
 .identity{display:flex;align-items:center;gap:12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-top:8px}
 .identity img{width:34px;height:34px;border-radius:50%;border:1px solid var(--line2)}
 .identity .who b{font-size:13.5px}
 .identity .who div{font-size:12px;color:var(--muted)}
 .identity .spacer{flex:1}
 .device-code{font-family:var(--mono);font-size:26px;font-weight:700;letter-spacing:.18em;background:var(--panel2);border:1px dashed var(--line2);border-radius:10px;padding:14px 18px;text-align:center;margin:12px 0}
-.gh-btn{background:#1f2530;border-color:var(--line2)}
+.gh-btn{background:var(--panel2);border-color:var(--line2)}
 .inline-form{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .inline-form input,.inline-form select{width:auto}
 @media(max-width:860px){.sidebar{width:62px}.sidebar .logo{padding:16px 0;justify-content:center}.sidebar .logo em,.sidebar .logo .lg-txt{display:none}.nav .txt,.nav-cap{display:none}.nav button{justify-content:center;padding:10px}.side-foot{display:none}.form-grid{grid-template-columns:1fr}.kv{grid-template-columns:130px 1fr}}
@@ -180,9 +215,7 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
   <main>
     <header class="topbar">
       <h1 id="view-title"></h1>
-      <span class="repo-chip"><span class="dot" id="gh-dot"></span><span id="gh-repo-name"></span></span>
       <button class="icon" id="btn-refresh"></button>
-      <button class="primary" id="btn-deploy"></button>
       <button class="ghost" id="btn-logout"></button>
     </header>
 
@@ -223,10 +256,6 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
         </div>
         <div class="section-head"><h2 data-i18n="dp.runs">Workflow runs</h2><div class="spacer"></div><a id="actions-link" href="#" target="_blank" rel="noopener" data-i18n="dp.openActions">open GitHub Actions ↗</a></div>
         <div class="tablewrap"><table id="runs-table"></table></div>
-        <div class="section">
-          <div class="section-head"><h2 data-i18n="dp.lastLocal">Last dashboard deploy</h2></div>
-          <div class="card"><div id="last-local-deploy" class="muted"></div></div>
-        </div>
       </section>
 
       <!-- runner -->
@@ -239,12 +268,23 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
         </div>
       </section>
 
-      <!-- containers -->
+      <!-- containers (with the inline log panel — logs open from a container row) -->
       <section id="view-containers" class="view hidden">
         <div class="tablewrap"><table id="containers-table"></table></div>
+        <div id="ct-logpanel" class="hidden" style="margin-top:16px">
+          <div class="section-head">
+            <h2 style="font-family:var(--mono)" id="ct-log-title"></h2>
+            <select id="log-tail" style="width:auto"><option>100</option><option selected>200</option><option>500</option><option>1000</option></select>
+            <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px"><input type="checkbox" id="log-follow" style="width:auto" checked> <span data-i18n="lg.follow">follow</span></label>
+            <div class="spacer"></div>
+            <button class="small" id="btn-log-download" data-i18n="lg.download">Download</button>
+            <button class="small ghost" id="btn-log-close">✕</button>
+          </div>
+          <div class="logbox" id="logbox"></div>
+        </div>
       </section>
 
-      <!-- apps -->
+      <!-- apps (compact rows — details live in the install modal) -->
       <section id="view-apps" class="view hidden">
         <div class="section-head">
           <input id="apps-search" style="width:auto;min-width:220px" data-i18n-ph="ap.search">
@@ -252,7 +292,7 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
           <div class="spacer"></div>
           <span class="muted" style="font-size:12px" data-i18n="ap.hint"></span>
         </div>
-        <div class="grid" id="apps-grid" style="grid-template-columns:repeat(auto-fill,minmax(270px,1fr))"></div>
+        <div id="apps-list" class="applist"></div>
       </section>
 
       <!-- images -->
@@ -291,18 +331,6 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
         </div>
       </section>
 
-      <!-- logs -->
-      <section id="view-logs" class="view hidden">
-        <div class="section-head">
-          <select id="log-container" style="width:auto;min-width:230px"></select>
-          <select id="log-tail" style="width:auto"><option>100</option><option selected>200</option><option>500</option><option>1000</option></select>
-          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:12px"><input type="checkbox" id="log-follow" style="width:auto" checked> <span data-i18n="lg.follow">follow</span></label>
-          <div class="spacer"></div>
-          <button class="small" id="btn-log-download" data-i18n="lg.download">Download</button>
-        </div>
-        <div class="logbox" id="logbox"></div>
-      </section>
-
       <!-- system -->
       <section id="view-system" class="view hidden">
         <div class="grid cards">
@@ -317,8 +345,8 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
           <div class="card"><dl class="kv" id="sys-docker"></dl></div></div>
       </section>
 
-      <!-- settings -->
-      <section id="view-settings" class="view hidden">
+      <!-- github: connect + pick a repo + the install wizard -->
+      <section id="view-github" class="view hidden">
         <div class="card">
           <h3 data-i18n="se.gh">GitHub connection</h3>
 
@@ -347,21 +375,35 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
             </div>
             <div style="margin-top:14px"><a href="#" id="link-no-gh" class="muted" style="font-size:12.5px" data-i18n="se.noGhLink">Continue without signing in with GitHub?</a></div>
           </div>
+        </div>
 
-          <!-- repository: picked from the account's authorized repos; a manual
-               URL fallback lives under Advanced for repos outside the list -->
-          <form id="settings-form">
-            <div class="form-grid">
-              <div class="full">
-                <label data-i18n="se.repo">Repository</label>
-                <div class="inline-form">
-                  <input id="repo-search" style="min-width:200px;flex:1" data-i18n-ph="se.repoSearch">
-                  <select id="repo-pick" style="min-width:260px;flex:2"></select>
-                </div>
-              </div>
-            </div>
-            <details style="margin-top:16px">
-              <summary class="muted" style="cursor:pointer;font-size:13px" data-i18n="se.advanced">Advanced</summary>
+        <!-- repo wizard: search, pick, install — like installing an app -->
+        <div class="card hidden" id="repo-card" style="margin-top:16px">
+          <h3 data-i18n="gh.pickTitle">Set up a repository</h3>
+          <p class="muted" style="font-size:13px;margin-bottom:10px" data-i18n="gh.pickHelp">Search your repositories, pick one, and Install — the wizard commits the deploy workflow, creates the compose project, and registers the runner automatically.</p>
+          <div class="inline-form">
+            <input id="repo-search" style="min-width:220px;flex:1" data-i18n-ph="se.repoSearch">
+            <button class="primary" id="btn-repo-install" disabled data-i18n="gh.installBtn">Install</button>
+          </div>
+          <div id="repo-list" class="repolist"></div>
+        </div>
+
+        <!-- readiness of the connected repo -->
+        <div class="card hidden" id="setup-card" style="margin-top:16px">
+          <h3 style="display:flex;align-items:center;gap:10px"><span data-i18n="su.title">Deployment readiness</span>
+            <span style="flex:1"></span>
+            <span class="muted" style="font-weight:500;text-transform:none;letter-spacing:0" id="setup-repo-name"></span>
+            <button class="small" id="btn-wiz-rerun" data-i18n="gh.reinstall">Re-run the wizard</button></h3>
+          <div id="setup-summary" style="font-size:13px;margin-bottom:6px"></div>
+          <div id="setup-list"></div>
+          <div class="logbox hidden" id="setup-log" style="margin-top:12px;max-height:280px"></div>
+        </div>
+
+        <!-- manual fallback for repos outside the list + server paths -->
+        <div class="card" style="margin-top:16px">
+          <details>
+            <summary class="muted" style="cursor:pointer;font-size:13px" data-i18n="se.advanced">Advanced</summary>
+            <form id="settings-form">
               <div class="form-grid">
                 <div class="full"><label for="set-repo" data-i18n="se.repoUrl">Repository URL</label>
                 <input id="set-repo" placeholder="https://github.com/owner/repo"></div>
@@ -374,21 +416,14 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9c2d4}
                 <button type="submit" class="small" data-i18n="c.save">Save</button>
               </div>
               <div class="stat-sub" id="settings-meta" style="margin-top:10px"></div>
-            </details>
-          </form>
+            </form>
+          </details>
         </div>
+      </section>
 
-        <!-- readiness: the dashboard checks the repo + server and fixes what it can -->
-        <div class="card hidden" id="setup-card" style="margin-top:16px">
-          <h3 style="display:flex;align-items:center"><span data-i18n="su.title">Deployment readiness</span>
-            <span style="flex:1"></span>
-            <button class="small primary" id="btn-auto-setup" data-i18n="su.autoBtn">Auto-fix everything</button></h3>
-          <div id="setup-summary" style="font-size:13px;margin-bottom:6px"></div>
-          <div id="setup-list"></div>
-          <div class="logbox hidden" id="setup-log" style="margin-top:12px;max-height:280px"></div>
-        </div>
-
-        <div class="card" style="margin-top:16px">
+      <!-- settings: local dashboard preferences only -->
+      <section id="view-settings" class="view hidden">
+        <div class="card">
           <h3 data-i18n="se.prefs">Dashboard preferences</h3>
           <div class="form-grid">
             <div><label for="lang-select" data-i18n="se.lang">Language</label>
@@ -429,10 +464,21 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 /* ================= i18n ================= */
 const I18N={
 en:{
- "nav.grp.monitor":"Monitor","nav.grp.docker":"Docker","nav.grp.server":"Server",
+ "nav.grp.monitor":"Monitor","nav.grp.docker":"Docker","nav.grp.server":"Server","nav.grp.github":"Publishing",
  "nav.overview":"Overview","nav.deployments":"Deployments","nav.runner":"Runner","nav.containers":"Containers",
- "nav.images":"Images","nav.storage":"Storage & Networks","nav.logs":"Logs","nav.system":"System","nav.settings":"Settings",
- "nav.apps":"Apps",
+ "nav.images":"Images","nav.storage":"Storage & Networks","nav.system":"System","nav.settings":"Settings",
+ "nav.apps":"Apps","nav.github":"GitHub",
+ "gh.locked":"Not connected — click to sign in","gh.pickTitle":"Set up a repository",
+ "gh.pickHelp":"Search your repositories, pick one, and Install — the wizard commits the deploy workflow, creates the compose project, and registers the runner automatically.",
+ "gh.installBtn":"Install","gh.moreRepos":"{n} more — keep typing to narrow down","gh.noRepos":"No repository matches.",
+ "gh.reinstall":"Re-run the wizard","gh.connectedAs":"connected",
+ "wiz.title":"Repository setup wizard","wiz.connect":"Connecting the repository","wiz.check":"Checking repo & server",
+ "wiz.dockerfile":"Dockerfile","wiz.workflow":"Deploy workflow","wiz.compose":"Compose project","wiz.runner":"Self-hosted runner","wiz.verify":"Verification",
+ "wiz.ready":"already in place","wiz.done":"Everything is ready — merge to master and it deploys itself.",
+ "wiz.failed":"Setup failed at: {x}","wiz.replacingRunner":"a runner registered to {r} will be replaced",
+ "wiz.runnerVerified":"{n} runner(s) registered on GitHub","wiz.verifyUnknown":"runner installed; online state could not be checked (token lacks Administration: read)",
+ "wiz.verifyFail":"the runner does not appear on GitHub — check the log below",
+ "wiz.showLog":"show log","wiz.cancel":"Run in background",
  "su.title":"Deployment readiness","su.dockerfile":"Dockerfile","su.workflow":"Deploy workflow","su.runner":"Self-hosted runner","su.compose":"Compose project",
  "su.dockerfileMiss":"Missing — add a Dockerfile to the repo root. It's the only thing the pipeline expects from your code.",
  "su.workflowMiss":"Missing — can be created automatically (commits .github/workflows/deploy.yml to the repo).",
@@ -440,17 +486,18 @@ en:{
  "su.runnerOffline":"Installed but offline — check the systemd service on the Runner page.",
  "su.runnerUnknown":"Installed. Online status could not be checked (token lacks Administration: read).",
  "su.runnerOnline":"{n} online","su.installBtn":"Install runner","su.createBtn":"Create",
+ "su.runnerMismatch":"Installed but registered to {r} — the wizard replaces it for this repo.",
  "su.composeMiss":"{p} does not exist — can be generated for this repo's image.",
  "su.allReady":"Everything is ready — merge to master and it deploys itself.",
  "su.onlyMissing":"Only one thing missing: {x}","su.missingList":"Missing: {x}",
  "su.workflowDone":"Workflow committed to the repository","su.composeDone":"Compose file created",
  "su.runnerDone":"Runner installed and started","su.installing":"installing — this can take a few minutes…",
- "su.autoFixing":"Setting this repository up — fixing everything that can be fixed automatically…",
- "su.autoBtn":"Auto-fix everything","su.startBtn":"Start service","su.started":"Runner service started",
+ "su.startBtn":"Start service","su.started":"Runner service started",
  "ap.search":"search apps…","ap.all":"all categories","ap.open":"Open","ap.install":"Install","ap.uninstall":"Remove",
+ "ap.pulling":"pulling the image…","ap.starting":"starting the container…","ap.installing":"installing",
  "ap.hint":"Apps run as pinqops-<id> containers; data is kept in named volumes.",
  "ap.installOk":"{n} installed","ap.uninstallOk":"{n} removed","ap.rmTitle":"Remove app","ap.rmConfirm":"Remove “{n}”? Its container is deleted; named volumes are kept.",
- "ap.port":"port","ap.portsLbl":"Host ports","cat.database":"Databases","cat.search-queue":"Search & Queue","cat.web-storage":"Web & Storage",
+ "ap.portsLbl":"Host ports","cat.database":"Databases","cat.search-queue":"Search & Queue","cat.web-storage":"Web & Storage",
  "cat.admin-tool":"Admin Tools","cat.monitoring":"Monitoring","cat.dev-ci":"Dev & CI","cat.auth":"Auth & Security","cat.app":"Applications",
  "st.map":"Network map","st.mapEmpty":"No containers to map.","se.pickFirst":"Pick a repository first.",
  "se.prefs":"Dashboard preferences","se.lang":"Language","se.refreshLbl":"Auto-refresh",
@@ -460,16 +507,15 @@ en:{
  "ov.hRunchart":"Run history — duration","ov.hReschart":"Container resources","ov.hLoadspark":"Load (1m)","ov.hMemspark":"Memory used %",
  "ch.success":"success","ch.failure":"failure","ch.other":"running / other","ch.cpu":"CPU %","ch.mem":"Memory %",
  "ch.noStats":"No running containers (or Docker is unreachable).","ch.collecting":"collecting samples…",
- "tb.deploy":"Deploy now","tb.signout":"Sign out","tb.refresh":"Refresh","tb.notConnected":"not connected","tb.off":"off",
- "tb.deployHint":"Pulls the newest image and restarts the app on this server (docker compose pull && up -d). Merging to master does this automatically; use this button to force it by hand.",
- "banner.connect":'GitHub is not connected — open <a href="#" data-goto="settings">Settings</a> and connect your repository to see runs and runner status.',
- "c.cancel":"Cancel","c.close":"Close","c.save":"Save","c.remove":"Remove","c.create":"Create","c.connect":"Connect",
+ "tb.signout":"Sign out","tb.refresh":"Refresh","tb.off":"off",
+ "banner.connect":'GitHub is not connected — open the <a href="#" data-goto="github">GitHub</a> menu and connect your repository to see runs and runner status.',
+ "c.cancel":"Cancel","c.close":"Close","c.save":"Save","c.remove":"Remove","c.create":"Create","c.connect":"Connect","c.failed":"✕ failed",
  "c.disconnect":"Disconnect","c.view":"view ↗","c.never":"never","c.yes":"yes","c.no":"no",
  "ov.hContainers":"Containers","ov.hRunner":"Runner","ov.hLastjob":"Last runner job","ov.hDisk":"Disk",
  "ov.running":"/ {n} running","ov.allGood":"all good","ov.stopped":"{n} stopped","ov.online":"online","ov.offline":"offline","ov.none":"none",
- "ov.onlineSub":"{a}/{b} online","ov.busyNow":" · busy now","ov.noRunners":"no runners registered","ov.connectGh":"connect GitHub in Settings",
+ "ov.onlineSub":"{a}/{b} online","ov.busyNow":" · busy now","ov.noRunners":"no runners registered","ov.connectGh":"connect via the GitHub menu",
  "ov.noSelfJob":"no self-hosted job found in recent runs","ov.compose":"Compose project","ov.recentRuns":"Recent workflow runs","ov.seeAll":"see all →",
- "ov.composeMissing":"Compose file not found at {p} — set the path in Settings.","ov.noServices":"No services are up in this compose project.",
+ "ov.composeMissing":"Compose file not found at {p} — set the path under GitHub → Advanced.","ov.noServices":"No services are up in this compose project.",
  "ov.connectToSee":"Connect GitHub to see workflow runs.","ov.of":"of",
  "th.service":"Service","th.image":"Image","th.state":"State","th.status":"Status","th.ports":"Ports","th.run":"Run","th.workflow":"Workflow",
  "th.commit":"Commit","th.branch":"Branch","th.trigger":"Trigger","th.started":"Started","th.duration":"Duration","th.name":"Name",
@@ -477,15 +523,14 @@ en:{
  "th.size":"Size","th.driver":"Driver","th.scope":"Scope","th.mount":"Mountpoint","th.internal":"Internal","th.type":"Type","th.total":"Total",
  "th.active":"Active","th.reclaimable":"Reclaimable",
  "dp.lastJob":"Runner last executed a job","dp.runs":"Workflow runs","dp.openActions":"open GitHub Actions ↗",
- "dp.lastLocal":"Last dashboard deploy","dp.noLocal":"No deploy has been triggered from this dashboard yet.",
- "dp.triggered":"triggered from this dashboard","dp.noSelfJob":"No job on a self-hosted runner was found in the recent runs.",
+ "dp.noSelfJob":"No job on a self-hosted runner was found in the recent runs.",
  "dp.job":"job","dp.runner":"Runner","dp.started":"Started","dp.finished":"Finished","dp.link":"Link","dp.openJob":"open job on GitHub ↗",
- "dp.workflow":"Workflow","dp.noRuns":"No workflow runs yet.","dp.connectFirst":"Connect GitHub in Settings first.",
+ "dp.workflow":"Workflow","dp.noRuns":"No workflow runs yet.","dp.connectFirst":"Connect a repository via the GitHub menu first.",
  "rn.gh":"GitHub runners (repository)","rn.local":"Local runner (this machine)","rn.busy":"busy","rn.idle":"idle",
  "rn.installed":"Installed","rn.dirMissing":"no (directory {d} not found)","rn.dir":"Directory","rn.agent":"Agent name",
  "rn.regTo":"Registered to","rn.service":"Service","rn.svcMissing":"not found (systemd unavailable or service not installed)",
  "rn.lastExec":"Last job executed","rn.neverLogs":"never (no Worker logs)","rn.procLog":"Runner process log","rn.since":"since",
- "rn.none":"No self-hosted runners are registered on {r}. Run <code>pinqops setup</code> on the server.","rn.connect":"Connect GitHub in Settings to list repository runners.",
+ "rn.none":"No self-hosted runners are registered on {r}. Run <code>pinqops setup</code> on the server.","rn.connect":"Connect a repository via the GitHub menu to list repository runners.",
  "ct.start":"start","ct.stop":"stop","ct.restart":"restart","ct.logs":"logs","ct.inspect":"inspect","ct.none":"No containers.","ct.actionOk":"{a} {n} — ok",
  "im.pruneBtn":"Prune dangling images","im.pruneTitle":"Prune images","im.pruneConfirm":"Remove all dangling images (<code>docker image prune -f</code>)?",
  "im.prune":"Prune","im.pruned":"pruned","im.none":"No images.",
@@ -493,37 +538,44 @@ en:{
  "st.internal":"internal (no outbound)","st.rmTitle":"Remove network","st.rmConfirm":"Remove network “{n}”?","st.builtin":"built-in",
  "st.attach":"Connect container","st.attached":"Attached containers","st.noneAttached":"No containers attached.","st.subnet":"Subnet",
  "st.gateway":"Gateway","st.pickContainer":"— choose container —","st.created":"created","st.noVolumes":"No volumes.","st.noNetworks":"No networks.",
- "lg.follow":"follow","lg.download":"Download","lg.select":"select a container…","lg.noOutput":"(no output)",
+ "lg.follow":"follow","lg.download":"Download","lg.noOutput":"(no output)",
  "sy.mem":"Memory","sy.disk":"Disk /","sy.load":"Load average","sy.uptime":"Uptime","sy.host":"Host","sy.hostname":"Hostname",
  "sy.os":"OS","sy.kernel":"Kernel","sy.arch":"Architecture","sy.time":"Server time (UTC)","sy.client":"Client","sy.server":"Server",
  "sy.daemon":"– (daemon unreachable?)",
- "se.gh":"GitHub connection","se.signIn":"Sign in with GitHub","se.orToken":"or paste a token",
+ "se.gh":"GitHub connection","se.signIn":"Sign in with GitHub",
  "se.deviceHelp":"Sign in with GitHub (you confirm a short code on github.com), then just pick your repository — the readiness check below tells you if anything (like a Dockerfile) is missing.",
  "se.clientId":"OAuth App client ID","se.clientIdHelp":"Create an OAuth App at GitHub → Settings → Developer settings → OAuth Apps (enable device flow). No secret needed; the id is saved for next time.",
  "se.enterAt":"Enter this code at","se.waiting":"waiting for approval…","se.denied":"sign-in was denied.","se.expired":"code expired — try again.",
  "se.signedIn":"Signed in","se.ghDisconnect":"Disconnect","se.useToken":"Connect with token",
- "se.tokenHelp":"Fine-grained PAT: Actions read (+ Administration read for runners). Classic PAT: repo scope.",
- "se.repo":"Repository","se.repoSearch":"search repositories…","se.pickRepo":"— pick a repository —","se.private":"private",
+ "se.repoSearch":"search repositories…","se.private":"private",
  "se.admin":"admin","se.write":"write","se.read":"read",
  "se.repoUrl":"Repository URL","se.userOpt":"GitHub username (optional)","se.token":"Token / PAT","se.tokenReq":"(required)",
  "se.tokenKeep":"(leave empty to keep the saved token)","se.tokenSaved":"saved: {m}",
- "se.compose":"Compose file path","se.runnerDir":"Runner install directory","se.saveTest":"Save & test connection",
- "se.dcTitle":"Disconnect GitHub","se.dcConfirm":"Remove the stored repository URL and token from this server?","se.disconnected":"Disconnected",
+ "se.compose":"Compose file path","se.runnerDir":"Runner install directory", "se.dcTitle":"Disconnect GitHub","se.dcConfirm":"Remove the stored repository URL and token from this server?","se.disconnected":"Disconnected",
  "se.connected":"Connected to {r}","se.configFile":"Config file",
  "se.pwCard":"Dashboard password","se.pwCur":"Current password","se.pwNew":"New password (min 8)","se.pwChange":"Change password",
  "se.pwChanged":"Password changed — sign in again","se.tokenOk":"Token verified — now pick a repository",
- "dep.title":"Deploy now","dep.confirm":"Run <code>docker compose pull && up -d</code> for the configured compose project? The app restarts with the newest image.",
- "dep.run":"Deploy","dep.ing":"deploying…","dep.ok":"✓ deploy succeeded","dep.fail":"✕ deploy failed",
  "lk.login":"Dashboard login","lk.setup":"First run — create the dashboard password.","lk.code":"Setup code",
  "lk.codeHint":"(printed on the server console)","lk.pw":"Password","lk.pw2":"Repeat password","lk.signIn":"Sign in",
  "lk.create":"Create password","lk.min8":"At least 8 characters.","lk.mismatch":"Passwords do not match.","lk.noApi":"Cannot reach the API: {e}",
  "insp.title":"inspect: {n}",
 },
 tr:{
- "nav.grp.monitor":"İzleme","nav.grp.docker":"Docker","nav.grp.server":"Sunucu",
+ "nav.grp.monitor":"İzleme","nav.grp.docker":"Docker","nav.grp.server":"Sunucu","nav.grp.github":"Yayınlama",
  "nav.overview":"Genel Bakış","nav.deployments":"Dağıtımlar","nav.runner":"Runner","nav.containers":"Konteynerler",
- "nav.images":"İmajlar","nav.storage":"Depolama ve Ağlar","nav.logs":"Loglar","nav.system":"Sistem","nav.settings":"Ayarlar",
- "nav.apps":"Uygulamalar",
+ "nav.images":"İmajlar","nav.storage":"Depolama ve Ağlar","nav.system":"Sistem","nav.settings":"Ayarlar",
+ "nav.apps":"Uygulamalar","nav.github":"GitHub",
+ "gh.locked":"Bağlı değil — giriş için tıkla","gh.pickTitle":"Depo kur",
+ "gh.pickHelp":"Depolarında ara, birini seç ve Kur'a bas — sihirbaz deploy workflow'unu commit'ler, compose projesini oluşturur ve runner'ı otomatik kaydeder.",
+ "gh.installBtn":"Kur","gh.moreRepos":"{n} depo daha — daraltmak için yazmaya devam et","gh.noRepos":"Eşleşen depo yok.",
+ "gh.reinstall":"Sihirbazı yeniden çalıştır","gh.connectedAs":"bağlı",
+ "wiz.title":"Depo kurulum sihirbazı","wiz.connect":"Depo bağlanıyor","wiz.check":"Depo ve sunucu kontrol ediliyor",
+ "wiz.dockerfile":"Dockerfile","wiz.workflow":"Deploy workflow","wiz.compose":"Compose projesi","wiz.runner":"Self-hosted runner","wiz.verify":"Doğrulama",
+ "wiz.ready":"zaten hazır","wiz.done":"Her şey hazır — master'a merge et, gerisi otomatik.",
+ "wiz.failed":"Kurulum şu adımda başarısız oldu: {x}","wiz.replacingRunner":"{r} deposuna kayıtlı runner değiştirilecek",
+ "wiz.runnerVerified":"GitHub'da {n} runner kayıtlı","wiz.verifyUnknown":"runner kuruldu; çevrimiçi durumu doğrulanamadı (token'da Administration: read yok)",
+ "wiz.verifyFail":"runner GitHub'da görünmüyor — aşağıdaki loga bak",
+ "wiz.showLog":"logu göster","wiz.cancel":"Arka planda sürdür",
  "su.title":"Dağıtım hazırlığı","su.dockerfile":"Dockerfile","su.workflow":"Deploy workflow","su.runner":"Self-hosted runner","su.compose":"Compose projesi",
  "su.dockerfileMiss":"Eksik — repo köküne bir Dockerfile ekle. Pipeline'ın kodundan beklediği tek şey bu.",
  "su.workflowMiss":"Eksik — otomatik oluşturulabilir (repoya .github/workflows/deploy.yml commit'lenir).",
@@ -531,17 +583,18 @@ tr:{
  "su.runnerOffline":"Kurulu ama çevrimdışı — Runner sayfasından systemd servisini kontrol et.",
  "su.runnerUnknown":"Kurulu. Çevrimiçi durumu doğrulanamadı (token'da Administration: read yok).",
  "su.runnerOnline":"{n} çevrimiçi","su.installBtn":"Runner'ı kur","su.createBtn":"Oluştur",
+ "su.runnerMismatch":"Kurulu ama {r} deposuna kayıtlı — sihirbaz bu depo için değiştirir.",
  "su.composeMiss":"{p} yok — bu reponun imajı için otomatik üretilebilir.",
  "su.allReady":"Her şey hazır — master'a merge et, gerisi otomatik.",
  "su.onlyMissing":"Sadece şu eksik: {x}","su.missingList":"Eksikler: {x}",
  "su.workflowDone":"Workflow repoya commit'lendi","su.composeDone":"Compose dosyası oluşturuldu",
  "su.runnerDone":"Runner kuruldu ve başlatıldı","su.installing":"kuruluyor — birkaç dakika sürebilir…",
- "su.autoFixing":"Bu repo yayına hazırlanıyor — otomatik düzeltilebilen her şey düzeltiliyor…",
- "su.autoBtn":"Hepsini otomatik tamamla","su.startBtn":"Servisi başlat","su.started":"Runner servisi başlatıldı",
+ "su.startBtn":"Servisi başlat","su.started":"Runner servisi başlatıldı",
  "ap.search":"uygulama ara…","ap.all":"tüm kategoriler","ap.open":"Aç","ap.install":"Kur","ap.uninstall":"Kaldır",
+ "ap.pulling":"imaj çekiliyor…","ap.starting":"konteyner başlatılıyor…","ap.installing":"kuruluyor",
  "ap.hint":"Uygulamalar pinqops-<id> adlı konteynerler olarak çalışır; veriler adlandırılmış volume'larda tutulur.",
  "ap.installOk":"{n} kuruldu","ap.uninstallOk":"{n} kaldırıldı","ap.rmTitle":"Uygulamayı kaldır","ap.rmConfirm":"“{n}” kaldırılsın mı? Konteyner silinir; volume'lar korunur.",
- "ap.port":"port","ap.portsLbl":"Host portları","cat.database":"Veritabanları","cat.search-queue":"Arama ve Kuyruk","cat.web-storage":"Web ve Depolama",
+ "ap.portsLbl":"Host portları","cat.database":"Veritabanları","cat.search-queue":"Arama ve Kuyruk","cat.web-storage":"Web ve Depolama",
  "cat.admin-tool":"Yönetim Araçları","cat.monitoring":"İzleme","cat.dev-ci":"Geliştirme ve CI","cat.auth":"Kimlik ve Güvenlik","cat.app":"Uygulamalar",
  "st.map":"Ağ haritası","st.mapEmpty":"Haritalanacak konteyner yok.","se.pickFirst":"Önce bir depo seç.",
  "se.prefs":"Panel tercihleri","se.lang":"Dil","se.refreshLbl":"Otomatik yenileme",
@@ -551,16 +604,15 @@ tr:{
  "ov.hRunchart":"Çalıştırma geçmişi — süre","ov.hReschart":"Konteyner kaynakları","ov.hLoadspark":"Yük (1dk)","ov.hMemspark":"Kullanılan bellek %",
  "ch.success":"başarılı","ch.failure":"başarısız","ch.other":"çalışıyor / diğer","ch.cpu":"CPU %","ch.mem":"Bellek %",
  "ch.noStats":"Çalışan konteyner yok (veya Docker'a ulaşılamıyor).","ch.collecting":"örnekler toplanıyor…",
- "tb.deploy":"Şimdi dağıt","tb.signout":"Çıkış","tb.refresh":"Yenile","tb.notConnected":"bağlı değil","tb.off":"kapalı",
- "tb.deployHint":"Bu sunucuda en yeni imajı çekip uygulamayı yeniden başlatır (docker compose pull && up -d). master'a merge zaten bunu otomatik yapar; bu buton elle zorlamak içindir.",
- "banner.connect":`GitHub bağlı değil — <a href="#" data-goto="settings">Ayarlar</a> bölümünden deponu bağla; çalıştırmaları ve runner durumunu orada göreceksin.`,
- "c.cancel":"İptal","c.close":"Kapat","c.save":"Kaydet","c.remove":"Kaldır","c.create":"Oluştur","c.connect":"Bağla",
+ "tb.signout":"Çıkış","tb.refresh":"Yenile","tb.off":"kapalı",
+ "banner.connect":`GitHub bağlı değil — <a href="#" data-goto="github">GitHub</a> menüsünden deponu bağla; çalıştırmaları ve runner durumunu orada göreceksin.`,
+ "c.cancel":"İptal","c.close":"Kapat","c.save":"Kaydet","c.remove":"Kaldır","c.create":"Oluştur","c.connect":"Bağla","c.failed":"✕ başarısız",
  "c.disconnect":"Ayır","c.view":"görüntüle ↗","c.never":"hiç","c.yes":"evet","c.no":"hayır",
  "ov.hContainers":"Konteynerler","ov.hRunner":"Runner","ov.hLastjob":"Son runner işi","ov.hDisk":"Disk",
  "ov.running":"/ {n} çalışıyor","ov.allGood":"her şey yolunda","ov.stopped":"{n} durmuş","ov.online":"çevrimiçi","ov.offline":"çevrimdışı","ov.none":"yok",
- "ov.onlineSub":"{a}/{b} çevrimiçi","ov.busyNow":" · şu an meşgul","ov.noRunners":"kayıtlı runner yok","ov.connectGh":"Ayarlar'dan GitHub'ı bağla",
+ "ov.onlineSub":"{a}/{b} çevrimiçi","ov.busyNow":" · şu an meşgul","ov.noRunners":"kayıtlı runner yok","ov.connectGh":"GitHub menüsünden bağlan",
  "ov.noSelfJob":"son çalıştırmalarda self-hosted iş bulunamadı","ov.compose":"Compose projesi","ov.recentRuns":"Son workflow çalıştırmaları","ov.seeAll":"tümü →",
- "ov.composeMissing":"Compose dosyası {p} konumunda bulunamadı — yolu Ayarlar'dan belirle.","ov.noServices":"Bu compose projesinde ayakta servis yok.",
+ "ov.composeMissing":"Compose dosyası {p} konumunda bulunamadı — yolu GitHub → Gelişmiş bölümünden belirle.","ov.noServices":"Bu compose projesinde ayakta servis yok.",
  "ov.connectToSee":"Çalıştırmaları görmek için GitHub'ı bağla.","ov.of":"/",
  "th.service":"Servis","th.image":"İmaj","th.state":"Durum","th.status":"Ayrıntı","th.ports":"Portlar","th.run":"Çalıştırma","th.workflow":"Workflow",
  "th.commit":"Commit","th.branch":"Dal","th.trigger":"Tetikleyici","th.started":"Başlangıç","th.duration":"Süre","th.name":"Ad",
@@ -568,15 +620,14 @@ tr:{
  "th.size":"Boyut","th.driver":"Sürücü","th.scope":"Kapsam","th.mount":"Bağlama noktası","th.internal":"Dahili","th.type":"Tür","th.total":"Toplam",
  "th.active":"Aktif","th.reclaimable":"Geri kazanılabilir",
  "dp.lastJob":"Runner en son iş çalıştırdı","dp.runs":"Workflow çalıştırmaları","dp.openActions":"GitHub Actions'ı aç ↗",
- "dp.lastLocal":"Panelden son dağıtım","dp.noLocal":"Bu panelden henüz dağıtım tetiklenmedi.",
- "dp.triggered":"bu panelden tetiklendi","dp.noSelfJob":"Son çalıştırmalarda self-hosted runner'da koşan iş bulunamadı.",
+ "dp.noSelfJob":"Son çalıştırmalarda self-hosted runner'da koşan iş bulunamadı.",
  "dp.job":"iş","dp.runner":"Runner","dp.started":"Başlangıç","dp.finished":"Bitiş","dp.link":"Bağlantı","dp.openJob":"işi GitHub'da aç ↗",
- "dp.workflow":"Workflow","dp.noRuns":"Henüz workflow çalıştırması yok.","dp.connectFirst":"Önce Ayarlar'dan GitHub'ı bağla.",
+ "dp.workflow":"Workflow","dp.noRuns":"Henüz workflow çalıştırması yok.","dp.connectFirst":"Önce GitHub menüsünden bir depo bağla.",
  "rn.gh":"GitHub runner'ları (depo)","rn.local":"Yerel runner (bu makine)","rn.busy":"meşgul","rn.idle":"boşta",
  "rn.installed":"Kurulu","rn.dirMissing":"hayır ({d} dizini bulunamadı)","rn.dir":"Dizin","rn.agent":"Ajan adı",
  "rn.regTo":"Kayıtlı olduğu yer","rn.service":"Servis","rn.svcMissing":"bulunamadı (systemd yok veya servis kurulmamış)",
  "rn.lastExec":"Son çalıştırılan iş","rn.neverLogs":"hiç (Worker logu yok)","rn.procLog":"Runner süreç logu","rn.since":"başlangıç",
- "rn.none":"{r} deposunda kayıtlı self-hosted runner yok. Sunucuda <code>pinqops setup</code> çalıştır.","rn.connect":"Depo runner'larını listelemek için Ayarlar'dan GitHub'ı bağla.",
+ "rn.none":"{r} deposunda kayıtlı self-hosted runner yok. Sunucuda <code>pinqops setup</code> çalıştır.","rn.connect":"Depo runner'larını listelemek için GitHub menüsünden bağlan.",
  "ct.start":"başlat","ct.stop":"durdur","ct.restart":"yeniden başlat","ct.logs":"loglar","ct.inspect":"incele","ct.none":"Konteyner yok.","ct.actionOk":"{n}: {a} — tamam",
  "im.pruneBtn":"Sahipsiz imajları temizle","im.pruneTitle":"İmaj temizliği","im.pruneConfirm":"Tüm sahipsiz imajlar silinsin mi (<code>docker image prune -f</code>)?",
  "im.prune":"Temizle","im.pruned":"temizlendi","im.none":"İmaj yok.",
@@ -584,27 +635,23 @@ tr:{
  "st.internal":"dahili (dışa kapalı)","st.rmTitle":"Ağı kaldır","st.rmConfirm":"“{n}” ağı kaldırılsın mı?","st.builtin":"yerleşik",
  "st.attach":"Konteyner bağla","st.attached":"Bağlı konteynerler","st.noneAttached":"Bağlı konteyner yok.","st.subnet":"Alt ağ",
  "st.gateway":"Ağ geçidi","st.pickContainer":"— konteyner seç —","st.created":"oluşturuldu","st.noVolumes":"Volume yok.","st.noNetworks":"Ağ yok.",
- "lg.follow":"takip et","lg.download":"İndir","lg.select":"bir konteyner seç…","lg.noOutput":"(çıktı yok)",
+ "lg.follow":"takip et","lg.download":"İndir","lg.noOutput":"(çıktı yok)",
  "sy.mem":"Bellek","sy.disk":"Disk /","sy.load":"Yük ortalaması","sy.uptime":"Çalışma süresi","sy.host":"Sunucu","sy.hostname":"Makine adı",
  "sy.os":"İşletim sistemi","sy.kernel":"Çekirdek","sy.arch":"Mimari","sy.time":"Sunucu saati (UTC)","sy.client":"İstemci","sy.server":"Sunucu",
  "sy.daemon":"– (daemon'a ulaşılamıyor?)",
- "se.gh":"GitHub bağlantısı","se.signIn":"GitHub ile giriş yap","se.orToken":"veya token yapıştır",
+ "se.gh":"GitHub bağlantısı","se.signIn":"GitHub ile giriş yap",
  "se.deviceHelp":"GitHub ile giriş yap (github.com'da kısa bir kodu onaylarsın), sonra sadece deponu seç — aşağıdaki hazırlık kontrolü eksik ne varsa (ör. Dockerfile) sana söyler.",
  "se.clientId":"OAuth App client ID","se.clientIdHelp":"GitHub → Settings → Developer settings → OAuth Apps'ten bir OAuth App oluştur (device flow'u aç). Secret gerekmez; id bir daha sorulmamak üzere kaydedilir.",
  "se.enterAt":"Bu kodu şurada gir:","se.waiting":"onay bekleniyor…","se.denied":"giriş reddedildi.","se.expired":"kodun süresi doldu — tekrar dene.",
  "se.signedIn":"Giriş yapıldı","se.ghDisconnect":"Bağlantıyı kes","se.useToken":"Token ile bağlan",
- "se.tokenHelp":"Fine-grained PAT: Actions okuma (+ runner listesi için Administration okuma). Classic PAT: repo kapsamı.",
- "se.repo":"Depo","se.repoSearch":"depolarda ara…","se.pickRepo":"— depo seç —","se.private":"özel",
+ "se.repoSearch":"depolarda ara…","se.private":"özel",
  "se.admin":"yönetici","se.write":"yazma","se.read":"okuma",
  "se.repoUrl":"Depo URL'si","se.userOpt":"GitHub kullanıcı adı (opsiyonel)","se.token":"Token / PAT","se.tokenReq":"(zorunlu)",
  "se.tokenKeep":"(kayıtlı token'ı korumak için boş bırak)","se.tokenSaved":"kayıtlı: {m}",
- "se.compose":"Compose dosya yolu","se.runnerDir":"Runner kurulum dizini","se.saveTest":"Kaydet ve bağlantıyı test et",
- "se.dcTitle":"GitHub bağlantısını kes","se.dcConfirm":"Kayıtlı depo URL'si ve token bu sunucudan silinsin mi?","se.disconnected":"Bağlantı kesildi",
+ "se.compose":"Compose dosya yolu","se.runnerDir":"Runner kurulum dizini", "se.dcTitle":"GitHub bağlantısını kes","se.dcConfirm":"Kayıtlı depo URL'si ve token bu sunucudan silinsin mi?","se.disconnected":"Bağlantı kesildi",
  "se.connected":"{r} bağlandı","se.configFile":"Yapılandırma dosyası",
  "se.pwCard":"Panel şifresi","se.pwCur":"Mevcut şifre","se.pwNew":"Yeni şifre (en az 8)","se.pwChange":"Şifreyi değiştir",
  "se.pwChanged":"Şifre değişti — tekrar giriş yap","se.tokenOk":"Token doğrulandı — şimdi bir depo seç",
- "dep.title":"Şimdi dağıt","dep.confirm":"Ayarlı compose projesi için <code>docker compose pull && up -d</code> çalıştırılsın mı? Uygulama en yeni imajla yeniden başlar.",
- "dep.run":"Dağıt","dep.ing":"dağıtılıyor…","dep.ok":"✓ dağıtım başarılı","dep.fail":"✕ dağıtım başarısız",
  "lk.login":"Panel girişi","lk.setup":"İlk çalıştırma — panel şifresini oluştur.","lk.code":"Kurulum kodu",
  "lk.codeHint":"(sunucu konsolunda yazar)","lk.pw":"Şifre","lk.pw2":"Şifreyi tekrar gir","lk.signIn":"Giriş yap",
  "lk.create":"Şifre oluştur","lk.min8":"En az 8 karakter.","lk.mismatch":"Şifreler eşleşmiyor.","lk.noApi":"API'ye ulaşılamıyor: {e}",
@@ -616,8 +663,7 @@ const API_TR=[
  [/^Wrong password\.$/,"Şifre yanlış."],
  [/^Wrong setup code.*$/,"Kurulum kodu yanlış — pinqops-ui'nin çalıştığı sunucu konsolunda yazar."],
  [/^Too many failed attempts — try again in (\d+) minute\(s\)\.$/,(m)=>`Çok fazla hatalı deneme — ${m[1]} dakika sonra tekrar dene.`],
- [/^A deploy is already in progress\.$/,"Zaten bir dağıtım sürüyor."],
- [/^GitHub is not connected yet.*$/,"GitHub henüz bağlı değil — Ayarlar'dan depo ve token ekle."],
+ [/^GitHub is not connected yet.*$/,"GitHub henüz bağlı değil — GitHub menüsünden depo ve token ekle."],
  [/^Choose a password of at least 8 characters\.$/,"En az 8 karakterlik bir şifre seç."],
  [/^New password must be at least 8 characters\.$/,"Yeni şifre en az 8 karakter olmalı."],
  [/^Current password is wrong\.$/,"Mevcut şifre yanlış."],
@@ -634,6 +680,9 @@ const API_TR=[
  [/^A runner install is already in progress\.$/,"Zaten bir runner kurulumu sürüyor."],
  [/^Unknown app '(.*)'\.$/,(m)=>`Bilinmeyen uygulama: '${m[1]}'.`],
  [/^Host port must be between 1 and 65535\.$/,"Host portu 1-65535 arasında olmalı."],
+ [/^An install for this app is already in progress\.$/,"Bu uygulama için zaten bir kurulum sürüyor."],
+ [/^Unknown install job\.$/,"Bilinmeyen kurulum işi."],
+ [/^Invalid request body\.$/,"Geçersiz istek gövdesi."],
 ];
 let lang=localStorage.getItem("pinqops.lang")||((navigator.language||"").toLowerCase().startsWith("tr")?"tr":"en");
 function t(key,vars){let s=(I18N[lang]&&I18N[lang][key])??I18N.en[key]??key;
@@ -649,12 +698,13 @@ const IC={
  box:'<svg class="ic" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
  layers:'<svg class="ic" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
  db:'<svg class="ic" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
- file:'<svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
  activity:'<svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
  sliders:'<svg class="ic" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>',
  refresh:'<svg class="ic" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
  logout:'<svg class="ic" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
  zap:'<svg class="ic" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+ github:'<svg class="ic brand" viewBox="0 0 16 16" style="width:16px;height:16px"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>',
+ lock:'<svg class="ic" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
 };
 
 /* ================= state ================= */
@@ -662,7 +712,8 @@ let token=localStorage.getItem("pinqops.token")||"";
 let view="overview", refreshMs=10000, timer=null, logTimer=null, needsSetup=false, ghConfigured=false;
 let deviceTimer=null, deviceHandle=null, repoList=[];
 const NAV=[["nav.grp.monitor",[["overview",IC.grid],["deployments",IC.rocket],["runner",IC.cpu]]],
-           ["nav.grp.docker",[["containers",IC.box],["apps",IC.zap],["images",IC.layers],["storage",IC.db],["logs",IC.file]]],
+           ["nav.grp.docker",[["containers",IC.box],["apps",IC.zap],["images",IC.layers],["storage",IC.db]]],
+           ["nav.grp.github",[["github",IC.github]]],
            ["nav.grp.server",[["system",IC.activity],["settings",IC.sliders]]]];
 
 /* ================= api ================= */
@@ -685,15 +736,20 @@ async function api(path,opts={}){
 
 /* ================= toasts / modal ================= */
 function toast(msg,kind){const el=document.createElement("div");el.className="toast "+(kind||"");el.textContent=msg;$("#toasts").appendChild(el);setTimeout(()=>el.remove(),5000);}
-function openModal(title,bodyHtml,buttons){
-  $("#modal-title").textContent=title;$("#modal-body").innerHTML=bodyHtml;
+let modalSticky=false; // sticky modals (the wizard) ignore backdrop/✕ closes
+function setModalButtons(buttons){
   const foot=$("#modal-foot");foot.innerHTML="";
   (buttons||[{label:t("c.close")}]).forEach(b=>{const btn=document.createElement("button");btn.textContent=b.label;if(b.primary)btn.className="primary";if(b.danger)btn.className="danger";btn.onclick=()=>{if(b.onClick)b.onClick();else closeModal();};foot.appendChild(btn);});
+}
+function openModal(title,bodyHtml,buttons,opts){
+  modalSticky=!!(opts&&opts.sticky);
+  $("#modal-title").textContent=title;$("#modal-body").innerHTML=bodyHtml;
+  setModalButtons(buttons);
   $("#modal").classList.remove("hidden");
 }
-function closeModal(){$("#modal").classList.add("hidden");}
-$("#modal-x").onclick=closeModal;
-$("#modal").addEventListener("click",e=>{if(e.target.id==="modal")closeModal();});
+function closeModal(){modalSticky=false;$("#modal").classList.add("hidden");}
+$("#modal-x").onclick=()=>{if(!modalSticky)closeModal();};
+$("#modal").addEventListener("click",e=>{if(e.target.id==="modal"&&!modalSticky)closeModal();});
 
 /* ================= formatting ================= */
 function timeAgo(iso){if(!iso)return"–";const d=new Date(iso);if(isNaN(d))return esc(iso);const s=(Date.now()-d.getTime())/1000;
@@ -727,8 +783,6 @@ function applyLang(){
     (k==="banner.connect"||k==="im.pruneConfirm")?el.innerHTML=t(k):el.textContent=t(k);});
   document.querySelectorAll("[data-i18n-ph]").forEach(el=>el.placeholder=t(el.dataset.i18nPh));
   $("#banner-connect").innerHTML=t("banner.connect");
-  $("#btn-deploy").textContent=t("tb.deploy");
-  $("#btn-deploy").title=t("tb.deployHint");
   $("#btn-logout").innerHTML=IC.logout+`<span>${t("tb.signout")}</span>`;
   $("#btn-refresh").innerHTML=IC.refresh;$("#btn-refresh").title=t("tb.refresh");
   $("#refresh-select").innerHTML=`<option value="5000">5s</option><option value="10000">10s</option><option value="30000">30s</option><option value="0">${t("tb.off")}</option>`;
@@ -741,7 +795,6 @@ function applyLang(){
   $("#net-name").placeholder=t("st.netName");
   $("#repo-search").placeholder=t("se.repoSearch");
   $("#view-title").textContent=t("nav."+view);
-  setGhChip(ghChipName,ghChipOk); // re-render the chip in the new language
   buildNav();
   if(!$("#lock").classList.contains("hidden"))renderLock();
 }
@@ -751,9 +804,17 @@ function buildNav(){
     const cap=document.createElement("div");cap.className="nav-cap";cap.textContent=t(grp);nav.appendChild(cap);
     for(const[v,icon]of items){
       const b=document.createElement("button");b.dataset.view=v;b.innerHTML=icon+`<span class="txt">${t("nav."+v)}</span>`;
+      // The GitHub entry stays visible but carries a lock until connected —
+      // clicking it lands on the sign-in flow either way.
+      if(v==="github"&&!ghConfigured){b.innerHTML+=`<span class="nav-lock" title="${esc(t("gh.locked"))}">${IC.lock}</span>`;b.title=t("gh.locked");}
       b.classList.toggle("active",v===view);nav.appendChild(b);
     }
   }
+}
+/* banner + nav lock reflect the GitHub connection state */
+function updateGhUi(){
+  $("#banner-connect").classList.toggle("hidden",ghConfigured);
+  buildNav();
 }
 $("#lang-select") .onchange=e=>{lang=e.target.value;localStorage.setItem("pinqops.lang",lang);applyLang();refresh(true);};
 
@@ -792,16 +853,19 @@ $("#lock-form").addEventListener("submit",async e=>{
 /* ================= shell ================= */
 async function enterApp(){
   $("#lock").classList.add("hidden");$("#app").classList.remove("hidden");
-  await loadSettingsIntoForm();
-  setView(ghConfigured?view:"settings");
+  await loadGithubView();
+  setView(ghConfigured?view:"github");
 }
 function setView(v){
   view=v;$("#view-title").textContent=t("nav."+v);
   document.querySelectorAll(".view").forEach(s=>s.classList.add("hidden"));
   $("#view-"+v).classList.remove("hidden");
   document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===v));
-  if(v!=="logs"&&logTimer){clearInterval(logTimer);logTimer=null;}
-  if(v!=="settings"&&deviceTimer)stopDeviceFlow(); // don't keep polling GitHub after leaving Settings
+  if(v!=="containers"&&logTimer){clearInterval(logTimer);logTimer=null;}
+  // Coming back to Containers with the log panel still open: resume following
+  // (the timer was cleared on the way out, but the panel and target survive).
+  if(v==="containers"&&logTarget&&!$("#ct-logpanel").classList.contains("hidden")){fetchLogs();armLogTimer();}
+  if(v!=="github"&&deviceTimer)stopDeviceFlow(); // don't keep polling GitHub after leaving the view
   refresh();
 }
 $("#nav").addEventListener("click",e=>{const b=e.target.closest("button[data-view]");if(b)setView(b.dataset.view);});
@@ -822,28 +886,19 @@ async function refresh(quiet){
     else if(view==="apps")await loadApps();
     else if(view==="images")await loadImages();
     else if(view==="storage")await loadStorage();
-    else if(view==="logs")await loadLogsView();
     else if(view==="system")await loadSystem();
-    // Settings talks to the GitHub API (identity, repos, readiness) — refresh
-    // it only on view entry / manual refresh, never on the auto-refresh tick,
-    // to protect the rate limit and the user's in-progress search.
-    else if(view==="settings"&&!quiet)await loadSettingsIntoForm();
+    // The GitHub view talks to the GitHub API (identity, repos, readiness) —
+    // refresh it only on view entry / manual refresh, never on the auto-refresh
+    // tick, to protect the rate limit and the user's in-progress search.
+    else if(view==="github"&&!quiet)await loadGithubView();
   }catch(ex){if(!quiet&&ex.message!=="unauthorized")toast(ex.message,"err");}
 }
 
-let ghChipName=null,ghChipOk=true;
-function setGhChip(name,ok){
-  ghChipName=name||null;ghChipOk=ok!==false;
-  $("#gh-repo-name").textContent=name||t("tb.notConnected");
-  const dot=$("#gh-dot");dot.className="dot "+(name?(ok?"ok":"warn"):"");
-  $("#banner-connect").classList.toggle("hidden",!!name);
-}
-
 /* ================= charts (inline SVG, CSP-safe) =================
-   Colors: validated pair — indigo #6d5dfc (primary series) / pink #e255a1
+   Colors: validated pair — blue #7aa2f7 (primary series) / amber #fbbf24
    (secondary), gray for de-emphasized "other"; failures additionally get a
    hatch texture so state is never encoded by color alone. */
-const CH={a:"#6d5dfc",b:"#e255a1",mut:"#5d6575",grid:"rgba(139,147,165,.16)",txt:"#8b93a5"};
+const CH={a:"#7aa2f7",b:"#fbbf24",mut:"#5b5b62",grid:"rgba(143,143,150,.14)",txt:"#8f8f96"};
 const HATCH=`<defs><pattern id="hatch" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="6" stroke="rgba(255,255,255,.5)" stroke-width="1.6"/></pattern></defs>`;
 function chLegend(items){return`<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;color:var(--muted)">`+
   items.map(([c,l,h],i)=>{ // per-swatch pattern ids so no DOM id is duplicated
@@ -891,7 +946,7 @@ function chartRes(stats){
   rows.forEach((r,i)=>{
     const y=8+i*rowH;
     const wc=Math.max(2,(W-padL-padR)*r.cpu/max),wm=Math.max(2,(W-padL-padR)*r.mem/max);
-    out+=`<text x="${padL-8}" y="${y+16}" text-anchor="end" fill="#b9c2d4" font-size="11.5" font-family="ui-monospace,monospace">${esc(r.name.length>18?r.name.slice(0,17)+"…":r.name)}</text>
+    out+=`<text x="${padL-8}" y="${y+16}" text-anchor="end" fill="#b9bcc4" font-size="11.5" font-family="ui-monospace,monospace">${esc(r.name.length>18?r.name.slice(0,17)+"…":r.name)}</text>
       <rect x="${padL}" y="${y+2}" width="${wc}" height="9" rx="4" fill="${CH.a}"><title>${esc(r.name)} · CPU ${r.cpu.toFixed(1)}%</title></rect>
       <text x="${padL+wc+5}" y="${y+10}" fill="${CH.txt}" font-size="9.5">${r.cpu.toFixed(1)}%</text>
       <rect x="${padL}" y="${y+15}" width="${wm}" height="9" rx="4" fill="${CH.b}"><title>${esc(r.name)} · Mem ${r.mem.toFixed(1)}%</title></rect>
@@ -912,9 +967,9 @@ function sparkline(el,series){
   const area=line+` L ${pts[pts.length-1][0].toFixed(1)} ${H-pad} L ${pts[0][0].toFixed(1)} ${H-pad} Z`;
   const last=pts[pts.length-1];
   el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:64px;display:block;margin-top:6px">
-    <path d="${area}" fill="rgba(109,93,252,.14)"/>
+    <path d="${area}" fill="rgba(122,162,247,.12)"/>
     <path d="${line}" fill="none" stroke="${CH.a}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    <circle cx="${last[0]}" cy="${last[1]}" r="3.5" fill="${CH.a}" stroke="#12151d" stroke-width="2"/></svg>`;
+    <circle cx="${last[0]}" cy="${last[1]}" r="3.5" fill="${CH.a}" stroke="#0f0f10" stroke-width="2"/></svg>`;
 }
 
 /* ================= overview ================= */
@@ -923,7 +978,6 @@ async function githubOverview(force){
   if(!ghConfigured)return null;
   if(!force&&ghCache&&Date.now()-ghCacheAt<8000)return ghCache;
   ghCache=await api("/api/github/overview");ghCacheAt=Date.now();
-  setGhChip(ghCache.repo.fullName,true);
   return ghCache;
 }
 async function loadOverview(){
@@ -957,7 +1011,7 @@ async function loadOverview(){
     $("#ov-lastjob-sub").textContent=j?`${j.workflowName} #${j.runNumber} · ${j.conclusion||j.status}`:t("ov.noSelfJob");
     renderRunsTable($("#ov-runs-table"),gh.runs.slice(0,5));
     chartRuns(gh.runs);
-  }else if(ghConfigured&&ghR.status==="rejected"){setGhChip($("#gh-repo-name").textContent,false);chartRuns(null);}
+  }else if(ghConfigured&&ghR.status==="rejected"){chartRuns(null);}
   if(!ghConfigured){$("#ov-runner").textContent="–";$("#ov-runner-sub").textContent=t("ov.connectGh");
     $("#ov-lastjob").textContent="–";$("#ov-lastjob-sub").textContent=t("ov.connectGh");
     table($("#ov-runs-table"),[],[],t("ov.connectToSee"));chartRuns(null);}
@@ -984,7 +1038,7 @@ function renderRunsTable(el,runs){
 }
 async function loadDeployments(){
   const gh=await githubOverview();
-  if(!gh){table($("#runs-table"),[],[],t("dp.connectFirst"));$("#last-local-deploy").textContent=t("dp.noLocal");return;}
+  if(!gh){table($("#runs-table"),[],[],t("dp.connectFirst"));return;}
   $("#actions-link").href=gh.repo.htmlUrl+"/actions";
   renderRunsTable($("#runs-table"),gh.runs);
   const j=gh.lastRunnerJob;
@@ -995,10 +1049,6 @@ async function loadDeployments(){
       <dt>${t("dp.started")}</dt><dd>${fullTime(j.startedAt)}</dd><dt>${t("dp.finished")}</dt><dd>${fullTime(j.completedAt)}</dd>
       <dt>${t("dp.link")}</dt><dd><a href="${esc(j.htmlUrl)}" target="_blank" rel="noopener">${t("dp.openJob")}</a></dd></div>`
     :t("dp.noSelfJob");
-  const s=await api("/api/settings");
-  $("#last-local-deploy").innerHTML=s.lastDeploy
-    ?`${s.lastDeploy.succeeded?`<span class="chip ok">${t("dep.ok")}</span>`:`<span class="chip err">${t("dep.fail")}</span>`} <span title="${fullTime(s.lastDeploy.at)}">${timeAgo(s.lastDeploy.at)}</span> — ${t("dp.triggered")}`
-    :t("dp.noLocal");
 }
 
 /* ================= runner ================= */
@@ -1057,7 +1107,7 @@ $("#containers-table").addEventListener("click",async e=>{
     try{await api(`/api/docker/containers/${encodeURIComponent(b.dataset.id)}/action`,{method:"POST",body:JSON.stringify({action:b.dataset.act})});
       toast(t("ct.actionOk",{a:b.dataset.act,n:b.dataset.id}),"ok");await loadContainers();}
     catch(ex){toast(ex.message,"err");b.disabled=false;}
-  }else if(b.dataset.logs){pendingLogTarget=b.dataset.logs;setView("logs");}
+  }else if(b.dataset.logs){openLogPanel(b.dataset.logs);}
   else if(b.dataset.inspect){
     try{const r=await api(`/api/docker/containers/${encodeURIComponent(b.dataset.inspect)}/inspect`);
       openModal(t("insp.title",{n:b.dataset.inspect}),`<div class="logbox" style="max-height:62vh">${esc(JSON.stringify(r.data,null,2))}</div>`);}
@@ -1151,47 +1201,85 @@ async function loadApps(){
     sel.innerHTML=`<option value="">${t("ap.all")}</option>`+cats.map(c=>`<option value="${esc(c)}">${t("cat."+c)}</option>`).join("");
     if(prev&&cats.includes(prev))sel.value=prev;
     renderApps();
-  }catch(ex){$("#apps-grid").innerHTML=`<div class="card muted">${esc(ex.message)}</div>`;}
+  }catch(ex){$("#apps-list").innerHTML=`<div class="empty">${esc(ex.message)}</div>`;}
 }
 function renderApps(){
   const q=($("#apps-search").value||"").toLowerCase(),cat=$("#apps-cat").value;
   const shown=appsCache.filter(a=>(!cat||a.category===cat)&&(!q||a.name.toLowerCase().includes(q)||a.id.includes(q)||a.image.includes(q)));
-  $("#apps-grid").innerHTML=shown.map(a=>{
-    const meta=APP_META[a.id]||{c:"#6d5dfc"};
+  $("#apps-list").innerHTML=shown.map(a=>{
+    const meta=APP_META[a.id]||{c:"#2c2c2f"};
     const desc=lang==="tr"?(meta.tr||meta.en||""):(meta.en||"");
     // Open uses the port the container actually binds (server-parsed), which
     // may differ from the catalog default when the install overrode it.
     const openPort=a.hostPort||(a.ports[0]||{}).host;
-    const open=a.installed&&openPort?`<a href="http://${location.hostname}:${openPort}" target="_blank" rel="noopener" style="font-size:12px">${t("ap.open")} :${openPort} ↗</a>`:"";
-    return`<div class="card" style="display:flex;flex-direction:column">
-      <div style="display:flex;gap:12px;align-items:flex-start">
-        <div class="app-logo" style="background:linear-gradient(140deg,${meta.c},color-mix(in srgb,${meta.c},#000 32%))">${
-          APP_ICONS[a.id]?`<svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:#fff"><path d="${APP_ICONS[a.id]}"/></svg>`:esc(appMonogram(a.name))
-        }</div>
-        <div style="min-width:0;flex:1">
-          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-            <b style="font-size:14px">${esc(a.name)}</b>
-            ${a.installed?stateChip(a.state||"?"):""}
-          </div>
-          <div class="muted" style="font-size:12px;margin-top:1px">${esc(desc)}</div>
-        </div>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px">
-        <span class="chip mut">${t("cat."+a.category)}</span>
-        ${a.ports.map(p=>`<span class="lbl">:${p.host}</span>`).join("")}
-      </div>
-      <div class="mono muted" style="font-size:11px;margin-top:7px;word-break:break-all">${esc(a.image)}</div>
-      ${a.note?`<div class="muted" style="font-size:11.5px;margin-top:4px">🔑 ${esc(a.note)}</div>`:""}
-      <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
+    const installing=a.installing||pendingInstalls.has(a.id);
+    return`<div class="app-row" title="${esc(desc)}">
+      <div class="app-logo" style="background:${meta.c}">${
+        APP_ICONS[a.id]?`<svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:#fff"><path d="${APP_ICONS[a.id]}"/></svg>`:esc(appMonogram(a.name))
+      }</div>
+      <span class="aname">${esc(a.name)}</span>
+      ${a.installed?stateChip(a.state||"?"):""}
+      ${installing?`<span class="chip info"><span class="spin"></span> ${t("ap.installing")}</span>`:""}
+      <span class="chip mut acat">${t("cat."+a.category)}</span>
+      <span class="aports">${a.ports.map(p=>":"+p.host).join(" ")}</span>
+      <span class="aact">
+        ${a.installed&&openPort?`<a href="http://${location.hostname}:${openPort}" target="_blank" rel="noopener" style="font-size:12px">${t("ap.open")} :${openPort} ↗</a>`:""}
         ${a.installed
-          ?`${open}<div class="spacer" style="flex:1"></div><button class="small danger" data-app-rm="${esc(a.id)}" data-app-name="${esc(a.name)}">${t("ap.uninstall")}</button>`
-          :`<button class="small primary" data-app-install="${esc(a.id)}">${t("ap.install")}</button>`}
-      </div>
-    </div>`;}).join("")||`<div class="card muted">—</div>`;
+          ?`<button class="small danger" data-app-rm="${esc(a.id)}" data-app-name="${esc(a.name)}">${t("ap.uninstall")}</button>`
+          :`<button class="small primary" data-app-install="${esc(a.id)}" ${installing?"disabled":""}>${t("ap.install")}</button>`}
+      </span>
+    </div>`;}).join("")||`<div class="empty">—</div>`;
 }
 $("#apps-search").addEventListener("input",renderApps);
 $("#apps-cat").addEventListener("change",renderApps);
-$("#apps-grid").addEventListener("click",async e=>{
+/* Installs run as background jobs — poll the job and show phase progress in
+   the modal, so the result is visible without any page refresh. */
+const pendingInstalls=new Set();
+async function watchInstallJob(app,jobId){
+  pendingInstalls.add(app.id);renderApps();
+  const phaseText=p=>p==="pulling"?t("ap.pulling"):p==="starting"?t("ap.starting"):p;
+  // "owns" = the modal body still holds OUR progress element; the user may
+  // have hidden the modal or opened a different dialog meanwhile, and that
+  // dialog must never be closed or have its buttons replaced by this job.
+  const owns=()=>!!$("#app-install-progress");
+  const visible=()=>!$("#modal").classList.contains("hidden");
+  const showProgress=phase=>{
+    if(!owns())return;
+    $("#app-install-progress").innerHTML=`<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
+        <span class="spin"></span><b style="font-size:13px">${esc(app.name)}</b>
+        <span class="muted" style="font-size:12.5px">${esc(phaseText(phase))}</span></div>
+      <div class="progress-ind"><i></i></div>`;
+  };
+  showProgress("pulling");
+  try{
+    let failures=0;
+    for(;;){
+      await new Promise(res=>setTimeout(res,1500));
+      let j;
+      try{j=await api(`/api/apps/install/${encodeURIComponent(jobId)}`);failures=0;}
+      catch(ex){ // a single blip must not declare a running install failed
+        if(++failures>=4)throw ex;
+        continue;
+      }
+      if(j.phase==="error")throw new Error(j.error||t("c.failed"));
+      if(j.phase==="done")break;
+      showProgress(j.phase);
+    }
+    pendingInstalls.delete(app.id);
+    if(owns()&&visible())closeModal();
+    toast(t("ap.installOk",{n:app.name}),"ok");await loadApps();
+  }catch(ex){
+    pendingInstalls.delete(app.id);
+    if(owns()&&visible()){
+      $("#app-install-progress").innerHTML=`<div class="logbox" style="max-height:180px">${esc(ex.message)}</div>`;
+      setModalButtons([{label:t("c.close")}]);
+    }else{
+      toast(app.name+": "+ex.message,"err");
+    }
+    await loadApps();
+  }
+}
+$("#apps-list").addEventListener("click",async e=>{
   const b=e.target.closest("button");if(!b)return;
   if(b.dataset.appInstall){
     const app=appsCache.find(x=>x.id===b.dataset.appInstall);if(!app)return;
@@ -1199,15 +1287,21 @@ $("#apps-grid").addEventListener("click",async e=>{
     openModal(`${app.name} — ${t("ap.install")}`,
       `<div class="mono muted" style="font-size:12px;margin-bottom:4px">${esc(app.image)}</div>
        ${app.note?`<div class="muted" style="font-size:12px;margin-bottom:6px">${esc(app.note)}</div>`:""}
+       <div id="app-install-ports">
        <label>${t("ap.portsLbl")}</label>
        ${app.ports.map((p,i)=>`<div style="display:flex;align-items:center;gap:8px;margin-top:6px">
          <input type="number" min="1" max="65535" value="${p.host}" id="app-port-${i}" style="width:120px">
-         <span class="muted mono" style="font-size:12px">→ ${p.container}</span></div>`).join("")}`,
+         <span class="muted mono" style="font-size:12px">→ ${p.container}</span></div>`).join("")}
+       </div>
+       <div id="app-install-progress" style="margin-top:10px"></div>`,
       [{label:t("c.cancel")},{label:t("ap.install"),primary:true,onClick:async()=>{
         const hostPorts=app.ports.map((p,i)=>parseInt(($("#app-port-"+i)||{}).value,10)||p.host);
-        try{await api("/api/apps/install",{method:"POST",body:JSON.stringify({id:app.id,hostPorts})});
-          closeModal();toast(t("ap.installOk",{n:app.name}),"ok");await loadApps();}
-        catch(ex){toast(ex.message,"err");}}}]);
+        try{
+          const r=await api("/api/apps/install",{method:"POST",body:JSON.stringify({id:app.id,hostPorts})});
+          const ports=$("#app-install-ports");if(ports)ports.classList.add("hidden");
+          $("#modal-foot").innerHTML="";
+          await watchInstallJob(app,r.jobId);
+        }catch(ex){toast(ex.message,"err");}}}]);
   }else if(b.dataset.appRm){
     openModal(t("ap.rmTitle"),esc(t("ap.rmConfirm",{n:b.dataset.appName})),[
       {label:t("c.cancel")},{label:t("ap.uninstall"),danger:true,onClick:async()=>{closeModal();
@@ -1233,12 +1327,12 @@ function renderNetMap(containers){
   cts.forEach((c,i)=>ctY[c]=pad+i*rowH+rowH/2);
   let lines="",nodes="";
   nets.forEach(n=>map[n].forEach(c=>{
-    lines+=`<path d="M ${nx} ${netY[n]} C ${(nx+cx)/2} ${netY[n]}, ${(nx+cx)/2} ${ctY[c]}, ${cx} ${ctY[c]}" fill="none" stroke="rgba(109,93,252,.35)" stroke-width="1.5"/>`;}));
-  nets.forEach(n=>{nodes+=`<g><rect x="10" y="${netY[n]-15}" width="${nx-10}" height="30" rx="8" fill="rgba(109,93,252,.12)" stroke="rgba(109,93,252,.4)"/>
-    <text x="${10+(nx-10)/2}" y="${netY[n]+4}" text-anchor="middle" fill="#c9c2ff" font-size="12" font-family="ui-monospace,monospace">${esc(n.length>22?n.slice(0,21)+"…":n)}</text></g>`;});
+    lines+=`<path d="M ${nx} ${netY[n]} C ${(nx+cx)/2} ${netY[n]}, ${(nx+cx)/2} ${ctY[c]}, ${cx} ${ctY[c]}" fill="none" stroke="rgba(143,143,150,.3)" stroke-width="1.5"/>`;}));
+  nets.forEach(n=>{nodes+=`<g><rect x="10" y="${netY[n]-15}" width="${nx-10}" height="30" rx="8" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.18)"/>
+    <text x="${10+(nx-10)/2}" y="${netY[n]+4}" text-anchor="middle" fill="#ededed" font-size="12" font-family="ui-monospace,monospace">${esc(n.length>22?n.slice(0,21)+"…":n)}</text></g>`;});
   cts.forEach(c=>{const running=containers.some(x=>(x.Names||"").split(",")[0]===c&&(x.State||"").toLowerCase()==="running");
-    nodes+=`<g><rect x="${cx}" y="${ctY[c]-15}" width="${cw}" height="30" rx="8" fill="${running?"rgba(45,212,160,.09)":"rgba(139,147,165,.09)"}" stroke="${running?"rgba(45,212,160,.4)":"rgba(139,147,165,.3)"}"/>
-    <text x="${cx+cw/2}" y="${ctY[c]+4}" text-anchor="middle" fill="${running?"#2dd4a0":"#8b93a5"}" font-size="12" font-family="ui-monospace,monospace">${esc(c.length>30?c.slice(0,29)+"…":c)}</text></g>`;});
+    nodes+=`<g><rect x="${cx}" y="${ctY[c]-15}" width="${cw}" height="30" rx="8" fill="${running?"rgba(52,211,153,.08)":"rgba(143,143,150,.09)"}" stroke="${running?"rgba(52,211,153,.35)":"rgba(143,143,150,.3)"}"/>
+    <text x="${cx+cw/2}" y="${ctY[c]+4}" text-anchor="middle" fill="${running?"#34d399":"#8f8f96"}" font-size="12" font-family="ui-monospace,monospace">${esc(c.length>30?c.slice(0,29)+"…":c)}</text></g>`;});
   $("#net-map").innerHTML=`<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:720px;height:auto;display:block">${lines}${nodes}</svg></div>`;
 }
 async function loadStorage(){
@@ -1329,34 +1423,43 @@ async function openNetworkConnect(name){
   }catch(ex){toast(ex.message,"err");}
 }
 
-/* ================= logs ================= */
-let pendingLogTarget=null;
-async function loadLogsView(){
-  try{
-    const r=await api("/api/docker/containers");
-    const sel=$("#log-container");const prev=pendingLogTarget||sel.value;pendingLogTarget=null;
-    sel.innerHTML=r.items.map(c=>{const n=(c.Names||"").split(",")[0];return`<option>${esc(n)}</option>`;}).join("");
-    if(prev&&[...sel.options].some(o=>o.value===prev))sel.value=prev;
-    if(sel.value)await fetchLogs();else $("#logbox").textContent=t("lg.select");
-    if(logTimer)clearInterval(logTimer);
-    logTimer=setInterval(()=>{if($("#log-follow").checked&&view==="logs")fetchLogs();},5000);
-  }catch(ex){$("#logbox").textContent=ex.message;}
+/* ================= container logs (inline panel in the Containers view) ================= */
+let logTarget=null;
+function armLogTimer(){
+  if(logTimer)clearInterval(logTimer);
+  logTimer=setInterval(()=>{
+    if($("#log-follow").checked&&view==="containers"&&!$("#ct-logpanel").classList.contains("hidden"))fetchLogs();
+  },5000);
+}
+function openLogPanel(name){
+  logTarget=name;
+  $("#ct-log-title").textContent=name;
+  $("#ct-logpanel").classList.remove("hidden");
+  $("#logbox").textContent="";
+  fetchLogs();
+  armLogTimer();
+  $("#ct-logpanel").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+function closeLogPanel(){
+  $("#ct-logpanel").classList.add("hidden");
+  logTarget=null;
+  if(logTimer){clearInterval(logTimer);logTimer=null;}
 }
 async function fetchLogs(){
-  const name=$("#log-container").value;if(!name)return;
+  if(!logTarget)return;
   try{
-    const r=await api(`/api/docker/containers/${encodeURIComponent(name)}/logs?tail=${$("#log-tail").value}`);
+    const r=await api(`/api/docker/containers/${encodeURIComponent(logTarget)}/logs?tail=${$("#log-tail").value}`);
     const box=$("#logbox");const atBottom=box.scrollTop+box.clientHeight>=box.scrollHeight-30;
     box.textContent=r.logs||t("lg.noOutput");
     if(atBottom||$("#log-follow").checked)box.scrollTop=box.scrollHeight;
   }catch(ex){$("#logbox").textContent=ex.message;}
 }
-$("#log-container").onchange=fetchLogs;
 $("#log-tail").onchange=fetchLogs;
+$("#btn-log-close").onclick=closeLogPanel;
 $("#btn-log-download").onclick=()=>{
   const blob=new Blob([$("#logbox").textContent],{type:"text/plain"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download=($("#log-container").value||"container")+".log";a.click();URL.revokeObjectURL(a.href);};
+  a.download=(logTarget||"container")+".log";a.click();URL.revokeObjectURL(a.href);};
 
 /* ================= system ================= */
 async function loadSystem(){
@@ -1381,9 +1484,9 @@ async function loadSystem(){
   }catch(ex){$("#sys-docker").innerHTML=`<dt>Docker</dt><dd>${esc(ex.message)}</dd>`;}
 }
 
-/* ================= settings / github ================= */
+/* ================= github view ================= */
 let settingsCache=null;
-async function loadSettingsIntoForm(){
+async function loadGithubView(){
   try{
     const s=await api("/api/settings");
     settingsCache=s;
@@ -1394,10 +1497,12 @@ async function loadSettingsIntoForm(){
     if(s.version)$("#side-foot").textContent=`pinqops web ui v${s.version}`;
     $("#settings-meta").textContent=`${t("se.configFile")}: ${s.configPath}`;
     ghConfigured=!!(s.repoUrl&&s.patMasked);
-    if(ghConfigured){const m=(s.repoUrl.match(/github[^/]*\/(.+)$/)||[])[1];setGhChip(m||s.repoUrl,true);}
-    else setGhChip(null);
+    updateGhUi();
+    // The repo picker needs a token (the repo list comes from the account);
+    // the readiness card needs a connected repo.
+    $("#repo-card").classList.toggle("hidden",!s.patMasked);
     if(s.patMasked)loadIdentityAndRepos();
-    else{$("#gh-identity").classList.add("hidden");fillRepoPicker([]);}
+    else{$("#gh-identity").classList.add("hidden");renderRepoList([]);}
     if(ghConfigured)loadSetupStatus();else $("#setup-card").classList.add("hidden");
   }catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
 }
@@ -1405,6 +1510,8 @@ async function loadSettingsIntoForm(){
 /* --- deployment readiness: check the repo + server, fix what we can --- */
 async function loadSetupStatus(){
   const card=$("#setup-card");
+  // The server parses the URL (works for GHES hosts too) — no client regex.
+  $("#setup-repo-name").textContent=(settingsCache&&(settingsCache.fullName||settingsCache.repoUrl))||"";
   try{
     const s=await api("/api/setup/status");
     if(!s.configured){card.classList.add("hidden");return;}
@@ -1415,7 +1522,8 @@ async function loadSetupStatus(){
     // A token without Administration:read can't list runners — degrade the
     // runner row to "installed locally, online state unknown", never the card.
     const runnerOk=s.runnerInstalled&&(s.runnersOnline>0||!!s.runnersError);
-    const runnerDetail=!s.runnerInstalled?t("su.runnerMiss")
+    const runnerDetail=!s.runnerInstalled
+      ?(s.runnerMismatch?t("su.runnerMismatch",{r:esc(s.runnerRegisteredTo||"?")}):t("su.runnerMiss"))
       :s.runnersError?t("su.runnerUnknown")
       :s.runnersOnline>0?t("su.runnerOnline",{n:s.runnersOnline}):t("su.runnerOffline");
     $("#setup-list").innerHTML=[
@@ -1443,44 +1551,19 @@ async function loadSetupStatus(){
       const log=$("#setup-log");log.classList.remove("hidden");log.textContent=t("su.installing");
       try{const r=await api("/api/setup/install-runner",{method:"POST"});
         log.textContent=r.log||"";
-        toast(r.succeeded?t("su.runnerDone"):t("dep.fail"),r.succeeded?"ok":"err");
+        toast(r.succeeded?t("su.runnerDone"):t("c.failed"),r.succeeded?"ok":"err");
         if(r.succeeded)loadSetupStatus();else fr.disabled=false;}
       catch(ex){log.textContent=ex.message;toast(ex.message,"err");fr.disabled=false;}};
     const sr=$("#btn-start-runner");if(sr)sr.onclick=async()=>{sr.disabled=true;
       const log=$("#setup-log");log.classList.remove("hidden");
       try{const r=await api("/api/setup/start-runner",{method:"POST"});
         log.textContent=r.log||"";
-        toast(r.succeeded?t("su.started"):t("dep.fail"),r.succeeded?"ok":"err");
+        toast(r.succeeded?t("su.started"):t("c.failed"),r.succeeded?"ok":"err");
         loadSetupStatus();}
       catch(ex){log.textContent=ex.message;toast(ex.message,"err");sr.disabled=false;}};
   }catch(ex){card.classList.remove("hidden");$("#setup-summary").textContent=ex.message;$("#setup-list").innerHTML="";}
 }
 
-/* --- fully automatic publish: fix everything fixable, in sequence --- */
-async function runAutoSetup(){
-  const card=$("#setup-card");card.classList.remove("hidden");
-  const log=$("#setup-log");log.classList.remove("hidden");log.textContent="";
-  const say=m=>{log.textContent+=m+"\n";log.scrollTop=log.scrollHeight;};
-  say(t("su.autoFixing"));
-  let s;
-  try{s=await api("/api/setup/status");}catch(ex){say("✗ "+ex.message);return;}
-  if(!s.configured)return;
-  try{
-    if(!s.repo.hasWorkflow){say("→ "+t("su.workflow")+"…");
-      await api("/api/setup/create-workflow",{method:"POST"});say("✓ "+t("su.workflowDone"));ghCache=null;}
-    if(!s.composeExists){say("→ "+t("su.compose")+"…");
-      await api("/api/setup/create-compose",{method:"POST"});say("✓ "+t("su.composeDone"));}
-    if(!s.runnerInstalled){say("→ "+t("su.installBtn")+" ("+t("su.installing")+")");
-      const r=await api("/api/setup/install-runner",{method:"POST"});
-      if(r.log)say(r.log);say(r.succeeded?"✓ "+t("su.runnerDone"):"✗ "+t("dep.fail"));}
-    else if(!s.runnersError&&s.runnersOnline===0){say("→ "+t("su.startBtn")+"…");
-      const r=await api("/api/setup/start-runner",{method:"POST"});
-      if(r.log)say(r.log);say(r.succeeded?"✓ "+t("su.started"):"✗ "+t("dep.fail"));}
-    if(!s.repo.hasDockerfile)say("! "+t("su.dockerfileMiss"));
-  }catch(ex){say("✗ "+ex.message);}
-  await loadSetupStatus();
-}
-$("#btn-auto-setup").addEventListener("click",()=>runAutoSetup());
 async function loadIdentityAndRepos(){
   try{
     const u=await api("/api/github/user");
@@ -1492,32 +1575,185 @@ async function loadIdentityAndRepos(){
   try{
     const r=await api("/api/github/repos");
     repoList=r.items||[];
-    fillRepoPicker(repoList,$("#repo-search").value);
-  }catch{ fillRepoPicker([]); }
+    renderRepoList(repoList,$("#repo-search").value);
+  }catch{ renderRepoList([]); }
 }
-function fillRepoPicker(items,filter){
-  const sel=$("#repo-pick");
+
+/* --- repo picker: searchable list capped at 30 rows, click to select --- */
+let selectedRepoUrl=null;
+function renderRepoList(items,filter){
+  const list=$("#repo-list");
   const q=(filter||"").toLowerCase();
   const shown=items.filter(r=>!q||(r.fullName||"").toLowerCase().includes(q));
-  sel.innerHTML=`<option value="">${t("se.pickRepo")}</option>`+shown.map(r=>{
+  const cap=30,visible=shown.slice(0,cap);
+  if(selectedRepoUrl&&!visible.some(r=>`https://github.com/${r.fullName}`===selectedRepoUrl))selectedRepoUrl=null;
+  $("#btn-repo-install").disabled=!selectedRepoUrl;
+  list.innerHTML=visible.map(r=>{
+    const url=`https://github.com/${r.fullName}`;
     const role=r.admin?t("se.admin"):r.push?t("se.write"):t("se.read");
-    return`<option value="https://github.com/${esc(r.fullName)}">${esc(r.fullName)}${r.isPrivate?" 🔒":""} · ${role}</option>`;}).join("");
+    const connected=!!(settingsCache&&(settingsCache.fullName===r.fullName||settingsCache.repoUrl===url));
+    return`<div class="repo-row${url===selectedRepoUrl?" sel":""}" data-repo="${esc(url)}">
+      <span class="rname">${esc(r.fullName)}</span>
+      ${r.isPrivate?`<span class="chip mut">🔒 ${t("se.private")}</span>`:""}
+      ${connected?`<span class="chip ok">✓ ${t("gh.connectedAs")}</span>`:""}
+      <span class="rmeta"><span>${role}</span>${r.pushedAt?`<span>· ${timeAgo(r.pushedAt)}</span>`:""}</span>
+    </div>`;}).join("")||`<div class="more">${t("gh.noRepos")}</div>`;
+  if(shown.length>cap)list.innerHTML+=`<div class="more">${t("gh.moreRepos",{n:shown.length-cap})}</div>`;
 }
-$("#repo-search").addEventListener("input",e=>fillRepoPicker(repoList,e.target.value));
-// Portainer-style: picking a repository connects it AND publishes it — the
-// auto-setup pipeline fixes everything fixable (workflow, compose, runner)
-// without further clicks.
-$("#repo-pick").addEventListener("change",async e=>{
-  if(!e.target.value)return;
-  $("#set-repo").value=e.target.value;
-  try{
-    const r=await api("/api/settings",{method:"POST",body:JSON.stringify({repoUrl:e.target.value})});
-    ghCache=null;
-    toast(t("se.connected",{r:r.fullName+(r.isPrivate?" ("+t("se.private")+")":"")}),"ok");
-    await loadSettingsIntoForm();
-    await runAutoSetup();
-  }catch(ex){toast(ex.message,"err");}
+$("#repo-list").addEventListener("click",e=>{
+  const row=e.target.closest(".repo-row");if(!row)return;
+  selectedRepoUrl=row.dataset.repo;
+  renderRepoList(repoList,$("#repo-search").value);
 });
+$("#repo-search").addEventListener("input",e=>renderRepoList(repoList,e.target.value));
+$("#btn-repo-install").onclick=()=>{if(selectedRepoUrl)runInstallWizard(selectedRepoUrl);};
+$("#btn-wiz-rerun").onclick=()=>{if(settingsCache&&settingsCache.repoUrl)runInstallWizard(settingsCache.repoUrl);};
+
+/* --- repo install wizard: connect → check → fix each piece → verify.
+       The modal is sticky (no accidental backdrop close); "run in background"
+       just hides it — the steps keep running server-side. --- */
+async function installRunnerWithProgress(say){
+  // The buffer is shared across installs; remember the previous run's
+  // generation so a stale (or concurrent) run's result is never adopted as
+  // this run's outcome, and its old log lines are never replayed.
+  let gen0=0;
+  try{const b=await api("/api/setup/install-runner/progress");gen0=b.generation||0;}catch{}
+  let seen=0;
+  const poll=async()=>{try{
+    const p=await api("/api/setup/install-runner/progress");
+    if((p.generation||0)>gen0){
+      const lines=(p.log||"").split("\n").filter(Boolean);
+      for(;seen<lines.length;seen++)say(lines[seen]);
+    }
+    return p;
+  }catch{return null;}};
+  const timer=setInterval(poll,2000);
+  try{
+    const r=await api("/api/setup/install-runner",{method:"POST"});
+    await poll();
+    return r;
+  }catch(ex){
+    // The POST can die on a proxy timeout while the install keeps running —
+    // fall back to polling (single cadence: the interval stops first) until
+    // OUR run's buffer reports completion. If the server never even started a
+    // new run, the POST genuinely failed: surface its error.
+    clearInterval(timer);
+    say("✗ "+ex.message);
+    let stale=0;
+    for(let i=0;i<600;i++){ // up to 20 minutes — a runner install includes a large download
+      await new Promise(res=>setTimeout(res,2000));
+      const p=await poll();
+      if(p&&(p.generation||0)>gen0&&!p.active)return{succeeded:!!p.succeeded,log:p.log};
+      if(p&&(p.generation||0)<=gen0&&++stale>=3)break;
+    }
+    throw ex;
+  }finally{clearInterval(timer);}
+}
+async function runInstallWizard(repoUrl){
+  const steps=[["connect",t("wiz.connect")],["dockerfile",t("wiz.dockerfile")],["workflow",t("wiz.workflow")],
+               ["compose",t("wiz.compose")],["runner",t("wiz.runner")],["verify",t("wiz.verify")]];
+  openModal(t("wiz.title"),
+    `<div class="muted" style="font-family:var(--mono);font-size:12px;margin-bottom:10px">${esc(repoUrl)}</div>
+     <div class="bar wiz-bar"><i id="wiz-bar" style="width:0%"></i></div>
+     ${steps.map(([k,label])=>`<div class="wiz-step" id="wiz-${k}"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b>${esc(label)}</b><div class="ws-detail" id="wiz-${k}-d"></div></div></div>`).join("")}
+     <div id="wiz-summary" style="margin-top:12px;font-size:13px"></div>
+     <details style="margin-top:8px"><summary class="muted" style="cursor:pointer;font-size:12.5px">${t("wiz.showLog")}</summary>
+       <div class="logbox" id="wiz-log" style="margin-top:8px;max-height:220px"></div></details>`,
+    [{label:t("wiz.cancel"),onClick:()=>closeModal()}],
+    {sticky:true});
+  const say=m=>{const log=$("#wiz-log");if(log){log.textContent+=m+"\n";log.scrollTop=log.scrollHeight;}};
+  // The bar is derived from the step states, so no counter can drift from
+  // what the list shows.
+  const mark=(k,state,detail,spin)=>{
+    const el=$("#wiz-"+k);if(!el)return;
+    el.className="wiz-step "+(state||"");
+    const ic=el.querySelector(".ws-ic");
+    if(ic)ic.innerHTML=spin?`<span class="spin"></span>`:state==="ok"?"✓":state==="err"?"✕":state==="warn"?"!":"•";
+    const d=$("#wiz-"+k+"-d");if(d&&detail!==undefined)d.innerHTML=detail;
+    const bar=$("#wiz-bar");
+    if(bar){const fin=document.querySelectorAll("#modal-body .wiz-step.ok,#modal-body .wiz-step.warn").length;
+      bar.style.width=Math.round(fin/steps.length*100)+"%";}
+  };
+  const step=async(k,fn)=>{
+    mark(k,"run",undefined,true);
+    try{const detail=await fn();mark(k,"ok",detail);return true;}
+    catch(ex){mark(k,"err",esc(ex.message));say("✗ "+ex.message);return false;}
+  };
+
+  let failedAt=null;
+  if(!await step("connect",async()=>{
+    const r=await api("/api/settings",{method:"POST",body:JSON.stringify({repoUrl})});
+    ghCache=null;say("✓ "+t("se.connected",{r:r.fullName}));
+    return esc(r.fullName)+(r.isPrivate?" 🔒":"");
+  }))failedAt=t("wiz.connect");
+
+  let s=null;
+  if(!failedAt){
+    try{s=await api("/api/setup/status");}
+    catch(ex){mark("dockerfile","err",esc(ex.message));say("✗ "+ex.message);failedAt=t("wiz.check");}
+  }
+  if(s){
+    if(s.repo.hasDockerfile)mark("dockerfile","ok",t("wiz.ready"));
+    else mark("dockerfile","warn",t("su.dockerfileMiss")); // warn only — the wizard can't write app code
+
+    if(s.repo.hasWorkflow)mark("workflow","ok",t("wiz.ready"));
+    else if(!await step("workflow",async()=>{
+      await api("/api/setup/create-workflow",{method:"POST"});ghCache=null;
+      say("✓ "+t("su.workflowDone"));return t("su.workflowDone");
+    }))failedAt=failedAt||t("wiz.workflow");
+
+    if(s.composeExists)mark("compose","ok",t("wiz.ready"));
+    else if(!await step("compose",async()=>{
+      await api("/api/setup/create-compose",{method:"POST"});
+      say("✓ "+t("su.composeDone"));return t("su.composeDone");
+    }))failedAt=failedAt||t("wiz.compose");
+
+    if(s.runnerInstalled&&(s.runnersError||s.runnersOnline>0))mark("runner","ok",t("wiz.ready"));
+    else if(!await step("runner",async()=>{
+      if(!s.runnerInstalled){
+        if(s.runnerMismatch)say("! "+t("wiz.replacingRunner",{r:s.runnerRegisteredTo||"?"}));
+        const r=await installRunnerWithProgress(say);
+        if(!r.succeeded)throw new Error(t("su.installBtn")+": "+t("c.failed"));
+        return t("su.runnerDone");
+      }
+      const r=await api("/api/setup/start-runner",{method:"POST"});
+      if(r.log)say(r.log);
+      if(!r.succeeded)throw new Error(t("su.startBtn")+": "+t("c.failed"));
+      return t("su.started");
+    }))failedAt=failedAt||t("wiz.runner");
+
+    if(!failedAt){
+      if(!await step("verify",async()=>{
+        const v=await api("/api/setup/status");
+        if(!v.runnerInstalled)throw new Error(t("wiz.verifyFail"));
+        if(v.runnersError)return t("wiz.verifyUnknown");
+        if(v.runnersTotal>0)return t("wiz.runnerVerified",{n:v.runnersTotal});
+        throw new Error(t("wiz.verifyFail"));
+      }))failedAt=t("wiz.verify");
+    }else mark("verify","warn");
+  }
+
+  // Finish up — but only touch the modal if its body is still the wizard's
+  // and it is still visible: the user may have hidden it ("run in background")
+  // or opened a different dialog meanwhile, and that dialog's buttons must
+  // not be clobbered.
+  const owns=!!$("#wiz-bar");
+  const visible=!$("#modal").classList.contains("hidden");
+  if(owns){
+    const sum=$("#wiz-summary");
+    if(sum)sum.innerHTML=failedAt
+      ?`<span class="chip err">✕</span> <span style="color:var(--err)">${esc(t("wiz.failed",{x:failedAt}))}</span>`
+      :`<span class="chip ok">✓</span> <span style="color:var(--ok)">${esc(t("wiz.done"))}</span>`;
+  }
+  if(owns&&visible){
+    modalSticky=false;
+    setModalButtons([{label:t("c.close"),primary:!failedAt}]);
+  }else{
+    toast(failedAt?t("wiz.failed",{x:failedAt}):t("wiz.done"),failedAt?"err":"ok");
+  }
+  ghCache=null;
+  await loadGithubView();
+}
 
 /* --- "continue without GitHub sign-in" popup: token (PAT) entry lives here --- */
 $("#link-no-gh").addEventListener("click",e=>{
@@ -1539,7 +1775,7 @@ $("#link-no-gh").addEventListener("click",e=>{
           pat,username:$("#adv-user").value.trim()||null})});
         closeModal();ghCache=null;
         toast(`${t("se.signedIn")}: @${r.user.login} — ${t("se.tokenOk")}`,"ok");
-        await loadSettingsIntoForm();
+        await loadGithubView();
       }catch(ex){toast(ex.message,"err");}
     }}]);
 });
@@ -1575,7 +1811,7 @@ async function devicePollOnce(){
     const p=await api("/api/github/device/poll",{method:"POST",body:JSON.stringify({handle:deviceHandle})});
     if(p.status==="success"){stopDeviceFlow();ghCache=null;
       toast(`${t("se.signedIn")}: @${p.user.login} — ${t("se.tokenOk")}`,"ok");
-      await loadSettingsIntoForm();}
+      await loadGithubView();}
     else if(p.status==="denied")stopDeviceFlow(t("se.denied"));
     else if(p.status==="expired")stopDeviceFlow(t("se.expired"));
     else{ // honor GitHub's slow_down by re-arming at the server-reported interval
@@ -1587,7 +1823,7 @@ async function devicePollOnce(){
 $("#btn-gh-signout").onclick=()=>openModal(t("se.dcTitle"),esc(t("se.dcConfirm")),[
   {label:t("c.cancel")},{label:t("se.ghDisconnect"),danger:true,onClick:async()=>{closeModal();
     try{await api("/api/settings/disconnect",{method:"POST"});ghCache=null;stopDeviceFlow();
-      toast(t("se.disconnected"),"ok");await loadSettingsIntoForm();}
+      toast(t("se.disconnected"),"ok");await loadGithubView();}
     catch(ex){toast(ex.message,"err");}}}]);
 
 $("#settings-form").addEventListener("submit",async e=>{
@@ -1601,7 +1837,7 @@ $("#settings-form").addEventListener("submit",async e=>{
       githubClientId:$("#set-clientid").value.trim()})});
     ghCache=null;
     toast(t("se.connected",{r:r.fullName+(r.isPrivate?" ("+t("se.private")+")":"")}),"ok");
-    await loadSettingsIntoForm();
+    await loadGithubView();
   }catch(ex){toast(ex.message,"err");}
 });
 $("#password-form").addEventListener("submit",async e=>{
@@ -1613,16 +1849,6 @@ $("#password-form").addEventListener("submit",async e=>{
     token="";localStorage.removeItem("pinqops.token");showLock(false);}
   catch(ex){toast(ex.message,"err");}
 });
-
-/* ================= deploy ================= */
-$("#btn-deploy").onclick=()=>openModal(t("dep.title"),t("dep.confirm"),[
-  {label:t("c.cancel")},{label:t("dep.run"),primary:true,onClick:async()=>{
-    $("#modal-body").innerHTML=`<div class="logbox">${t("dep.ing")}</div>`;$("#modal-foot").innerHTML="";
-    try{const r=await api("/api/deploy",{method:"POST"});
-      $("#modal-body").innerHTML=`<div style="margin-bottom:10px">${r.succeeded?`<span class="chip ok">${t("dep.ok")}</span>`:`<span class="chip err">${t("dep.fail")}</span>`}</div><div class="logbox">${esc(r.log||t("lg.noOutput"))}</div>`;
-    }catch(ex){$("#modal-body").innerHTML=`<div class="logbox">${esc(ex.message)}</div>`;}
-    $("#modal-foot").innerHTML="";const b=document.createElement("button");b.textContent=t("c.close");b.onclick=closeModal;$("#modal-foot").appendChild(b);
-    refresh(true);}}]);
 
 /* ================= boot ================= */
 applyLang();

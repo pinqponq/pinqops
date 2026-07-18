@@ -45,6 +45,42 @@ public class SetupWizardTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_LeftoverRunnerForAnotherRepo_MintsRemovalTokenAndDeregistersIt()
+    {
+        // A runner registered to another repository already lives in the
+        // install directory; gh mints both tokens.
+        Directory.CreateDirectory(_tempDirectory);
+        File.WriteAllText(Path.Combine(_tempDirectory, "config.sh"), "#!/bin/sh");
+        File.WriteAllText(Path.Combine(_tempDirectory, "svc.sh"), "#!/bin/sh");
+        File.WriteAllText(Path.Combine(_tempDirectory, ".runner"), """{"gitHubUrl":"https://github.com/old/repo"}""");
+
+        var runner = new FakeProcessRunner((fileName, arguments) =>
+        {
+            if (fileName == "gh" && arguments.Contains("api"))
+            {
+                var isRemoval = arguments.Any(argument => argument.Contains("remove-token"));
+                return new ProcessResult(0, isRemoval ? "removal-from-gh" : "reg-from-gh", string.Empty);
+            }
+
+            return new ProcessResult(0, string.Empty, string.Empty);
+        });
+        var wizard = Build(runner, new FakeGitHubApiClient(), new FakePrompt());
+        var options = SetupOptions.Create(repositoryUrl: RepoUrl, installDirectory: _tempDirectory);
+
+        var result = await wizard.RunAsync(options);
+
+        Assert.True(result);
+        // The old registration is removed with the removal token minted for
+        // the OLD repository, then the new one is configured.
+        Assert.Contains(runner.Invocations, invocation =>
+            invocation.CommandLine.Contains("actions/runners/remove-token") && invocation.CommandLine.Contains("old/repo"));
+        Assert.Contains(runner.Invocations, invocation =>
+            invocation.CommandLine.Contains("config.sh remove") && invocation.CommandLine.Contains("--token removal-from-gh"));
+        Assert.Contains(runner.Invocations, invocation =>
+            invocation.CommandLine.Contains("config.sh --url") && invocation.CommandLine.Contains("--token reg-from-gh"));
+    }
+
+    [Fact]
     public async Task RunAsync_MissingPrerequisite_StopsBeforeTokenAndInstall()
     {
         var runner = new FakeProcessRunner((fileName, _) =>

@@ -43,7 +43,30 @@ public sealed class SetupWizard
             .ResolveAsync(repository, options, cancellationToken)
             .ConfigureAwait(false);
 
-        var installOptions = options.ToRunnerInstallOptions(repository.ToUrl(), registrationToken);
+        // A leftover runner registered to a different repository must be
+        // de-registered before config.sh will accept the new registration;
+        // mint a removal token for the OLD repo (best effort — cleanup falls
+        // back to deleting local files without one).
+        string? removalToken = null;
+        var registeredUrl = RunnerRegistration.ReadUrl(options.InstallDirectory);
+        if (registeredUrl is not null)
+        {
+            try
+            {
+                var oldRepository = GitHubRepositoryParser.Parse(registeredUrl);
+                _log?.Invoke($"existing runner is registered to {oldRepository.Owner}/{oldRepository.Name}; minting a removal token");
+                removalToken = await _registrationTokenResolver
+                    .TryResolveRemovalTokenAsync(oldRepository, options, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (ArgumentException)
+            {
+                // Unparseable registration URL — cleanup will force-delete.
+            }
+        }
+
+        var installOptions = options.ToRunnerInstallOptions(repository.ToUrl(), registrationToken)
+            with { RemovalToken = removalToken };
         var installed = await _runnerInstaller
             .InstallAsync(installOptions, options.ServiceUser, cancellationToken)
             .ConfigureAwait(false);

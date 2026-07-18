@@ -165,20 +165,6 @@ public sealed class GitHubDashboardService : IDisposable
         }
     }
 
-    /// <summary>The stored token's GitHub login, or null when unavailable.</summary>
-    public async Task<string?> GetLoginAsync()
-    {
-        try
-        {
-            var user = await GetAsync(null, TokenAuth(null, null), "/user").ConfigureAwait(false);
-            return GetString(user, "login");
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
-
     /// <summary>Auth from an explicit candidate token, falling back to the stored one.</summary>
     private AuthenticationHeaderValue TokenAuth(string? username, string? pat)
     {

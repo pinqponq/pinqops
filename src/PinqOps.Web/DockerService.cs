@@ -136,6 +136,19 @@ public sealed class DockerService
     }
 
     /// <summary>
+    /// Pulls an app image up front, so install progress can report the slow
+    /// pull phase separately from the (fast) container start. Installs run as
+    /// background jobs, so the leash only guards against a truly hung pull —
+    /// large images on slow uplinks legitimately take tens of minutes.
+    /// </summary>
+    public async Task<string> PullImageAsync(string image)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(image);
+        var result = await RunAsync(TimeSpan.FromMinutes(30), "pull", image).ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
+    /// <summary>
     /// Runs a catalog app as a labeled, named container on the shared
     /// pinqops-apps network. Each entry in <paramref name="hostPorts"/>
     /// overrides the corresponding catalog port (0/absent keeps the default).
@@ -214,47 +227,12 @@ public sealed class DockerService
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
-    /// <summary>
-    /// <c>docker login</c> with the password on stdin so the token never appears
-    /// in an argument list or process table.
-    /// </summary>
-    public async Task<string> LoginAsync(string registry, string username, string token)
+    private Task<ProcessResult> RunAsync(params string[] arguments) =>
+        RunAsync(CommandTimeout, arguments);
+
+    private async Task<ProcessResult> RunAsync(TimeSpan timeout, params string[] arguments)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(registry);
-        ArgumentException.ThrowIfNullOrWhiteSpace(username);
-        ArgumentException.ThrowIfNullOrWhiteSpace(token);
-
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "docker",
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        foreach (var argument in new[] { "login", registry, "-u", username, "--password-stdin" })
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Failed to start 'docker login'.");
-        await process.StandardInput.WriteAsync(token).ConfigureAwait(false);
-        process.StandardInput.Close();
-
-        using var cts = new CancellationTokenSource(CommandTimeout);
-        var stdout = await process.StandardOutput.ReadToEndAsync(cts.Token).ConfigureAwait(false);
-        var stderr = await process.StandardError.ReadToEndAsync(cts.Token).ConfigureAwait(false);
-        await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
-
-        return process.ExitCode == 0
-            ? stdout.Trim()
-            : throw new InvalidOperationException($"docker login failed: {stderr.Trim()}");
-    }
-
-    private async Task<ProcessResult> RunAsync(params string[] arguments)
-    {
-        using var cts = new CancellationTokenSource(CommandTimeout);
+        using var cts = new CancellationTokenSource(timeout);
         return await _processRunner.RunAsync("docker", arguments, workingDirectory: null, cts.Token).ConfigureAwait(false);
     }
 

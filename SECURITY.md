@@ -68,7 +68,7 @@ controls are:
 | XSS / script injection | Strict CSP — only the page's own inline script (pinned by SHA-256 hash) can execute; all rendered values are HTML-escaped |
 | Clickjacking / embedding | `frame-ancestors 'none'` + `X-Frame-Options: DENY` |
 | CSRF | Auth is a Bearer header (never a cookie), so cross-site requests carry no credentials |
-| Token/PAT leakage | PAT stored in a `0600` config file, sent only in Authorization headers, returned to the UI only masked; `docker login` receives the token via stdin |
+| Token/PAT leakage | PAT stored in a `0600` config file, sent only in Authorization headers, returned to the UI only masked |
 | Command injection | Fixed `docker` argument lists; container ids/actions validated against strict allowlists |
 | Oversized/hostile requests | Request bodies capped at 64 KB; process calls time-bounded |
 | Plain-HTTP interception | Optional TLS via `--cert <pfx>` (HSTS enabled); or bind `--host 127.0.0.1` and reach it through a tunnel |

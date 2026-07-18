@@ -31,17 +31,22 @@ pinqops setup --repo-url https://github.com/<owner>/<repo>
 
 ## Web UI (optional)
 
-A dashboard for the server — containers, images, volumes, network management
-with a visual map, logs, workflow runs, runner status (down to when it last
-ran a job), system health, and a one-click deploy. English + Turkish.
+A minimal dashboard for the server — containers (with inline logs), images,
+volumes, network management with a visual map, workflow runs, runner status
+(down to when it last ran a job), and system health. English + Turkish.
 
-Portainer-style onboarding: sign in with GitHub (OAuth device flow) or paste
-a token, **pick your repository from the list** — no URLs — and the readiness
-panel checks what's missing (Dockerfile, deploy workflow, runner, compose
-project) and fixes what it can: it commits the workflow, generates the
-compose file, and **installs the self-hosted runner itself**. Plus a curated
-catalog of ~50 one-click apps (Redis, PostgreSQL, Grafana, MinIO, …). You
-don't have to install the UI; everything also works from the CLI.
+The **GitHub** menu is the whole onboarding: sign in with GitHub (OAuth
+device flow) or paste a token, search and pick your repository from the
+list — no URLs — and hit **Install**. A step-by-step wizard commits the
+deploy workflow, generates the compose file, **registers the self-hosted
+runner** (replacing a leftover runner from another repository if it finds
+one), streams the install log live, and verifies on GitHub that the runner
+actually appeared. Deploys then happen the intended way: merge to `master`.
+
+There is also a curated catalog of ~50 one-click apps (Redis, PostgreSQL,
+Grafana, MinIO, …); installs run in the background with live
+pulling → starting progress. You don't have to install the UI; everything
+also works from the CLI.
 
 ```bash
 sudo curl -fsSL -o /usr/local/bin/pinqops-ui \
@@ -56,9 +61,11 @@ sudo journalctl -u pinqops-ui | grep "setup code"   # then open http://<server>:
 `uninstall-service` removes the service.)
 
 On first visit, enter the **setup code** (from the journalctl line above, or
-the console when running in the foreground) and create a dashboard password. Then, in **Settings**, paste your repository URL and a
-token — a PAT alone, or a username + token. Use `--port <n>` / `--host <addr>`
-to change where it listens, and `--cert <pfx>` to serve HTTPS.
+the console when running in the foreground) and create a dashboard password.
+Then open the **GitHub** menu (it carries a lock icon until connected), sign
+in, pick your repository, and run the install wizard. Use `--port <n>` /
+`--host <addr>` to change where it listens, and `--cert <pfx>` to serve
+HTTPS.
 
 > Heads-up: the UI opens one inbound port on an otherwise closed server.
 > Keep it off, firewall it, or bind it to `127.0.0.1` and reach it through a
@@ -92,6 +99,7 @@ Flags and defaults: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 | | |
 |---|---|
+| [Wiki](https://github.com/pinqponq/pinqops/wiki) | Guides (sources in [docs/wiki](docs/wiki), incl. a Turkish guide) |
 | [SETUP.md](docs/SETUP.md) | Bare server → first deploy |
 | [TOKENS.md](docs/TOKENS.md) | Which token goes where |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Flow and trust boundaries |
