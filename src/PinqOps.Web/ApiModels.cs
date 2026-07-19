@@ -51,3 +51,9 @@ public sealed record NotificationTelegramRequest(bool? Enabled, string? BotToken
 public sealed record NotificationTestRequest(string? Channel);
 
 public sealed record ComposeEnvRequest(Dictionary<string, string>? Set, string[]? Remove);
+
+public sealed record ProxyEmailRequest(string? Email);
+
+public sealed record ProxyRouteRequest(string? Domain, string? Target, int? Port, bool? Connect);
+
+public sealed record ProxyRouteRemoveRequest(string? Domain);

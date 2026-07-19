@@ -31,3 +31,12 @@ services:
     #   - "8080:8080"
     # environment:
     #   - EXAMPLE=value
+    #
+    # OPTIONAL — join the shared pinqops-apps network so the pinqops-managed
+    # Caddy reverse proxy (Domains & SSL in the dashboard) can reach this app
+    # by container DNS. Create the network once: docker network create pinqops-apps
+    # networks: [default, pinqops-apps]
+
+# networks:
+#   pinqops-apps:
+#     external: true

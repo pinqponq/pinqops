@@ -205,7 +205,7 @@ public sealed class DockerService
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
-    private async Task EnsureSharedNetworkAsync()
+    public async Task EnsureSharedNetworkAsync()
     {
         var inspect = await RunAsync("network", "inspect", AppCatalog.SharedNetwork).ConfigureAwait(false);
         if (!inspect.Succeeded)
