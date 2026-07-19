@@ -22,6 +22,18 @@ and this project adheres to a rolling release model (latest `master` only).
   than the tool needs. Publish app ports directly, or run your own proxy. The
   shared `pinqops-apps` network stays for catalog-app connectivity.
 
+### Added
+
+- **`pinqops deploy --image <registry/path>` verifies the target before pulling.**
+  The generated deploy workflow now passes `--image ghcr.io/${{ github.repository }}`,
+  and pinqops checks that the server compose file actually references that image
+  (via `docker compose config --images`) before it pulls. A stale compose file —
+  the classic case being a repository rename that left `/opt/pinqops/docker-compose.yml`
+  pointing at the old image — now fails fast with a message naming both the
+  referenced and expected images and the exact fix, instead of an opaque registry
+  `403`/`denied` on pull. The flag is optional and compared only; it is never
+  passed to docker.
+
 ### Fixed
 
 - **Atomic, owner-only writes for secret state.** `ui.json` (GitHub PAT),

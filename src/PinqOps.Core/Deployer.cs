@@ -53,6 +53,18 @@ public sealed class Deployer
         var previousTag = EnvFileStore.GetValue(envFile, TagVariable);
         var healthState = DeployRecordValues.HealthSkipped;
 
+        if (options.ExpectedImage is not null)
+        {
+            var mismatch = await FindImageMismatchAsync(options.ExpectedImage, options.ComposeFilePath, token)
+                .ConfigureAwait(false);
+            if (mismatch is not null)
+            {
+                await FinishAsync(options, startedAt, DeployRecordValues.ResultFailed, previousTag, healthState, mismatch, cancellationToken)
+                    .ConfigureAwait(false);
+                return false;
+            }
+        }
+
         if (options.Tag is not null)
         {
             EnvFileStore.SetValue(envFile, TagVariable, options.Tag);
@@ -177,6 +189,43 @@ public sealed class Deployer
                 _log?.Invoke($"deploy observer failed: {exception.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// Verifies the compose project actually references <paramref name="expectedImage"/>.
+    /// Returns an actionable error message when it does not (the common cause is a
+    /// stale server compose file after a repository rename), or null when it matches
+    /// or the reference set could not be read (the pull would surface that anyway).
+    /// </summary>
+    private async Task<string?> FindImageMismatchAsync(string expectedImage, string composeFilePath, CancellationToken cancellationToken)
+    {
+        var imagesResult = await _processRunner
+            .RunAsync(DockerExecutable, DockerComposeCommandBuilder.ConfigImages(composeFilePath), workingDirectory: null, cancellationToken)
+            .ConfigureAwait(false);
+        if (!imagesResult.Succeeded)
+        {
+            // Can't read the reference set (e.g. a compose file pinqops did not
+            // generate); don't invent a failure — let pull report any real error.
+            _log?.Invoke($"could not read compose images to verify the target ({imagesResult.StandardError.TrimEnd()}); skipping the check");
+            return null;
+        }
+
+        var repositories = imagesResult.StandardOutput
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(ImageReference.RepositoryOf)
+            .ToArray();
+
+        if (repositories.Any(repository => string.Equals(repository, expectedImage, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        var referenced = repositories.Length > 0 ? string.Join(", ", repositories) : "(none)";
+        _log?.Invoke(
+            $"image mismatch: this deploy is for {expectedImage} but {composeFilePath} references {referenced}");
+        return $"compose file targets the wrong image. Expected {expectedImage}, but {composeFilePath} "
+            + $"references {referenced}. The server compose file is out of date (for example after a repository "
+            + $"rename); update its image: line to {expectedImage}:${{{TagVariable}:-latest}} and redeploy.";
     }
 
     /// <summary>True when every image the compose project references exists locally.</summary>

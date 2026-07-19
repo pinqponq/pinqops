@@ -76,7 +76,8 @@ public static class SetupTemplates
                   set -euo pipefail
                   echo "${{ secrets.GITHUB_TOKEN }}" \
                     | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-                  pinqops deploy --compose-file "$APP_COMPOSE_PATH" --tag "sha-${{ github.sha }}"
+                  pinqops deploy --compose-file "$APP_COMPOSE_PATH" --tag "sha-${{ github.sha }}" \
+                    --image "ghcr.io/${{ github.repository }}"
 
               - name: Log out of GHCR
                 if: always()

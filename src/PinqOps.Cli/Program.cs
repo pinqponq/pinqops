@@ -72,6 +72,7 @@ async Task<int> RunDeployAsync(string[] deployArgs)
     var tag = GetOption(deployArgs, "--tag");
     var healthTimeout = ParseHealthTimeout(GetOption(deployArgs, "--health-timeout-seconds"));
     var keepImages = ParseKeepImages(GetOption(deployArgs, "--keep-images"));
+    var expectedImage = GetOption(deployArgs, "--image");
 
     var options = DeployOptions.Create(
         composeFilePath,
@@ -80,7 +81,8 @@ async Task<int> RunDeployAsync(string[] deployArgs)
         tag: tag,
         healthCheckTimeout: healthTimeout,
         keepImages: keepImages,
-        trigger: tag is null ? DeployRecordValues.TriggerManual : DeployRecordValues.TriggerCi);
+        trigger: tag is null ? DeployRecordValues.TriggerManual : DeployRecordValues.TriggerCi,
+        expectedImage: expectedImage);
     using var notifications = new PinqOps.Notifications.NotificationDispatcher(composeFilePath, Console.WriteLine);
     var deployer = CreateDeployer(composeFilePath, notifications);
 
@@ -220,12 +222,15 @@ int PrintUsage()
 
           pinqops deploy [--compose-file <path>] [--tag <image-tag>] [--no-prune]
                          [--timeout-seconds <n>] [--health-timeout-seconds <n>]
-                         [--keep-images <n>]
+                         [--keep-images <n>] [--image <registry/path>]
               Pull the new image and restart the fixed compose project. With
               --tag, pins PINQOPS_TAG in the project's .env so the exact image
-              version is recorded and can be rolled back later. After up -d the
-              services are health-checked (default 60s; 0 skips). The newest
-              --keep-images sha-* images (default 5) are kept for rollback.
+              version is recorded and can be rolled back later. With --image
+              (e.g. ghcr.io/<owner>/<repo>), verifies the compose file targets
+              that image before pulling and fails fast with a clear message if
+              the server compose file is stale (e.g. after a repo rename). After
+              up -d the services are health-checked (default 60s; 0 skips). The
+              newest --keep-images sha-* images (default 5) are kept for rollback.
               Defaults: --compose-file from $APP_COMPOSE_PATH or /opt/pinqops/docker-compose.yml
 
           pinqops rollback [--to <tag>] [--compose-file <path>] [--health-timeout-seconds <n>]

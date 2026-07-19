@@ -44,13 +44,15 @@ public class DeployerTests : IDisposable
         string? tag = null,
         bool pruneImages = true,
         TimeSpan? healthCheckTimeout = null,
-        string trigger = DeployRecordValues.TriggerManual) =>
+        string trigger = DeployRecordValues.TriggerManual,
+        string? expectedImage = null) =>
         DeployOptions.Create(
             _composePath,
             pruneImages: pruneImages,
             tag: tag,
             healthCheckTimeout: healthCheckTimeout ?? TimeSpan.FromSeconds(5),
-            trigger: trigger);
+            trigger: trigger,
+            expectedImage: expectedImage);
 
     [Fact]
     public async Task DeployAsync_HappyPath_RunsPullUpHealthRetention_InOrder()
@@ -261,6 +263,91 @@ public class DeployerTests : IDisposable
         var deployer = new Deployer(runner);
 
         var result = await deployer.DeployAsync(Options(tag: "sha-old", trigger: DeployRecordValues.TriggerRollback));
+
+        Assert.True(result);
+        Assert.Contains(runner.Invocations, invocation => invocation.Arguments.Contains("pull"));
+    }
+
+    // Runner that answers `config --images` with a fixed reference set and
+    // otherwise behaves like a healthy deploy.
+    private static FakeProcessRunner RunnerWithConfigImages(string configImagesOutput, int configExit = 0) =>
+        new((_, arguments) =>
+        {
+            if (arguments.Contains("config"))
+            {
+                return new ProcessResult(configExit, configExit == 0 ? configImagesOutput : string.Empty, configExit == 0 ? string.Empty : "boom");
+            }
+
+            return arguments.Contains("ps")
+                ? new ProcessResult(0, HealthyPs, string.Empty)
+                : new ProcessResult(0, string.Empty, string.Empty);
+        });
+
+    [Fact]
+    public async Task DeployAsync_ExpectedImageMatches_VerifiesBeforePull_Proceeds()
+    {
+        var runner = RunnerWithConfigImages("ghcr.io/acme/app:sha-abc123\n");
+        var deployer = new Deployer(runner);
+
+        var result = await deployer.DeployAsync(Options(tag: "sha-abc123", expectedImage: "ghcr.io/acme/app"));
+
+        Assert.True(result);
+        var commands = runner.Invocations.Select(invocation => invocation.CommandLine).ToList();
+        // The verification config call runs before the pull.
+        Assert.Equal($"docker compose -f {_composePath} config --images", commands[0]);
+        Assert.Equal($"docker compose -f {_composePath} pull", commands[1]);
+    }
+
+    [Fact]
+    public async Task DeployAsync_ExpectedImageMatches_CaseInsensitive_Proceeds()
+    {
+        var runner = RunnerWithConfigImages("ghcr.io/Acme/App:sha-abc123\n");
+        var deployer = new Deployer(runner);
+
+        var result = await deployer.DeployAsync(Options(tag: "sha-abc123", expectedImage: "ghcr.io/acme/app"));
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public async Task DeployAsync_ExpectedImageMismatch_FailsBeforePull_RecordsFailed()
+    {
+        var runner = RunnerWithConfigImages("ghcr.io/acme/old-name:sha-abc123\n");
+        var history = new DeployHistoryStore(_composePath);
+        var deployer = new Deployer(runner, history: history);
+
+        var result = await deployer.DeployAsync(Options(tag: "sha-abc123", expectedImage: "ghcr.io/acme/new-name"));
+
+        Assert.False(result);
+        Assert.DoesNotContain(runner.Invocations, invocation => invocation.Arguments.Contains("pull"));
+        var record = Assert.Single(history.Load());
+        Assert.Equal(DeployRecordValues.ResultFailed, record.Result);
+        Assert.Contains("ghcr.io/acme/new-name", record.Error);
+        Assert.Contains("ghcr.io/acme/old-name", record.Error);
+    }
+
+    [Fact]
+    public async Task DeployAsync_ExpectedImageMismatch_DoesNotPinTag()
+    {
+        var envFile = Path.Combine(_projectDirectory, ".env");
+        EnvFileStore.SetValue(envFile, Deployer.TagVariable, "sha-old");
+        var runner = RunnerWithConfigImages("ghcr.io/acme/old-name:sha-old\n");
+        var deployer = new Deployer(runner);
+
+        var result = await deployer.DeployAsync(Options(tag: "sha-new", expectedImage: "ghcr.io/acme/new-name"));
+
+        Assert.False(result);
+        // Nothing was applied, so the pinned tag must be left untouched.
+        Assert.Equal("sha-old", EnvFileStore.GetValue(envFile, Deployer.TagVariable));
+    }
+
+    [Fact]
+    public async Task DeployAsync_ExpectedImageSet_ConfigUnreadable_SkipsCheck_Proceeds()
+    {
+        var runner = RunnerWithConfigImages(string.Empty, configExit: 1);
+        var deployer = new Deployer(runner);
+
+        var result = await deployer.DeployAsync(Options(tag: "sha-abc123", expectedImage: "ghcr.io/acme/app"));
 
         Assert.True(result);
         Assert.Contains(runner.Invocations, invocation => invocation.Arguments.Contains("pull"));

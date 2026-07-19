@@ -102,7 +102,13 @@ jobs:
           # deploy in history. No repository content is checked out or executed
           # on the server. (Requires the compose file to reference the image as
           # `image: ...:${PINQOPS_TAG:-latest}` — see deploy/app.docker-compose.example.yml.)
-          pinqops deploy --compose-file "$APP_COMPOSE_PATH" --tag "sha-${{ github.sha }}"
+          #
+          # --image is the image this repo builds; pinqops verifies the server
+          # compose file targets it before pulling, so a stale compose file
+          # (e.g. after a repository rename) fails with a clear message instead
+          # of an opaque registry error.
+          pinqops deploy --compose-file "$APP_COMPOSE_PATH" --tag "sha-${{ github.sha }}" \
+            --image "ghcr.io/${{ github.repository }}"
 
       - name: Log out of GHCR
         if: always()

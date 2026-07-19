@@ -39,6 +39,16 @@ public sealed partial record DeployOptions
     public string Trigger { get; init; } = DeployRecordValues.TriggerManual;
 
     /// <summary>
+    /// The image repository this deploy is for (registry + path, no tag), e.g.
+    /// <c>ghcr.io/acme/app</c>. When set, the deploy verifies the server compose
+    /// file references this repository before pulling and fails fast otherwise —
+    /// catching a stale compose file (for example after a repository rename)
+    /// with a clear message instead of an opaque registry error. Null skips the
+    /// check. Used only for comparison, never as a command argument.
+    /// </summary>
+    public string? ExpectedImage { get; init; }
+
+    /// <summary>
     /// Validates inputs and returns a <see cref="DeployOptions"/>. Throws when a
     /// required value is missing or invalid (fail fast).
     /// </summary>
@@ -49,12 +59,15 @@ public sealed partial record DeployOptions
         string? tag = null,
         TimeSpan? healthCheckTimeout = null,
         int keepImages = 5,
-        string trigger = DeployRecordValues.TriggerManual)
+        string trigger = DeployRecordValues.TriggerManual,
+        string? expectedImage = null)
     {
         if (string.IsNullOrWhiteSpace(composeFilePath))
         {
             throw new ArgumentException("Compose file path is required.", nameof(composeFilePath));
         }
+
+        var normalizedExpectedImage = NormalizeExpectedImage(expectedImage);
 
         var effectiveTimeout = timeout ?? DefaultTimeout;
         if (effectiveTimeout <= TimeSpan.Zero)
@@ -86,7 +99,31 @@ public sealed partial record DeployOptions
             HealthCheckTimeout = effectiveHealthTimeout,
             KeepImages = keepImages,
             Trigger = trigger,
+            ExpectedImage = normalizedExpectedImage,
         };
+    }
+
+    /// <summary>
+    /// Validates and reduces the expected image to its repository (drops any
+    /// tag the caller passed by mistake). An unexpanded <c>${...}</c> means the
+    /// workflow never substituted the value — reject it so the misconfiguration
+    /// surfaces here rather than as a confusing image mismatch.
+    /// </summary>
+    private static string? NormalizeExpectedImage(string? expectedImage)
+    {
+        if (string.IsNullOrWhiteSpace(expectedImage))
+        {
+            return null;
+        }
+
+        var value = expectedImage.Trim();
+        if (value.Contains("${", StringComparison.Ordinal) || value.Any(char.IsWhiteSpace))
+        {
+            throw new ArgumentException(
+                $"'{expectedImage}' is not a valid image reference.", nameof(expectedImage));
+        }
+
+        return ImageReference.RepositoryOf(value);
     }
 
     [GeneratedRegex("^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$")]

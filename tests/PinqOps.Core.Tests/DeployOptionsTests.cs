@@ -92,4 +92,39 @@ public class DeployOptionsTests
         Assert.Throws<ArgumentOutOfRangeException>(() => DeployOptions.Create(
             "/opt/pinqops/docker-compose.yml", keepImages: 0));
     }
+
+    [Fact]
+    public void Create_ExpectedImageDefaultsToNull()
+    {
+        Assert.Null(DeployOptions.Create("/opt/pinqops/docker-compose.yml").ExpectedImage);
+    }
+
+    [Theory]
+    [InlineData("ghcr.io/acme/app", "ghcr.io/acme/app")]
+    [InlineData("  ghcr.io/acme/app  ", "ghcr.io/acme/app")]
+    [InlineData("ghcr.io/acme/app:latest", "ghcr.io/acme/app")]
+    [InlineData("localhost:5000/app:v1", "localhost:5000/app")]
+    public void Create_NormalizesExpectedImageToRepository(string input, string expected)
+    {
+        var options = DeployOptions.Create("/opt/pinqops/docker-compose.yml", expectedImage: input);
+
+        Assert.Equal(expected, options.ExpectedImage);
+    }
+
+    [Theory]
+    [InlineData("ghcr.io/${{ github.repository }}")]
+    [InlineData("ghcr.io/acme/app image")]
+    public void Create_RejectsUnexpandedOrMalformedExpectedImage(string image)
+    {
+        Assert.Throws<ArgumentException>(
+            () => DeployOptions.Create("/opt/pinqops/docker-compose.yml", expectedImage: image));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Create_BlankExpectedImageIsNull(string image)
+    {
+        Assert.Null(DeployOptions.Create("/opt/pinqops/docker-compose.yml", expectedImage: image).ExpectedImage);
+    }
 }
