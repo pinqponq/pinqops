@@ -251,35 +251,7 @@ public sealed class DockerService
     /// Docker's <c>--format json</c> output is NDJSON in some versions and a
     /// single array in others; accept both.
     /// </summary>
-    internal static List<JsonElement> ParseJsonLinesOrArray(string output)
-    {
-        var items = new List<JsonElement>();
-        var trimmed = output.Trim();
-        if (trimmed.Length == 0)
-        {
-            return items;
-        }
-
-        if (trimmed.StartsWith('['))
-        {
-            using var document = JsonDocument.Parse(trimmed);
-            items.AddRange(document.RootElement.EnumerateArray().Select(element => element.Clone()));
-            return items;
-        }
-
-        foreach (var line in trimmed.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (!line.StartsWith('{'))
-            {
-                continue;
-            }
-
-            using var document = JsonDocument.Parse(line);
-            items.Add(document.RootElement.Clone());
-        }
-
-        return items;
-    }
+    internal static List<JsonElement> ParseJsonLinesOrArray(string output) => JsonLines.Parse(output);
 
     private static JsonElement ParseElement(string json)
     {

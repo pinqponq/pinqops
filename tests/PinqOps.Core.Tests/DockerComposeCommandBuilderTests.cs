@@ -28,6 +28,37 @@ public class DockerComposeCommandBuilderTests
         Assert.Equal(new[] { "image", "prune", "-f" }, DockerComposeCommandBuilder.PruneImages());
     }
 
+    [Fact]
+    public void Ps_BuildsFixedArguments()
+    {
+        Assert.Equal(
+            new[] { "compose", "-f", ComposePath, "ps", "-a", "--format", "json" },
+            DockerComposeCommandBuilder.Ps(ComposePath));
+    }
+
+    [Fact]
+    public void ConfigImages_BuildsFixedArguments()
+    {
+        Assert.Equal(
+            new[] { "compose", "-f", ComposePath, "config", "--images" },
+            DockerComposeCommandBuilder.ConfigImages(ComposePath));
+    }
+
+    [Fact]
+    public void ListRepoImages_BuildsFixedArguments()
+    {
+        Assert.Equal(
+            new[] { "images", "ghcr.io/o/r", "--format", "{{json .}}" },
+            DockerComposeCommandBuilder.ListRepoImages("ghcr.io/o/r"));
+    }
+
+    [Fact]
+    public void RemoveImage_And_InspectImage_KeepReferenceAsSingleArgument()
+    {
+        Assert.Equal(new[] { "rmi", "ghcr.io/o/r:sha-1" }, DockerComposeCommandBuilder.RemoveImage("ghcr.io/o/r:sha-1"));
+        Assert.Equal(new[] { "image", "inspect", "ghcr.io/o/r:sha-1" }, DockerComposeCommandBuilder.InspectImage("ghcr.io/o/r:sha-1"));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("   ")]

@@ -36,9 +36,60 @@ public class DeployOptionsTests
         var options = DeployOptions.Create(
             "/srv/app/docker-compose.yml",
             pruneImages: false,
-            timeout: TimeSpan.FromSeconds(90));
+            timeout: TimeSpan.FromSeconds(90),
+            tag: "sha-0123abc",
+            healthCheckTimeout: TimeSpan.FromSeconds(10),
+            keepImages: 3,
+            trigger: DeployRecordValues.TriggerCi);
 
         Assert.False(options.PruneImages);
         Assert.Equal(TimeSpan.FromSeconds(90), options.Timeout);
+        Assert.Equal("sha-0123abc", options.Tag);
+        Assert.Equal(TimeSpan.FromSeconds(10), options.HealthCheckTimeout);
+        Assert.Equal(3, options.KeepImages);
+        Assert.Equal(DeployRecordValues.TriggerCi, options.Trigger);
+    }
+
+    [Fact]
+    public void Create_TagDefaults()
+    {
+        var options = DeployOptions.Create("/opt/pinqops/docker-compose.yml");
+
+        Assert.Null(options.Tag);
+        Assert.Equal(TimeSpan.FromSeconds(60), options.HealthCheckTimeout);
+        Assert.Equal(5, options.KeepImages);
+        Assert.Equal(DeployRecordValues.TriggerManual, options.Trigger);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(".leading-dot")]
+    [InlineData("-leading-dash")]
+    [InlineData("has space")]
+    [InlineData("semi;colon")]
+    [InlineData("new\nline")]
+    public void Create_RejectsInvalidTags(string tag)
+    {
+        Assert.Throws<ArgumentException>(
+            () => DeployOptions.Create("/opt/pinqops/docker-compose.yml", tag: tag));
+    }
+
+    [Theory]
+    [InlineData("latest")]
+    [InlineData("sha-0af3c9d2b1e8f7a6c5d4e3f2a1b0c9d8e7f6a5b4")]
+    [InlineData("v1.2.3")]
+    [InlineData("_underscore")]
+    public void Create_AcceptsValidTags(string tag)
+    {
+        Assert.Equal(tag, DeployOptions.Create("/opt/pinqops/docker-compose.yml", tag: tag).Tag);
+    }
+
+    [Fact]
+    public void Create_RejectsNegativeHealthTimeoutAndZeroKeepImages()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => DeployOptions.Create(
+            "/opt/pinqops/docker-compose.yml", healthCheckTimeout: TimeSpan.FromSeconds(-1)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => DeployOptions.Create(
+            "/opt/pinqops/docker-compose.yml", keepImages: 0));
     }
 }
