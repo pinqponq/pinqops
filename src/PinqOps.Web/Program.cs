@@ -80,6 +80,7 @@ builder.Services.AddSingleton<GitHubDeviceFlow>();
 builder.Services.AddSingleton<LocalRunnerService>();
 builder.Services.AddSingleton<SystemInfoService>();
 builder.Services.AddSingleton<AppInstallJobs>();
+builder.Services.AddSingleton<DeployService>();
 
 // Blunt per-client request ceiling on top of the login throttle, so a single
 // client cannot hammer the API (or the process-spawning docker endpoints).
@@ -832,6 +833,68 @@ app.MapGet("/api/compose", (UiConfigStore store, DockerService docker) =>
 
         return new { composeFile, exists = true, items = await docker.ComposeServicesAsync(composeFile) };
     }));
+
+// ---- Deploy history & rollback ------------------------------------------------
+
+app.MapGet("/api/deploy/state", (UiConfigStore store, DeployService deploys) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        return deploys.GetState(store.Current.ComposeFile);
+    }));
+
+app.MapGet("/api/deploy/history", (UiConfigStore store, DeployService deploys) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        return new { items = deploys.History(store.Current.ComposeFile) };
+    }));
+
+app.MapPost("/api/deploy/rollback", async (HttpContext context, UiConfigStore store, DeployService deploys) =>
+{
+    RollbackRequest? request;
+    try
+    {
+        request = await context.Request.ReadFromJsonAsync<RollbackRequest>();
+    }
+    catch (System.Text.Json.JsonException)
+    {
+        return Error(400, "Invalid request body.");
+    }
+
+    if (request?.Tag is not { Length: > 0 } tag)
+    {
+        return Error(400, "A tag is required.");
+    }
+
+    try
+    {
+        var job = deploys.TryStartRollback(store.Current.ComposeFile, tag);
+        if (job is null)
+        {
+            return Error(409, "A rollback is already in progress.");
+        }
+
+        logger.LogWarning("Rollback to {Tag} started from the dashboard", tag);
+        return Results.Json(new { jobId = job.Id });
+    }
+    catch (ArgumentException exception)
+    {
+        return Error(400, exception.Message);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Error(400, exception.Message);
+    }
+});
+
+app.MapGet("/api/deploy/job/{jobId}", (string jobId, DeployService deploys) =>
+{
+    var job = deploys.Find(jobId);
+    return job is null
+        ? Error(404, "Unknown rollback job.")
+        : Results.Json(new { tag = job.Tag, phase = job.Phase, done = job.Done, error = job.Error, log = job.Log() });
+});
 
 // ---- Local runner & system ------------------------------------------------------
 

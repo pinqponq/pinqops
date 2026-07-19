@@ -250,6 +250,11 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
 
       <!-- deployments -->
       <section id="view-deployments" class="view hidden">
+        <div class="section" style="margin-bottom:16px">
+          <div class="section-head"><h2 data-i18n="dh.title">Deploy history</h2><div class="spacer"></div><span id="dep-current" class="muted"></span></div>
+          <div id="dep-tagvar-hint" class="muted hidden" style="font-size:12px;margin-bottom:8px"></div>
+          <div class="tablewrap"><table id="dep-history-table"></table></div>
+        </div>
         <div class="card" style="margin-bottom:16px">
           <h3 data-i18n="dp.lastJob">Runner last executed a job</h3>
           <div id="lastjob-detail" class="muted">–</div>
@@ -522,6 +527,12 @@ en:{
  "th.cpu":"CPU","th.mem":"Memory","th.actions":"Actions","th.repo":"Repository","th.tag":"Tag","th.imageId":"Image ID","th.created":"Created",
  "th.size":"Size","th.driver":"Driver","th.scope":"Scope","th.mount":"Mountpoint","th.internal":"Internal","th.type":"Type","th.total":"Total",
  "th.active":"Active","th.reclaimable":"Reclaimable",
+ "dh.title":"Deploy history","dh.current":"deployed: {tag}","dh.rollback":"Roll back","dh.result":"Result","dh.health":"Health",
+ "dh.rSucceeded":"✓ succeeded","dh.rFailed":"✕ failed","dh.rRolledBack":"↩ rolled back",
+ "dh.rbTitle":"Roll back","dh.rbConfirm":"Redeploy image tag {tag}? The compose project is restarted with that version.",
+ "dh.rbStarted":"Rollback to {tag} started…","dh.rbDone":"Rolled back to {tag}","dh.rbFail":"Rollback failed: {e}",
+ "dh.none":"No deploys recorded yet — they appear here after the first `pinqops deploy --tag`.",
+ "dh.migrate":"Tip: point the compose image at :${PINQOPS_TAG:-latest} and deploy with --tag to enable version history and rollback.",
  "dp.lastJob":"Runner last executed a job","dp.runs":"Workflow runs","dp.openActions":"open GitHub Actions ↗",
  "dp.noSelfJob":"No job on a self-hosted runner was found in the recent runs.",
  "dp.job":"job","dp.runner":"Runner","dp.started":"Started","dp.finished":"Finished","dp.link":"Link","dp.openJob":"open job on GitHub ↗",
@@ -619,6 +630,12 @@ tr:{
  "th.cpu":"CPU","th.mem":"Bellek","th.actions":"İşlemler","th.repo":"Depo","th.tag":"Etiket","th.imageId":"İmaj ID","th.created":"Oluşturulma",
  "th.size":"Boyut","th.driver":"Sürücü","th.scope":"Kapsam","th.mount":"Bağlama noktası","th.internal":"Dahili","th.type":"Tür","th.total":"Toplam",
  "th.active":"Aktif","th.reclaimable":"Geri kazanılabilir",
+ "dh.title":"Dağıtım geçmişi","dh.current":"yayında: {tag}","dh.rollback":"Geri al","dh.result":"Sonuç","dh.health":"Sağlık",
+ "dh.rSucceeded":"✓ başarılı","dh.rFailed":"✕ başarısız","dh.rRolledBack":"↩ geri alındı",
+ "dh.rbTitle":"Geri al","dh.rbConfirm":"{tag} imaj etiketi yeniden yayınlansın mı? Compose projesi o sürümle yeniden başlatılır.",
+ "dh.rbStarted":"{tag} sürümüne geri alma başladı…","dh.rbDone":"{tag} sürümüne geri alındı","dh.rbFail":"Geri alma başarısız: {e}",
+ "dh.none":"Henüz kayıtlı dağıtım yok — ilk `pinqops deploy --tag` sonrasında burada görünür.",
+ "dh.migrate":"İpucu: compose imajını :${PINQOPS_TAG:-latest} olarak ayarla ve --tag ile dağıt; sürüm geçmişi ve geri alma aktifleşir.",
  "dp.lastJob":"Runner en son iş çalıştırdı","dp.runs":"Workflow çalıştırmaları","dp.openActions":"GitHub Actions'ı aç ↗",
  "dp.noSelfJob":"Son çalıştırmalarda self-hosted runner'da koşan iş bulunamadı.",
  "dp.job":"iş","dp.runner":"Runner","dp.started":"Başlangıç","dp.finished":"Bitiş","dp.link":"Bağlantı","dp.openJob":"işi GitHub'da aç ↗",
@@ -1036,7 +1053,58 @@ function renderRunsTable(el,runs){
         {h:`<a href="${esc(r.htmlUrl)}" target="_blank" rel="noopener">${t("c.view")}</a>`}];}),
     t("dp.noRuns"));
 }
+/* ---- deploy history & rollback (server-side state; works without GitHub) ---- */
+function shortTag(tag){return /^sha-[0-9a-f]{12,}$/i.test(tag||"")?tag.slice(0,12):esc(tag||"–");}
+function deployResultChip(r){
+  const map={succeeded:["ok",t("dh.rSucceeded")],failed:["err",t("dh.rFailed")],rolled_back:["warn",t("dh.rRolledBack")]};
+  const[k,l]=map[r]||["mut",r||"?"];return`<span class="chip ${k}">${esc(l)}</span>`;}
+async function loadDeployHistory(){
+  try{
+    const[state,history]=await Promise.all([api("/api/deploy/state"),api("/api/deploy/history")]);
+    $("#dep-current").textContent=state.currentTag
+      ?t("dh.current",{tag:shortTag(state.currentTag)})
+      :"";
+    const hint=$("#dep-tagvar-hint");
+    if(!state.composeUsesTagVariable&&history.items.length===0){hint.textContent=t("dh.migrate");hint.classList.remove("hidden");}
+    else hint.classList.add("hidden");
+    table($("#dep-history-table"),
+      [t("th.tag"),t("th.started"),t("th.duration"),t("dh.result"),t("th.trigger"),t("dh.health"),""],
+      history.items.map(d=>[
+        {h:`<span class="mono" title="${esc(d.tag)}">${shortTag(d.tag)}</span>`},
+        {h:`<span title="${fullTime(d.startedAt)}">${timeAgo(d.startedAt)}</span>`},
+        d.durationSeconds?Math.round(d.durationSeconds)+"s":"–",
+        {h:deployResultChip(d.result)},
+        esc(d.trigger||"–"),
+        esc(d.healthCheck||"–"),
+        {h:(d.result==="succeeded"||d.result==="rolled_back")&&d.tag!==state.currentTag&&state.composeUsesTagVariable
+          ?`<button class="small" data-rollback="${esc(d.tag)}">${t("dh.rollback")}</button>`:""}]),
+      t("dh.none"));
+  }catch(ex){table($("#dep-history-table"),[],[],esc(ex.message));}
+}
+$("#dep-history-table").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-rollback]");if(!b)return;
+  const tag=b.dataset.rollback;
+  openModal(t("dh.rbTitle"),t("dh.rbConfirm",{tag:`<span class="mono">${shortTag(tag)}</span>`}),[
+    {label:t("c.cancel")},
+    {label:t("dh.rollback"),danger:true,onClick:async()=>{
+      closeModal();
+      try{
+        const{jobId}=await api("/api/deploy/rollback",{method:"POST",body:JSON.stringify({tag})});
+        toast(t("dh.rbStarted",{tag:shortTag(tag)}),"ok");
+        const poll=setInterval(async()=>{
+          try{
+            const job=await api(`/api/deploy/job/${encodeURIComponent(jobId)}`);
+            if(!job.done)return;
+            clearInterval(poll);
+            toast(job.phase==="done"?t("dh.rbDone",{tag:shortTag(tag)}):t("dh.rbFail",{e:job.error||""}),job.phase==="done"?"ok":"err");
+            await loadDeployHistory();
+          }catch(ex){clearInterval(poll);toast(ex.message,"err");}
+        },2000);
+      }catch(ex){toast(ex.message,"err");}
+    }}]);
+});
 async function loadDeployments(){
+  await loadDeployHistory();
   const gh=await githubOverview();
   if(!gh){table($("#runs-table"),[],[],t("dp.connectFirst"));return;}
   $("#actions-link").href=gh.repo.htmlUrl+"/actions";

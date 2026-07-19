@@ -27,3 +27,5 @@ public sealed record NetworkContainerRequest(string? Container);
 public sealed record AppInstallRequest(string? Id, int? HostPort, int[]? HostPorts);
 
 public sealed record ContainerActionRequest(string? Action);
+
+public sealed record RollbackRequest(string? Tag);
