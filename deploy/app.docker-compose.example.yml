@@ -14,9 +14,12 @@ name: pinqops
 
 services:
   app:
-    # Moving tag: master builds overwrite :latest, and `pull` fetches the new
-    # digest so `up -d` recreates the container.
-    image: ghcr.io/your-org/pinqops:latest
+    # PINQOPS_TAG is pinned in this directory's .env by `pinqops deploy --tag`
+    # (the CI workflow passes the commit's sha-<...> tag), so the exact deployed
+    # version is recorded in the deploy history and `pinqops rollback` can
+    # return to a previous one. Without a .env it falls back to :latest, which
+    # preserves the old moving-tag behavior.
+    image: ghcr.io/your-org/pinqops:${PINQOPS_TAG:-latest}
     restart: unless-stopped
 
     # --- Everything below is application-specific and only an illustration. ---
