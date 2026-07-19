@@ -57,9 +57,11 @@ shows deploy history with one-click rollback plus a compose `.env` editor.
 You don't have to install the UI; everything also works from the CLI.
 
 ```bash
-sudo curl -fsSL -o /usr/local/bin/pinqops-ui \
+curl -fsSL -o /tmp/pinqops-ui \
   https://github.com/pinqponq/pinqops/releases/latest/download/pinqops-ui
-sudo chmod +x /usr/local/bin/pinqops-ui
+chmod +x /tmp/pinqops-ui
+sudo install /tmp/pinqops-ui /usr/local/bin/pinqops-ui
+rm /tmp/pinqops-ui
 
 sudo pinqops-ui install-service   # runs now, survives SSH logout, starts on boot
 sudo journalctl -u pinqops-ui | grep "setup code"   # then open http://<server>:7467
