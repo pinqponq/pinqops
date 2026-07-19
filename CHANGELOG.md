@@ -7,6 +7,13 @@ and this project adheres to a rolling release model (latest `master` only).
 
 ## [Unreleased]
 
+### Changed
+
+- **Split the "Storage & Networks" dashboard view into separate "Storage" and
+  "Networks" tabs.** Storage keeps volumes and Docker disk usage; Networks holds
+  the network list (create/remove/connect) and the visual network map. Each
+  loads independently.
+
 ### Removed
 
 - **Domains & SSL (Caddy reverse proxy).** The managed `pinqops-caddy` reverse

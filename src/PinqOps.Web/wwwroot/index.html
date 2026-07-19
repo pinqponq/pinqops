@@ -316,12 +316,16 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
         <div class="tablewrap"><table id="images-table"></table></div>
       </section>
 
-      <!-- storage & networks -->
+      <!-- storage -->
       <section id="view-storage" class="view hidden">
         <div class="section-head"><h2 data-i18n="st.df">Docker disk usage</h2></div>
         <div class="tablewrap"><table id="df-table"></table></div>
         <div class="section"><div class="section-head"><h2 data-i18n="st.volumes">Volumes</h2></div>
         <div class="tablewrap"><table id="volumes-table"></table></div></div>
+      </section>
+
+      <!-- networks -->
+      <section id="view-networks" class="view hidden">
         <div class="section">
           <div class="section-head"><h2 data-i18n="st.map">Network map</h2></div>
           <div class="card" id="net-map-card"><div id="net-map"></div></div>
@@ -513,7 +517,7 @@ const I18N={
 en:{
  "nav.grp.monitor":"Monitor","nav.grp.docker":"Docker","nav.grp.server":"Server","nav.grp.github":"Publishing",
  "nav.overview":"Overview","nav.deployments":"Deployments","nav.runner":"Runner","nav.containers":"Containers",
- "nav.images":"Images","nav.storage":"Storage & Networks","nav.system":"System","nav.settings":"Settings",
+ "nav.images":"Images","nav.storage":"Storage","nav.networks":"Networks","nav.system":"System","nav.settings":"Settings",
  "nav.apps":"Apps","nav.github":"GitHub",
  "gh.locked":"Not connected — click to sign in","gh.pickTitle":"Set up a repository",
  "gh.pickHelp":"Search your repositories, pick one, and Install — the wizard commits the deploy workflow, creates the compose project, and registers the runner automatically.",
@@ -626,7 +630,7 @@ en:{
 tr:{
  "nav.grp.monitor":"İzleme","nav.grp.docker":"Docker","nav.grp.server":"Sunucu","nav.grp.github":"Yayınlama",
  "nav.overview":"Genel Bakış","nav.deployments":"Dağıtımlar","nav.runner":"Runner","nav.containers":"Konteynerler",
- "nav.images":"İmajlar","nav.storage":"Depolama ve Ağlar","nav.system":"Sistem","nav.settings":"Ayarlar",
+ "nav.images":"İmajlar","nav.storage":"Depolama","nav.networks":"Ağlar","nav.system":"Sistem","nav.settings":"Ayarlar",
  "nav.apps":"Uygulamalar","nav.github":"GitHub",
  "gh.locked":"Bağlı değil — giriş için tıkla","gh.pickTitle":"Depo kur",
  "gh.pickHelp":"Depolarında ara, birini seç ve Kur'a bas — sihirbaz deploy workflow'unu commit'ler, compose projesini oluşturur ve runner'ı otomatik kaydeder.",
@@ -792,7 +796,7 @@ let token=localStorage.getItem("pinqops.token")||"";
 let view="overview", refreshMs=10000, timer=null, logTimer=null, needsSetup=false, ghConfigured=false;
 let deviceTimer=null, deviceHandle=null, repoList=[];
 const NAV=[["nav.grp.monitor",[["overview",IC.grid],["deployments",IC.rocket],["runner",IC.cpu]]],
-           ["nav.grp.docker",[["containers",IC.box],["apps",IC.zap],["images",IC.layers],["storage",IC.db]]],
+           ["nav.grp.docker",[["containers",IC.box],["apps",IC.zap],["images",IC.layers],["storage",IC.db],["networks",IC.globe]]],
            ["nav.grp.github",[["github",IC.github]]],
            ["nav.grp.server",[["system",IC.activity],["settings",IC.sliders]]]];
 
@@ -966,6 +970,7 @@ async function refresh(quiet){
     else if(view==="apps")await loadApps();
     else if(view==="images")await loadImages();
     else if(view==="storage")await loadStorage();
+    else if(view==="networks")await loadNetworks();
     else if(view==="system")await loadSystem();
     // Settings holds form state the user may be editing; populate only on
     // view entry / manual refresh, never on the auto-refresh tick.
@@ -1532,15 +1537,18 @@ function renderNetMap(containers){
   $("#net-map").innerHTML=`<div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:720px;height:auto;display:block">${lines}${nodes}</svg></div>`;
 }
 async function loadStorage(){
-  const[dfR,volR,netR,psR]=await Promise.allSettled([api("/api/docker/df"),api("/api/docker/volumes"),api("/api/docker/networks"),api("/api/docker/containers")]);
-  if(psR.status==="fulfilled")renderNetMap(psR.value.items);
-  else $("#net-map").innerHTML=`<div class="muted" style="font-size:13px">${esc(psR.reason.message)}</div>`;
+  const[dfR,volR]=await Promise.allSettled([api("/api/docker/df"),api("/api/docker/volumes")]);
   if(dfR.status==="fulfilled")table($("#df-table"),[t("th.type"),t("th.total"),t("th.active"),t("th.size"),t("th.reclaimable")],
     dfR.value.items.map(d=>[esc(d.Type||""),esc(String(d.TotalCount??"")),esc(String(d.Active??"")),esc(d.Size||""),esc(d.Reclaimable||"")]),"–");
   else table($("#df-table"),[],[],dfR.reason.message);
   if(volR.status==="fulfilled")table($("#volumes-table"),[t("th.name"),t("th.driver"),t("th.scope"),t("th.mount")],
     volR.value.items.map(v=>[{h:esc(v.Name||""),cls:"mono"},esc(v.Driver||""),esc(v.Scope||""),{h:esc(v.Mountpoint||""),cls:"mono"}]),t("st.noVolumes"));
   else table($("#volumes-table"),[],[],volR.reason.message);
+}
+async function loadNetworks(){
+  const[netR,psR]=await Promise.allSettled([api("/api/docker/networks"),api("/api/docker/containers")]);
+  if(psR.status==="fulfilled")renderNetMap(psR.value.items);
+  else $("#net-map").innerHTML=`<div class="muted" style="font-size:13px">${esc(psR.reason.message)}</div>`;
   if(netR.status==="fulfilled")table($("#networks-table"),[t("th.name"),"ID",t("th.driver"),t("th.scope"),t("th.internal"),t("th.actions")],
     netR.value.items.map(n=>{
       const builtin=BUILTIN_NETS.includes(n.Name);
@@ -1560,7 +1568,7 @@ $("#net-create-form").addEventListener("submit",async e=>{
       name:$("#net-name").value.trim(),driver:$("#net-driver").value,internal:$("#net-internal").checked})});
     toast(`${$("#net-name").value.trim()} — ${t("st.created")}`,"ok");
     $("#net-name").value="";$("#net-internal").checked=false;
-    loadStorage();
+    loadNetworks();
   }catch(ex){toast(ex.message,"err");}
 });
 $("#networks-table").addEventListener("click",async e=>{
@@ -1568,7 +1576,7 @@ $("#networks-table").addEventListener("click",async e=>{
   if(b.dataset.netRm){
     openModal(t("st.rmTitle"),esc(t("st.rmConfirm",{n:b.dataset.netRm})),[
       {label:t("c.cancel")},{label:t("c.remove"),danger:true,onClick:async()=>{closeModal();
-        try{await api(`/api/docker/networks/${encodeURIComponent(b.dataset.netRm)}/remove`,{method:"POST"});toast(b.dataset.netRm+" ✓","ok");loadStorage();}
+        try{await api(`/api/docker/networks/${encodeURIComponent(b.dataset.netRm)}/remove`,{method:"POST"});toast(b.dataset.netRm+" ✓","ok");loadNetworks();}
         catch(ex){toast(ex.message,"err");}}}]);
   }else if(b.dataset.netInspect){
     await openNetworkInspect(b.dataset.netInspect);
@@ -1602,7 +1610,7 @@ $("#modal-body").addEventListener("click",async e=>{
   const b=e.target.closest("button[data-net-dc]");if(!b)return;
   b.disabled=true;
   try{await api(`/api/docker/networks/${encodeURIComponent(b.dataset.netDc)}/disconnect`,{method:"POST",body:JSON.stringify({container:b.dataset.ct})});
-    toast(`${b.dataset.ct} ✓`,"ok");closeModal();loadStorage();}
+    toast(`${b.dataset.ct} ✓`,"ok");closeModal();loadNetworks();}
   catch(ex){toast(ex.message,"err");b.disabled=false;}
 });
 async function openNetworkConnect(name){
@@ -1614,7 +1622,7 @@ async function openNetworkConnect(name){
       [{label:t("c.cancel")},{label:t("c.connect"),primary:true,onClick:async()=>{
         const container=$("#net-attach-pick").value;if(!container)return;
         try{await api(`/api/docker/networks/${encodeURIComponent(name)}/connect`,{method:"POST",body:JSON.stringify({container})});
-          toast(`${container} → ${name} ✓`,"ok");closeModal();loadStorage();}
+          toast(`${container} → ${name} ✓`,"ok");closeModal();loadNetworks();}
         catch(ex){toast(ex.message,"err");}}}]);
   }catch(ex){toast(ex.message,"err");}
 }

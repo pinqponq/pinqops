@@ -27,7 +27,9 @@ password. Options: `--port <n>`, `--host <addr>`, `--cert <pfx>` (HTTPS),
 | Runner | Repository runners on GitHub + the local runner (unit, registration, last job) |
 | Containers | List with start/stop/restart/inspect — and an **inline log panel** (tail, follow, download) that opens from a container's `logs` button |
 | Apps | The [App Catalog](App-Catalog) as a compact list |
-| Images / Storage | Images with prune; volumes, disk usage, networks with a visual map |
+| Images | Images with prune |
+| Storage | Volumes and Docker disk usage |
+| Networks | Networks with create/remove/connect and a visual network map |
 | **GitHub** | Sign-in, repository picker, and the [Repository Wizard](Repository-Wizard). Carries a lock icon until connected |
 | System | Memory, disk, load, uptime, host + Docker info |
 | Settings | Language, auto-refresh, [notification channels](Notifications), dashboard password |
