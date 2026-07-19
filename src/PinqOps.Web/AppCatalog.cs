@@ -136,6 +136,12 @@ public static class AppCatalog
             if (start >= 0)
             {
                 var end = value.IndexOf("}}", start, StringComparison.Ordinal);
+                if (end < 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Malformed credential placeholder in catalog env entry '{entry}'.");
+                }
+
                 var token = value[start..(end + 2)];
                 var targetApp = token == "{{password}}"
                     ? spec.Id

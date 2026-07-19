@@ -5,6 +5,37 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to a rolling release model (latest `master` only).
 
+## [Unreleased]
+
+### Fixed
+
+- **Atomic, owner-only writes for secret state.** `ui.json` (GitHub PAT),
+  `app-credentials.json` (plaintext app passwords), the compose `.env`, deploy
+  history and Caddy routes are now written via a temp-file-plus-rename that
+  creates the file `0600` *before* any bytes are written. This closes a
+  create-then-`chmod` window where secrets briefly existed at the process umask,
+  and prevents a crash mid-write from truncating `ui.json` and silently dropping
+  the dashboard back to the unauthenticated setup flow.
+- **Docker argument injection hardening.** Container/network names and Caddy
+  route targets that begin with `-` are now rejected, and every dashboard docker
+  call passes `--` before the user-supplied positional, so a crafted name can no
+  longer be parsed as a docker flag.
+- **Image retention no longer trusts `docker images` ordering.** Retention now
+  sorts `sha-*` tags by `CreatedAt` before keeping the newest N, so an
+  out-of-order-built or re-pulled image can't cause the newest image (the one a
+  rollback needs) to be deleted.
+- **Dashboard robustness.** `GitHubDashboardService` no longer disposes an
+  injected `HttpClient`, and its JSON reader tolerates `null` nodes (e.g. a
+  workflow run with `actor: null`) instead of throwing and failing the whole
+  overview. Malformed `docker --format json` lines are skipped rather than
+  discarding every result.
+- **Auth & input hardening.** The first-run setup code is widened to 64 bits and
+  the setup endpoint is now covered by the brute-force throttle; generated
+  passwords use rejection-sampled selection (no modulo bias); the OAuth
+  device-flow handle table is swept and capped; `install-service` validates its
+  arguments before writing the systemd unit; and repository owner/name parsing
+  enforces GitHub's character set.
+
 ## [0.5.0] - 2026-07-19
 
 ### Added

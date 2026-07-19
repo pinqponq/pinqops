@@ -19,8 +19,17 @@ public static class JsonLines
 
         if (trimmed.StartsWith('['))
         {
-            using var document = JsonDocument.Parse(trimmed);
-            items.AddRange(document.RootElement.EnumerateArray().Select(element => element.Clone()));
+            // A truncated or partial array must not crash best-effort callers
+            // (image retention, health checks); return whatever parsed.
+            try
+            {
+                using var document = JsonDocument.Parse(trimmed);
+                items.AddRange(document.RootElement.EnumerateArray().Select(element => element.Clone()));
+            }
+            catch (JsonException)
+            {
+            }
+
             return items;
         }
 
@@ -31,8 +40,16 @@ public static class JsonLines
                 continue;
             }
 
-            using var document = JsonDocument.Parse(line);
-            items.Add(document.RootElement.Clone());
+            // Skip a single malformed line (e.g. an interleaved docker warning)
+            // rather than discarding every well-formed line alongside it.
+            try
+            {
+                using var document = JsonDocument.Parse(line);
+                items.Add(document.RootElement.Clone());
+            }
+            catch (JsonException)
+            {
+            }
         }
 
         return items;

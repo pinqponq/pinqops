@@ -66,8 +66,8 @@ public sealed partial class CaddyRoutesStore
         {
             var routes = Load();
             mutate(routes);
-            Directory.CreateDirectory(_directory);
-            File.WriteAllText(RoutesFile, JsonSerializer.Serialize(routes, SerializerOptions));
+            // Atomic write so a crash mid-save cannot corrupt the routes file.
+            SecureFile.WriteAllText(RoutesFile, JsonSerializer.Serialize(routes, SerializerOptions));
             return routes;
         }
     }
@@ -82,6 +82,7 @@ public sealed partial class CaddyRoutesStore
         ValidateDomain(route.Domain);
 
         if (string.IsNullOrWhiteSpace(route.Target)
+            || route.Target[0] is '-'
             || !route.Target.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or '-'))
         {
             throw new ArgumentException($"'{route.Target}' is not a valid container name.");

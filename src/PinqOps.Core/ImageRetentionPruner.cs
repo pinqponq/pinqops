@@ -62,21 +62,35 @@ public sealed class ImageRetentionPruner
             return;
         }
 
-        // `docker images` lists newest first; keep that order for retention.
-        var shaTags = new List<string>();
+        // `docker images` lists newest first, but that ordering is not
+        // guaranteed and is by image *Created* time — a re-pulled or
+        // out-of-order-built tag can sort unexpectedly. Read CreatedAt and sort
+        // explicitly so retention never deletes the newest image (the one a
+        // rollback needs) by trusting the listing order.
+        var shaTags = new List<(string Tag, DateTimeOffset? Created)>();
         foreach (var element in JsonLines.Parse(listResult.StandardOutput))
         {
             if (element.TryGetProperty("Tag", out var tagProperty)
                 && tagProperty.ValueKind == JsonValueKind.String
                 && tagProperty.GetString() is { } tag
                 && tag.StartsWith("sha-", StringComparison.Ordinal)
-                && !shaTags.Contains(tag))
+                && !shaTags.Any(existing => existing.Tag == tag))
             {
-                shaTags.Add(tag);
+                var created = element.TryGetProperty("CreatedAt", out var createdProperty)
+                    && createdProperty.ValueKind == JsonValueKind.String
+                        ? ParseDockerCreatedAt(createdProperty.GetString())
+                        : null;
+                shaTags.Add((tag, created));
             }
         }
 
-        foreach (var tag in shaTags.Skip(keepImages))
+        // Only reorder when every tag carries a parseable timestamp; otherwise
+        // fall back to docker's newest-first listing order.
+        var ordered = shaTags.All(entry => entry.Created is not null)
+            ? shaTags.OrderByDescending(entry => entry.Created!.Value).Select(entry => entry.Tag)
+            : shaTags.Select(entry => entry.Tag);
+
+        foreach (var tag in ordered.Skip(keepImages))
         {
             var reference = $"{repository}:{tag}";
             var removeResult = await RunAsync(DockerComposeCommandBuilder.RemoveImage(reference), cancellationToken)
@@ -99,6 +113,30 @@ public sealed class ImageRetentionPruner
         // A colon after the last slash separates the tag; before it, a port.
         var lastSlash = imageReference.LastIndexOf('/');
         return lastColon > lastSlash ? imageReference[..lastColon] : imageReference;
+    }
+
+    /// <summary>Parses docker's <c>CreatedAt</c> ("2024-06-13 08:15:30 +0000 UTC").</summary>
+    private static DateTimeOffset? ParseDockerCreatedAt(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var value = raw.Trim();
+        // Drop the trailing timezone name so the numeric offset can be parsed.
+        if (value.EndsWith(" UTC", StringComparison.Ordinal))
+        {
+            value = value[..^4].TrimEnd();
+        }
+
+        return DateTimeOffset.TryParse(
+            value,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal,
+            out var parsed)
+            ? parsed
+            : null;
     }
 
     private Task<ProcessResult> RunAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken) =>

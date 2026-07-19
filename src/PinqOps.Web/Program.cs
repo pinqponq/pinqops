@@ -116,7 +116,7 @@ var contentSecurityPolicy =
 // First-run bootstrap secret: creating the dashboard password requires this
 // code from the server console, so whoever reaches the port first cannot
 // claim an unconfigured dashboard.
-var setupCode = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(4));
+var setupCode = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8));
 
 app.UseRateLimiter();
 
@@ -178,8 +178,15 @@ app.MapGet("/api/auth/state", (UiConfigStore store) => Results.Json(new
     needsSetup = string.IsNullOrEmpty(store.Current.PasswordHash),
 }));
 
-app.MapPost("/api/auth/setup", async (HttpContext context, UiConfigStore store, SessionStore sessions) =>
+app.MapPost("/api/auth/setup", async (HttpContext context, UiConfigStore store, SessionStore sessions, LoginThrottle throttle) =>
 {
+    var client = ClientKey(context);
+    if (throttle.RetryAfter(client) is { } wait)
+    {
+        context.Response.Headers.RetryAfter = ((int)Math.Ceiling(wait.TotalSeconds)).ToString();
+        return Error(429, $"Too many failed attempts — try again in {(int)Math.Ceiling(wait.TotalMinutes)} minute(s).");
+    }
+
     var request = await context.Request.ReadFromJsonAsync<SetupRequest>();
     if (!string.IsNullOrEmpty(store.Current.PasswordHash))
     {
@@ -190,7 +197,8 @@ app.MapPost("/api/auth/setup", async (HttpContext context, UiConfigStore store, 
             Encoding.UTF8.GetBytes(request?.SetupCode?.Trim().ToLowerInvariant() ?? ""),
             Encoding.UTF8.GetBytes(setupCode)))
     {
-        logger.LogWarning("Dashboard setup attempt with a wrong setup code from {Client}", ClientKey(context));
+        throttle.RecordFailure(client);
+        logger.LogWarning("Dashboard setup attempt with a wrong setup code from {Client}", client);
         await Task.Delay(500);
         return Error(401, "Wrong setup code — it is printed on the server console where pinqops-ui runs.");
     }
@@ -200,8 +208,9 @@ app.MapPost("/api/auth/setup", async (HttpContext context, UiConfigStore store, 
         return Error(400, "Choose a password of at least 8 characters.");
     }
 
+    throttle.RecordSuccess(client);
     store.Update(config => config.PasswordHash = PasswordHasher.Hash(password));
-    logger.LogWarning("Dashboard password created from {Client}", ClientKey(context));
+    logger.LogWarning("Dashboard password created from {Client}", client);
     return Results.Json(new { token = sessions.Create() });
 });
 

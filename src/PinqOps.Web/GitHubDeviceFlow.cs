@@ -47,6 +47,10 @@ public sealed class GitHubDeviceFlow : IDisposable
         var interval = payload.TryGetProperty("interval", out var i) && i.TryGetInt32(out var seconds) ? seconds : 5;
         var expiresIn = payload.TryGetProperty("expires_in", out var e) && e.TryGetInt32(out var exp) ? exp : 900;
 
+        // Sweep abandoned handles (started but never polled to completion) so a
+        // client that only ever calls start cannot grow the table without bound.
+        PruneExpired();
+
         var handle = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
         _pending[handle] = new Pending(clientId, deviceCode, interval, DateTimeOffset.UtcNow.AddSeconds(expiresIn));
 
@@ -109,6 +113,30 @@ public sealed class GitHubDeviceFlow : IDisposable
             default:
                 _pending.TryRemove(handle, out _);
                 return ("expired", null, pending.IntervalSeconds);
+        }
+    }
+
+    private const int MaxPending = 256;
+
+    private void PruneExpired()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var (key, pending) in _pending)
+        {
+            if (pending.ExpiresAt < now)
+            {
+                _pending.TryRemove(key, out _);
+            }
+        }
+
+        // Hard cap as a backstop: evict the entries nearest to expiry.
+        while (_pending.Count >= MaxPending)
+        {
+            var oldest = _pending.MinBy(pair => pair.Value.ExpiresAt);
+            if (!_pending.TryRemove(oldest.Key, out _))
+            {
+                break;
+            }
         }
     }
 
