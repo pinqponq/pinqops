@@ -439,6 +439,38 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
         </div>
 
         <div class="card" style="margin-top:16px">
+          <h3 data-i18n="nf.card">Notifications</h3>
+          <p class="muted" style="font-size:13px" data-i18n="nf.help">Deploy results (success, failure, rollback) are sent to the enabled channels. Settings are stored next to the compose project, so CLI deploys on the runner send them too.</p>
+          <form id="notif-form">
+            <div class="form-grid">
+              <div class="full" style="display:flex;gap:16px;flex-wrap:wrap">
+                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="nf-ev-ok" style="width:auto" checked> <span data-i18n="nf.evOk">deploy succeeded</span></label>
+                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="nf-ev-fail" style="width:auto" checked> <span data-i18n="nf.evFail">deploy failed</span></label>
+                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="nf-ev-health" style="width:auto" checked> <span data-i18n="nf.evHealth">health check failed</span></label>
+                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="nf-ev-rb" style="width:auto" checked> <span data-i18n="nf.evRb">rolled back</span></label>
+              </div>
+              <div class="full" style="display:flex;gap:8px;align-items:center">
+                <label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="nf-webhook-on" style="width:auto"> Webhook</label>
+                <input id="nf-webhook-url" placeholder="https://example.com/hook" style="flex:1">
+                <button type="button" class="small" id="nf-test-webhook" data-i18n="nf.test">Test</button>
+              </div>
+              <div class="full" style="display:flex;gap:8px;align-items:center">
+                <label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="nf-slack-on" style="width:auto"> Slack</label>
+                <input id="nf-slack-url" placeholder="https://hooks.slack.com/services/…" style="flex:1">
+                <button type="button" class="small" id="nf-test-slack" data-i18n="nf.test">Test</button>
+              </div>
+              <div class="full" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="nf-tg-on" style="width:auto"> Telegram</label>
+                <input id="nf-tg-token" data-i18n-ph="nf.tgToken" style="flex:1;min-width:160px">
+                <input id="nf-tg-chat" data-i18n-ph="nf.tgChat" style="width:140px">
+                <button type="button" class="small" id="nf-test-telegram" data-i18n="nf.test">Test</button>
+              </div>
+              <div class="full" style="margin-top:6px"><button type="submit" data-i18n="c.save">Save</button></div>
+            </div>
+          </form>
+        </div>
+
+        <div class="card" style="margin-top:16px">
           <h3 data-i18n="se.pwCard">Dashboard password</h3>
           <form id="password-form" class="form-grid">
             <div><label for="pw-current" data-i18n="se.pwCur">Current password</label><input id="pw-current" type="password" autocomplete="current-password" required></div>
@@ -566,6 +598,11 @@ en:{
  "se.connected":"Connected to {r}","se.configFile":"Config file",
  "se.pwCard":"Dashboard password","se.pwCur":"Current password","se.pwNew":"New password (min 8)","se.pwChange":"Change password",
  "se.pwChanged":"Password changed — sign in again","se.tokenOk":"Token verified — now pick a repository",
+ "nf.card":"Notifications","nf.test":"Test","nf.saved":"Notification settings saved",
+ "nf.help":"Deploy results (success, failure, rollback) are sent to the enabled channels. Settings are stored next to the compose project, so CLI deploys on the runner send them too.",
+ "nf.evOk":"deploy succeeded","nf.evFail":"deploy failed","nf.evHealth":"health check failed","nf.evRb":"rolled back",
+ "nf.tgToken":"bot token","nf.tgChat":"chat id","nf.tgTokenKeep":"saved: {m} (leave empty to keep)",
+ "nf.testOk":"{c}: test notification delivered","nf.testFail":"{c}: delivery failed — check the settings",
  "lk.login":"Dashboard login","lk.setup":"First run — create the dashboard password.","lk.code":"Setup code",
  "lk.codeHint":"(printed on the server console)","lk.pw":"Password","lk.pw2":"Repeat password","lk.signIn":"Sign in",
  "lk.create":"Create password","lk.min8":"At least 8 characters.","lk.mismatch":"Passwords do not match.","lk.noApi":"Cannot reach the API: {e}",
@@ -669,6 +706,11 @@ tr:{
  "se.connected":"{r} bağlandı","se.configFile":"Yapılandırma dosyası",
  "se.pwCard":"Panel şifresi","se.pwCur":"Mevcut şifre","se.pwNew":"Yeni şifre (en az 8)","se.pwChange":"Şifreyi değiştir",
  "se.pwChanged":"Şifre değişti — tekrar giriş yap","se.tokenOk":"Token doğrulandı — şimdi bir depo seç",
+ "nf.card":"Bildirimler","nf.test":"Dene","nf.saved":"Bildirim ayarları kaydedildi",
+ "nf.help":"Dağıtım sonuçları (başarı, hata, geri alma) etkin kanallara gönderilir. Ayarlar compose projesinin yanında saklanır; runner'daki CLI dağıtımları da bildirim yollar.",
+ "nf.evOk":"dağıtım başarılı","nf.evFail":"dağıtım başarısız","nf.evHealth":"sağlık kontrolü başarısız","nf.evRb":"geri alındı",
+ "nf.tgToken":"bot token","nf.tgChat":"chat id","nf.tgTokenKeep":"kayıtlı: {m} (korumak için boş bırak)",
+ "nf.testOk":"{c}: test bildirimi ulaştı","nf.testFail":"{c}: gönderilemedi — ayarları kontrol et",
  "lk.login":"Panel girişi","lk.setup":"İlk çalıştırma — panel şifresini oluştur.","lk.code":"Kurulum kodu",
  "lk.codeHint":"(sunucu konsolunda yazar)","lk.pw":"Şifre","lk.pw2":"Şifreyi tekrar gir","lk.signIn":"Giriş yap",
  "lk.create":"Şifre oluştur","lk.min8":"En az 8 karakter.","lk.mismatch":"Şifreler eşleşmiyor.","lk.noApi":"API'ye ulaşılamıyor: {e}",
@@ -904,6 +946,9 @@ async function refresh(quiet){
     else if(view==="images")await loadImages();
     else if(view==="storage")await loadStorage();
     else if(view==="system")await loadSystem();
+    // Settings holds form state the user may be editing; populate only on
+    // view entry / manual refresh, never on the auto-refresh tick.
+    else if(view==="settings"&&!quiet)await loadNotifSettings();
     // The GitHub view talks to the GitHub API (identity, repos, readiness) —
     // refresh it only on view entry / manual refresh, never on the auto-refresh
     // tick, to protect the rate limit and the user's in-progress search.
@@ -1908,6 +1953,41 @@ $("#settings-form").addEventListener("submit",async e=>{
     await loadGithubView();
   }catch(ex){toast(ex.message,"err");}
 });
+/* ================= notifications settings ================= */
+async function loadNotifSettings(){
+  try{
+    const n=await api("/api/notifications");
+    $("#nf-ev-ok").checked=n.events.deploySucceeded;$("#nf-ev-fail").checked=n.events.deployFailed;
+    $("#nf-ev-health").checked=n.events.healthCheckFailed;$("#nf-ev-rb").checked=n.events.rolledBack;
+    $("#nf-webhook-on").checked=n.webhook.enabled;$("#nf-webhook-url").value=n.webhook.url||"";
+    $("#nf-slack-on").checked=n.slack.enabled;$("#nf-slack-url").value=n.slack.webhookUrl||"";
+    $("#nf-tg-on").checked=n.telegram.enabled;$("#nf-tg-chat").value=n.telegram.chatId||"";
+    $("#nf-tg-token").value="";
+    $("#nf-tg-token").placeholder=n.telegram.botTokenMasked?t("nf.tgTokenKeep",{m:n.telegram.botTokenMasked}):t("nf.tgToken");
+  }catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
+}
+async function saveNotifSettings(){
+  await api("/api/notifications",{method:"POST",body:JSON.stringify({
+    events:{deploySucceeded:$("#nf-ev-ok").checked,deployFailed:$("#nf-ev-fail").checked,
+            healthCheckFailed:$("#nf-ev-health").checked,rolledBack:$("#nf-ev-rb").checked},
+    webhook:{enabled:$("#nf-webhook-on").checked,url:$("#nf-webhook-url").value.trim()},
+    slack:{enabled:$("#nf-slack-on").checked,webhookUrl:$("#nf-slack-url").value.trim()},
+    telegram:{enabled:$("#nf-tg-on").checked,botToken:$("#nf-tg-token").value.trim()||null,chatId:$("#nf-tg-chat").value.trim()}})});
+}
+$("#notif-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  try{await saveNotifSettings();toast(t("nf.saved"),"ok");await loadNotifSettings();}
+  catch(ex){toast(ex.message,"err");}
+});
+for(const ch of["webhook","slack","telegram"]){
+  $(`#nf-test-${ch}`).addEventListener("click",async()=>{
+    try{
+      await saveNotifSettings(); // test what's on screen, not stale disk state
+      const r=await api("/api/notifications/test",{method:"POST",body:JSON.stringify({channel:ch})});
+      toast(r.delivered?t("nf.testOk",{c:ch}):t("nf.testFail",{c:ch}),r.delivered?"ok":"err");
+    }catch(ex){toast(ex.message,"err");}
+  });
+}
 $("#password-form").addEventListener("submit",async e=>{
   e.preventDefault();
   try{await api("/api/auth/change-password",{method:"POST",body:JSON.stringify({

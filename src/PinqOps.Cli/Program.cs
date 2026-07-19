@@ -81,7 +81,8 @@ async Task<int> RunDeployAsync(string[] deployArgs)
         healthCheckTimeout: healthTimeout,
         keepImages: keepImages,
         trigger: tag is null ? DeployRecordValues.TriggerManual : DeployRecordValues.TriggerCi);
-    var deployer = CreateDeployer(composeFilePath);
+    using var notifications = new PinqOps.Notifications.NotificationDispatcher(composeFilePath, Console.WriteLine);
+    var deployer = CreateDeployer(composeFilePath, notifications);
 
     var succeeded = await deployer.DeployAsync(options);
     return succeeded ? 0 : 1;
@@ -117,7 +118,8 @@ async Task<int> RunRollbackAsync(string[] rollbackArgs)
         tag: targetTag,
         healthCheckTimeout: ParseHealthTimeout(GetOption(rollbackArgs, "--health-timeout-seconds")),
         trigger: DeployRecordValues.TriggerRollback);
-    var deployer = CreateDeployer(composeFilePath);
+    using var notifications = new PinqOps.Notifications.NotificationDispatcher(composeFilePath, Console.WriteLine);
+    var deployer = CreateDeployer(composeFilePath, notifications);
 
     var succeeded = await deployer.DeployAsync(options);
     return succeeded ? 0 : 1;
@@ -156,8 +158,8 @@ int RunHistory(string[] historyArgs)
     return 0;
 }
 
-Deployer CreateDeployer(string composeFilePath) =>
-    new(new ProcessRunner(), Console.WriteLine, history: new DeployHistoryStore(composeFilePath));
+Deployer CreateDeployer(string composeFilePath, PinqOps.Notifications.NotificationDispatcher notifications) =>
+    new(new ProcessRunner(), Console.WriteLine, history: new DeployHistoryStore(composeFilePath), observer: notifications);
 
 static string ResolveComposePath(string[] args) =>
     GetOption(args, "--compose-file")

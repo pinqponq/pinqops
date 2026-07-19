@@ -117,10 +117,12 @@ public sealed class DeployService
         await _gate.WaitAsync();
         try
         {
+            using var notifications = new PinqOps.Notifications.NotificationDispatcher(composeFilePath, job.Add);
             var deployer = new Deployer(
                 _processRunner,
                 job.Add,
-                history: new DeployHistoryStore(composeFilePath));
+                history: new DeployHistoryStore(composeFilePath),
+                observer: notifications);
             var options = DeployOptions.Create(
                 composeFilePath,
                 tag: tag,

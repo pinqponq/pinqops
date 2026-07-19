@@ -29,3 +29,23 @@ public sealed record AppInstallRequest(string? Id, int? HostPort, int[]? HostPor
 public sealed record ContainerActionRequest(string? Action);
 
 public sealed record RollbackRequest(string? Tag);
+
+public sealed record NotificationsRequest(
+    NotificationEventsRequest? Events,
+    NotificationWebhookRequest? Webhook,
+    NotificationSlackRequest? Slack,
+    NotificationTelegramRequest? Telegram);
+
+public sealed record NotificationEventsRequest(
+    bool? DeploySucceeded,
+    bool? DeployFailed,
+    bool? HealthCheckFailed,
+    bool? RolledBack);
+
+public sealed record NotificationWebhookRequest(bool? Enabled, string? Url);
+
+public sealed record NotificationSlackRequest(bool? Enabled, string? WebhookUrl);
+
+public sealed record NotificationTelegramRequest(bool? Enabled, string? BotToken, string? ChatId);
+
+public sealed record NotificationTestRequest(string? Channel);
