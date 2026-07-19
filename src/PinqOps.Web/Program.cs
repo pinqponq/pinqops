@@ -81,6 +81,7 @@ builder.Services.AddSingleton<LocalRunnerService>();
 builder.Services.AddSingleton<SystemInfoService>();
 builder.Services.AddSingleton<AppInstallJobs>();
 builder.Services.AddSingleton<DeployService>();
+builder.Services.AddSingleton<AppCredentialStore>();
 
 // Blunt per-client request ceiling on top of the login throttle, so a single
 // client cannot hammer the API (or the process-spawning docker endpoints).
@@ -785,13 +786,23 @@ app.MapPost("/api/apps/install", async (HttpContext context, DockerService docke
         return Error(409, "An install for this app is already in progress.");
     }
 
+    var credentialStore = context.RequestServices.GetRequiredService<AppCredentialStore>();
+
     _ = Task.Run(async () =>
     {
         try
         {
+            // Credential tokens resolve to per-app generated passwords; a
+            // reinstall reuses the stored one so existing volumes keep working.
+            var (env, credentials) = AppCatalog.ResolveEnv(appSpec, credentialStore.GetOrCreatePassword);
+            if (credentials.Count > 0)
+            {
+                credentialStore.SetEnv(appSpec.Id, credentials);
+            }
+
             await docker.PullImageAsync(appSpec.Image);
             job.Phase = "starting";
-            job.Output = await docker.InstallAppAsync(appSpec, hostPorts);
+            job.Output = await docker.InstallAppAsync(appSpec, hostPorts, env);
             job.Phase = "done";
         }
         catch (Exception exception)
@@ -819,6 +830,30 @@ app.MapPost("/api/apps/{id}/uninstall", (string id, DockerService docker) =>
         _ = AppCatalog.Find(id) ?? throw new ArgumentException($"Unknown app '{id}'.");
         return new { ok = true, output = await docker.UninstallAppAsync(id) };
     }));
+
+// Stored generated credentials of an installed catalog app (behind dashboard
+// auth like everything else). Kept retrievable because volumes outlive the
+// container and a reinstall must reuse the same password.
+app.MapGet("/api/apps/{id}/credentials", (string id, AppCredentialStore credentials) =>
+{
+    var appSpec = AppCatalog.Find(id);
+    if (appSpec is null)
+    {
+        return Error(404, $"Unknown app '{id}'.");
+    }
+
+    var env = credentials.Get(appSpec.Id);
+    return Results.Json(new
+    {
+        appId = appSpec.Id,
+        items = env is null
+            ? Array.Empty<object>()
+            : env.Where(pair => pair.Key != "password")
+                .Select(pair => new { key = pair.Key, value = pair.Value })
+                .ToArray<object>(),
+        note = appSpec.Note,
+    });
+});
 
 // ---- Compose project ----------------------------------------------------------
 
@@ -895,6 +930,78 @@ app.MapGet("/api/deploy/job/{jobId}", (string jobId, DeployService deploys) =>
         ? Error(404, "Unknown rollback job.")
         : Results.Json(new { tag = job.Tag, phase = job.Phase, done = job.Done, error = job.Error, log = job.Log() });
 });
+
+// ---- Compose project env (.env) -------------------------------------------------
+
+app.MapGet("/api/compose/env", (UiConfigStore store) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        var envFile = PinqOpsStatePaths.EnvFile(store.Current.ComposeFile);
+        return new
+        {
+            envFile,
+            items = EnvFileStore.GetAll(envFile).Select(pair => new
+            {
+                key = pair.Key,
+                // Values are secrets by assumption; the UI only ever sees a mask.
+                masked = pair.Value.Length > 4 ? $"••••{pair.Value[^4..]}" : "••••",
+                managed = pair.Key == Deployer.TagVariable,
+            }),
+        };
+    }));
+
+app.MapPost("/api/compose/env", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<ComposeEnvRequest>()
+            ?? throw new ArgumentException("Invalid request body.");
+        var envFile = PinqOpsStatePaths.EnvFile(store.Current.ComposeFile);
+
+        foreach (var key in request.Remove ?? [])
+        {
+            if (key == Deployer.TagVariable)
+            {
+                throw new ArgumentException($"{Deployer.TagVariable} is managed by pinqops deploy/rollback.");
+            }
+
+            EnvFileStore.RemoveValue(envFile, key);
+        }
+
+        foreach (var (key, value) in request.Set ?? new Dictionary<string, string>())
+        {
+            if (key == Deployer.TagVariable)
+            {
+                throw new ArgumentException($"{Deployer.TagVariable} is managed by pinqops deploy/rollback.");
+            }
+
+            EnvFileStore.SetValue(envFile, key, value);
+        }
+
+        logger.LogWarning("Compose .env edited from the dashboard");
+        return new { ok = true };
+    }));
+
+// New env only takes effect when the containers are recreated.
+app.MapPost("/api/compose/apply", (UiConfigStore store, IProcessRunner processRunner) =>
+    Safe(async () =>
+    {
+        var composeFile = store.Current.ComposeFile;
+        if (!File.Exists(composeFile))
+        {
+            throw new InvalidOperationException($"{composeFile} does not exist.");
+        }
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        var result = await processRunner.RunAsync(
+            "docker", DockerComposeCommandBuilder.Up(composeFile), workingDirectory: null, cts.Token);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException($"compose up failed: {result.StandardError.Trim()}");
+        }
+
+        return new { ok = true, output = result.StandardOutput.Trim() };
+    }));
 
 // ---- Notifications --------------------------------------------------------------
 

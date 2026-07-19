@@ -153,7 +153,7 @@ public sealed class DockerService
     /// pinqops-apps network. Each entry in <paramref name="hostPorts"/>
     /// overrides the corresponding catalog port (0/absent keeps the default).
     /// </summary>
-    public async Task<string> InstallAppAsync(AppSpec app, IReadOnlyList<int>? hostPorts)
+    public async Task<string> InstallAppAsync(AppSpec app, IReadOnlyList<int>? hostPorts, IReadOnlyList<string>? envOverride = null)
     {
         if (hostPorts is not null && hostPorts.Any(port => port is not 0 and (< 1 or > 65535)))
         {
@@ -182,7 +182,7 @@ public sealed class DockerService
             arguments.AddRange(["-p", $"{host}:{container}"]);
         }
 
-        foreach (var env in app.Env)
+        foreach (var env in envOverride ?? app.Env)
         {
             arguments.AddRange(["-e", env]);
         }

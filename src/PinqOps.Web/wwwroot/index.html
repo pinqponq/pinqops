@@ -255,6 +255,16 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
           <div id="dep-tagvar-hint" class="muted hidden" style="font-size:12px;margin-bottom:8px"></div>
           <div class="tablewrap"><table id="dep-history-table"></table></div>
         </div>
+        <div class="section" style="margin-bottom:16px">
+          <div class="section-head"><h2 data-i18n="ev.title">Environment (.env)</h2><div class="spacer"></div><span class="muted mono" id="env-file" style="font-size:12px"></span></div>
+          <div class="tablewrap"><table id="env-table"></table></div>
+          <form id="env-add" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
+            <input id="env-key" placeholder="KEY" style="width:180px">
+            <input id="env-val" placeholder="value" style="flex:1;min-width:160px">
+            <button type="submit" class="small" data-i18n="ev.set">Set</button>
+            <button type="button" class="small primary" id="env-apply" data-i18n="ev.apply">Apply (recreates containers)</button>
+          </form>
+        </div>
         <div class="card" style="margin-bottom:16px">
           <h3 data-i18n="dp.lastJob">Runner last executed a job</h3>
           <div id="lastjob-detail" class="muted">–</div>
@@ -598,6 +608,11 @@ en:{
  "se.connected":"Connected to {r}","se.configFile":"Config file",
  "se.pwCard":"Dashboard password","se.pwCur":"Current password","se.pwNew":"New password (min 8)","se.pwChange":"Change password",
  "se.pwChanged":"Password changed — sign in again","se.tokenOk":"Token verified — now pick a repository",
+ "ev.title":"Environment (.env)","ev.set":"Set","ev.apply":"Apply (recreates containers)","ev.applied":"Environment applied — containers recreated",
+ "ev.applyConfirm":"Run <code>docker compose up -d</code> so the new environment takes effect? Containers with changed env are recreated.",
+ "ev.saved":"{k} saved","ev.removed":"{k} removed","ev.none":"No variables in the compose project's .env yet.","ev.managed":"managed",
+ "ap.credsTitle":"{n} — credentials","ap.noCreds":"No stored credentials for this app.","ap.reveal":"reveal","ap.copied":"copied",
+ "ap.credsHint":"Generated at install and stored on this server (0600). A reinstall reuses the same password so existing data keeps working.",
  "nf.card":"Notifications","nf.test":"Test","nf.saved":"Notification settings saved",
  "nf.help":"Deploy results (success, failure, rollback) are sent to the enabled channels. Settings are stored next to the compose project, so CLI deploys on the runner send them too.",
  "nf.evOk":"deploy succeeded","nf.evFail":"deploy failed","nf.evHealth":"health check failed","nf.evRb":"rolled back",
@@ -706,6 +721,11 @@ tr:{
  "se.connected":"{r} bağlandı","se.configFile":"Yapılandırma dosyası",
  "se.pwCard":"Panel şifresi","se.pwCur":"Mevcut şifre","se.pwNew":"Yeni şifre (en az 8)","se.pwChange":"Şifreyi değiştir",
  "se.pwChanged":"Şifre değişti — tekrar giriş yap","se.tokenOk":"Token doğrulandı — şimdi bir depo seç",
+ "ev.title":"Ortam değişkenleri (.env)","ev.set":"Kaydet","ev.apply":"Uygula (konteynerleri yeniden oluşturur)","ev.applied":"Ortam uygulandı — konteynerler yeniden oluşturuldu",
+ "ev.applyConfirm":"Yeni ortam değişkenlerinin etkinleşmesi için <code>docker compose up -d</code> çalıştırılsın mı? Değişen env'e sahip konteynerler yeniden oluşturulur.",
+ "ev.saved":"{k} kaydedildi","ev.removed":"{k} silindi","ev.none":"Compose projesinin .env dosyasında henüz değişken yok.","ev.managed":"yönetilen",
+ "ap.credsTitle":"{n} — kimlik bilgileri","ap.noCreds":"Bu uygulama için kayıtlı kimlik bilgisi yok.","ap.reveal":"göster","ap.copied":"kopyalandı",
+ "ap.credsHint":"Kurulumda üretildi ve bu sunucuda saklanıyor (0600). Yeniden kurulumda aynı şifre kullanılır, mevcut veriler çalışmaya devam eder.",
  "nf.card":"Bildirimler","nf.test":"Dene","nf.saved":"Bildirim ayarları kaydedildi",
  "nf.help":"Dağıtım sonuçları (başarı, hata, geri alma) etkin kanallara gönderilir. Ayarlar compose projesinin yanında saklanır; runner'daki CLI dağıtımları da bildirim yollar.",
  "nf.evOk":"dağıtım başarılı","nf.evFail":"dağıtım başarısız","nf.evHealth":"sağlık kontrolü başarısız","nf.evRb":"geri alındı",
@@ -1148,8 +1168,46 @@ $("#dep-history-table").addEventListener("click",e=>{
       }catch(ex){toast(ex.message,"err");}
     }}]);
 });
+/* ---- compose project .env editor ---- */
+async function loadComposeEnv(){
+  try{
+    const env=await api("/api/compose/env");
+    $("#env-file").textContent=env.envFile;
+    table($("#env-table"),[t("th.name"),"",""],
+      env.items.map(i=>[
+        {h:`<span class="mono">${esc(i.key)}</span>${i.managed?` <span class="chip mut">${t("ev.managed")}</span>`:""}`},
+        {h:`<span class="mono muted">${esc(i.masked)}</span>`},
+        {h:i.managed?"":`<button class="small danger" data-env-rm="${esc(i.key)}">${t("c.remove")}</button>`}]),
+      t("ev.none"));
+  }catch(ex){table($("#env-table"),[],[],esc(ex.message));}
+}
+$("#env-table").addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-env-rm]");if(!b)return;
+  try{await api("/api/compose/env",{method:"POST",body:JSON.stringify({remove:[b.dataset.envRm]})});
+    toast(t("ev.removed",{k:b.dataset.envRm}),"ok");await loadComposeEnv();}
+  catch(ex){toast(ex.message,"err");}
+});
+$("#env-add").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const key=$("#env-key").value.trim(),val=$("#env-val").value;
+  if(!key)return;
+  try{await api("/api/compose/env",{method:"POST",body:JSON.stringify({set:{[key]:val}})});
+    $("#env-key").value="";$("#env-val").value="";
+    toast(t("ev.saved",{k:key}),"ok");await loadComposeEnv();}
+  catch(ex){toast(ex.message,"err");}
+});
+$("#env-apply").addEventListener("click",()=>{
+  openModal(t("ev.apply"),t("ev.applyConfirm"),[
+    {label:t("c.cancel")},
+    {label:t("ev.apply"),primary:true,onClick:async()=>{
+      closeModal();
+      try{await api("/api/compose/apply",{method:"POST"});toast(t("ev.applied"),"ok");}
+      catch(ex){toast(ex.message,"err");}
+    }}]);
+});
 async function loadDeployments(){
   await loadDeployHistory();
+  await loadComposeEnv();
   const gh=await githubOverview();
   if(!gh){table($("#runs-table"),[],[],t("dp.connectFirst"));return;}
   $("#actions-link").href=gh.repo.htmlUrl+"/actions";
@@ -1338,7 +1396,8 @@ function renderApps(){
       <span class="aact">
         ${a.installed&&openPort?`<a href="http://${location.hostname}:${openPort}" target="_blank" rel="noopener" style="font-size:12px">${t("ap.open")} :${openPort} ↗</a>`:""}
         ${a.installed
-          ?`<button class="small danger" data-app-rm="${esc(a.id)}" data-app-name="${esc(a.name)}">${t("ap.uninstall")}</button>`
+          ?`<button class="small" data-app-creds="${esc(a.id)}" data-app-name="${esc(a.name)}" title="${esc(t("ap.credsTitle",{n:a.name}))}">🔑</button>
+            <button class="small danger" data-app-rm="${esc(a.id)}" data-app-name="${esc(a.name)}">${t("ap.uninstall")}</button>`
           :`<button class="small primary" data-app-install="${esc(a.id)}" ${installing?"disabled":""}>${t("ap.install")}</button>`}
       </span>
     </div>`;}).join("")||`<div class="empty">—</div>`;
@@ -1381,6 +1440,7 @@ async function watchInstallJob(app,jobId){
     pendingInstalls.delete(app.id);
     if(owns()&&visible())closeModal();
     toast(t("ap.installOk",{n:app.name}),"ok");await loadApps();
+    await showAppCredentials(app.id,app.name,true); // show generated credentials once installed
   }catch(ex){
     pendingInstalls.delete(app.id);
     if(owns()&&visible()){
@@ -1392,8 +1452,30 @@ async function watchInstallJob(app,jobId){
     await loadApps();
   }
 }
+/* Generated credentials modal — values stay masked until revealed; volumes
+   outlive uninstalls, so the same password is reused on reinstall. */
+async function showAppCredentials(appId,appName,quiet){
+  try{
+    const c=await api(`/api/apps/${encodeURIComponent(appId)}/credentials`);
+    if(!c.items.length){if(!quiet)toast(t("ap.noCreds"),"ok");return;}
+    openModal(t("ap.credsTitle",{n:appName}),
+      `${c.note?`<div class="muted" style="font-size:12px;margin-bottom:8px">${esc(c.note)}</div>`:""}
+       <dl class="kv">${c.items.map(i=>`<dt>${esc(i.key)}</dt>
+         <dd><span class="mono" data-secret="${esc(i.value)}">••••••••</span>
+             <button class="small ghost" data-reveal>${t("ap.reveal")}</button>
+             <button class="small ghost" data-copy="${esc(i.value)}">⧉</button></dd>`).join("")}</dl>
+       <p class="muted" style="font-size:12px;margin-top:8px">${t("ap.credsHint")}</p>`);
+  }catch(ex){toast(ex.message,"err");}
+}
+$("#modal-body").addEventListener("click",async e=>{
+  const reveal=e.target.closest("button[data-reveal]");
+  if(reveal){const s=reveal.parentElement.querySelector("[data-secret]");if(s){s.textContent=s.dataset.secret;reveal.remove();}return;}
+  const copy=e.target.closest("button[data-copy]");
+  if(copy){try{await navigator.clipboard.writeText(copy.dataset.copy);toast(t("ap.copied"),"ok");}catch{toast("clipboard unavailable","err");}}
+});
 $("#apps-list").addEventListener("click",async e=>{
   const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.appCreds){await showAppCredentials(b.dataset.appCreds,b.dataset.appName,false);return;}
   if(b.dataset.appInstall){
     const app=appsCache.find(x=>x.id===b.dataset.appInstall);if(!app)return;
     // Per-port host inputs so any port (not just the first) can be relocated.

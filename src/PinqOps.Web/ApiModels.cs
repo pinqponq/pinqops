@@ -49,3 +49,5 @@ public sealed record NotificationSlackRequest(bool? Enabled, string? WebhookUrl)
 public sealed record NotificationTelegramRequest(bool? Enabled, string? BotToken, string? ChatId);
 
 public sealed record NotificationTestRequest(string? Channel);
+
+public sealed record ComposeEnvRequest(Dictionary<string, string>? Set, string[]? Remove);
