@@ -200,8 +200,13 @@ Create the single, fixed application project (default path
 ```bash
 sudo mkdir -p /opt/pinqops
 sudo cp deploy/app.docker-compose.example.yml /opt/pinqops/docker-compose.yml
-sudo nano /opt/pinqops/docker-compose.yml   # set image: ghcr.io/<owner>/<repo>:latest
+sudo nano /opt/pinqops/docker-compose.yml   # set image: ghcr.io/<owner>/<repo>:${PINQOPS_TAG:-latest}
 ```
+
+The `${PINQOPS_TAG:-latest}` interpolation is what enables deploy history and
+`pinqops rollback` — the deploy pins each commit's `sha-<...>` tag in
+`/opt/pinqops/.env`. A plain `:latest` reference still works (moving-tag mode,
+no rollback). See [CONFIGURATION.md](CONFIGURATION.md) for the details.
 
 (If you use a different path, set the repository variable `APP_COMPOSE_PATH`
 accordingly — Settings → Secrets and variables → Actions → Variables.)
@@ -210,11 +215,14 @@ accordingly — Settings → Secrets and variables → Actions → Variables.)
 
 1. Open a pull request, get it approved, and **merge into `master`**.
 2. Watch **Actions** → the `Build and Deploy` run:
-   - `build` (GitHub-hosted) builds and pushes `:latest`;
-   - `deploy` (your self-hosted runner) runs `pinqops deploy`.
-3. On the server, confirm the new container is running:
+   - `build` (GitHub-hosted) builds and pushes `:latest` + `sha-<commit>`;
+   - `deploy` (your self-hosted runner) runs `pinqops deploy --tag sha-<commit>`,
+     which also health-checks the services and records the deploy.
+3. On the server, confirm the new container is running and the deploy is
+   recorded:
    ```bash
    docker compose -f /opt/pinqops/docker-compose.yml ps
+   pinqops history
    ```
 
 ## Private repos & tokens: which token goes where

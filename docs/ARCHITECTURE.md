@@ -27,8 +27,10 @@ connected outbound, so nothing needs to be opened inbound.
 ### 1. `build` job — GitHub-hosted runner (cloud)
 
 Runs on `ubuntu-latest`. Builds the application image from the repository's
-`Dockerfile` and pushes it to GHCR as `:latest`. The production server is never
-involved in the build and never receives the source code.
+`Dockerfile` and pushes it to GHCR twice: as the moving `:latest` and as an
+immutable `sha-<commit>` tag. The production server is never involved in the
+build and never receives the source code. The SHA tag is what the deploy pins
+and what `pinqops rollback` returns to.
 
 ### 2. Self-hosted runner — production server
 
@@ -42,11 +44,15 @@ The official GitHub Actions runner, installed as a **systemd service** by
 
 ### 3. `pinqops` CLI — the deploy engine
 
-A .NET 10 console app distributed as a self-contained single-file binary. It has
-two commands today:
+A .NET 10 console app distributed as a self-contained single-file binary:
 
-- `pinqops deploy` — runs the fixed `docker compose pull && up -d` against the
-  fixed compose file.
+- `pinqops deploy [--tag <tag>]` — pins the tag in the project's `.env`, runs
+  the fixed `docker compose pull && up -d`, health-checks the services, records
+  the deploy in history, and keeps the newest N `sha-*` images for rollback.
+- `pinqops rollback [--to <tag>]` — redeploys a previously deployed tag (the
+  last successful one by default). The image is normally still local, so no
+  registry credentials are needed.
+- `pinqops history` — lists recent deploys (tag, time, result, health).
 - `pinqops install-runner` — downloads, registers, and installs the self-hosted
   runner as a systemd service.
 
@@ -57,7 +63,41 @@ network. The CLI (`PinqOps.Cli`) is a thin argument-parsing layer over it.
 ### 4. Application compose project — production server
 
 A single, fixed `docker-compose.yml` (e.g. `/opt/pinqops/docker-compose.yml`)
-whose service references `ghcr.io/<owner>/<repo>:latest`.
+whose service references `ghcr.io/<owner>/<repo>:${PINQOPS_TAG:-latest}`. The
+`PINQOPS_TAG` variable lives in the project's `.env` and is written only by
+`pinqops deploy`/`rollback`; without a `.env` the reference falls back to
+`:latest`, which preserves the pre-0.5 behavior.
+
+### 5. Server-side state — `.pinqops/` next to the compose file
+
+Both the CLI (running on the runner) and the dashboard already know the compose
+file path, so shared state derives from it:
+
+```
+/opt/pinqops/
+├── docker-compose.yml
+├── .env                    # PINQOPS_TAG=<deployed tag> + user app env (0600)
+└── .pinqops/
+    ├── history.json        # deploy history, newest first, capped (0600)
+    └── notify.json         # notification channels + event toggles (0600)
+```
+
+### 6. Optional dashboard extras
+
+- **Notifications** — after every deploy/rollback the outcome fans out to the
+  enabled channels (generic webhook, Slack-compatible webhook, Telegram bot),
+  best-effort with a per-channel timeout; a notification failure never fails a
+  deploy.
+- **Domains & SSL** — a managed `pinqops-caddy` container on the shared
+  `pinqops-apps` network publishes 80/443 and terminates TLS with automatic
+  Let's Encrypt certificates. Routes (`domain → container:port`) are stored in
+  `~/.config/pinqops/caddy/routes.json`, rendered into a Caddyfile from
+  validated fields only, and hot-reloaded. Certificates persist in named
+  volumes across container recreates.
+- **Catalog credentials** — catalog apps install with generated passwords
+  (stored 0600 in `~/.config/pinqops/app-credentials.json`, retrievable from
+  the dashboard); a reinstall reuses the stored password so data in surviving
+  volumes keeps working.
 
 ## Deploy lifecycle
 
@@ -75,12 +115,22 @@ push: master ──► GitHub Actions
                        over its OUTBOUND link — no inbound port used)
                              │  runs ON the production server:
                              │  docker login ghcr.io (per-job GITHUB_TOKEN)
-                             │  pinqops deploy --compose-file <fixed>
+                             │  pinqops deploy --compose-file <fixed> --tag sha-<commit>
+                             │    → pin PINQOPS_TAG=sha-<commit> in <dir>/.env
                              │    → docker compose -f <fixed> pull  ◄── pulls from GHCR (443 outbound)
                              │    → docker compose -f <fixed> up -d
+                             │    → health check (compose ps until running/healthy, default 60s)
+                             │    → record deploy in .pinqops/history.json + send notifications
+                             │    → image retention (keep latest + newest N sha-* images)
                              ▼
-                       new container running
+                       new container running (verified)
 ```
+
+A failed health check marks the deploy `failed` (CI shows red) and fires a
+notification — there is **no automatic rollback**. Rolling back is an explicit
+action: `pinqops rollback` on the server or the Roll back button in the
+dashboard's deploy history. Because retention keeps recent SHA images local,
+rollback needs no registry credentials.
 
 ## Trust boundaries
 
@@ -113,7 +163,15 @@ See [`../SECURITY.md`](../SECURITY.md) for the full threat model.
   builds and never receives the source; it only pulls a ready image.
 - **Per-job `GITHUB_TOKEN` for GHCR** — no long-lived registry secret on the
   server.
-- **Moving `:latest` tag** — keeps the deploy command static and matches the
-  no-rollback scope.
+- **SHA tags + `:latest`** — every build pushes an immutable `sha-<commit>` tag
+  alongside `:latest`. The deploy pins the SHA in the project's `.env`
+  (`${PINQOPS_TAG:-latest}` interpolation), which is what makes deploy history
+  and rollback possible while staying backward compatible.
+- **Manual rollback only** — a failed deploy or health check never auto-reverts;
+  the operator decides. Retention keeps the newest N (default 5) SHA images
+  local so a rollback is instant and credential-free.
+- **State next to the compose file** — `.pinqops/` derives from the one path the
+  CLI and the dashboard already share, so history and notification config work
+  even when the runner user and the dashboard user differ.
 - **.NET CLI with a testable core** — the team is a .NET shop; the deploy engine
   and installer are one small binary designed to grow into a wider DevOps toolkit.

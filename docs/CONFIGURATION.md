@@ -1,8 +1,19 @@
 # Configuration reference
 
-pinqops is intentionally almost configuration-free. There is no server-side
-config file and no long-lived secret to manage. This page lists the few knobs
-that exist.
+pinqops is intentionally almost configuration-free. The little server-side
+state that exists lives next to the compose file and is written by pinqops
+itself. This page lists the knobs that exist.
+
+## Server-side files and permissions
+
+| Path | Written by | Mode | Contents |
+|---|---|---|---|
+| `<compose-dir>/.env` | `pinqops deploy`/`rollback`, dashboard env editor | 0600 | `PINQOPS_TAG=<deployed tag>` + your app env |
+| `<compose-dir>/.pinqops/history.json` | deploy engine | 0600 | Deploy history (newest first, capped at 100) |
+| `<compose-dir>/.pinqops/notify.json` | dashboard (read by the CLI) | 0600 | Notification channels + event toggles |
+| `~/.config/pinqops/ui.json` | dashboard | 0600 | Dashboard password hash, GitHub connection (PAT) |
+| `~/.config/pinqops/app-credentials.json` | dashboard | 0600 | Generated catalog app credentials |
+| `~/.config/pinqops/caddy/` | dashboard | — | `routes.json` + generated `Caddyfile` |
 
 ## Runner label
 
@@ -38,11 +49,18 @@ The application compose file references the image the pipeline builds:
 ```yaml
 services:
   app:
-    image: ghcr.io/<owner>/<repo>:latest
+    image: ghcr.io/<owner>/<repo>:${PINQOPS_TAG:-latest}
 ```
 
-A moving `:latest` tag is used by design; `pull` fetches the new digest and
-`up -d` recreates the container.
+Every build pushes both `:latest` and an immutable `sha-<commit>` tag. The
+deploy job passes `--tag sha-<commit>`, which pins `PINQOPS_TAG` in the compose
+directory's `.env` — that is what enables deploy history and
+`pinqops rollback`. Without a `.env` (or with a plain `:latest` reference) the
+old moving-tag behavior applies unchanged.
+
+**Migrating from ≤0.4:** change the `image:` line to the interpolated form
+above; nothing else is required. Until you do, deploys keep working but history
+records tag `latest` and rollback is refused with a clear error.
 
 ## GHCR package visibility
 
@@ -54,14 +72,41 @@ automatically after the first successful `build` job.
 ## `pinqops deploy` options
 
 ```
-pinqops deploy [--compose-file <path>] [--no-prune] [--timeout-seconds <n>]
+pinqops deploy [--compose-file <path>] [--tag <image-tag>] [--no-prune]
+               [--timeout-seconds <n>] [--health-timeout-seconds <n>] [--keep-images <n>]
 ```
 
 | Option | Default | Purpose |
 |---|---|---|
 | `--compose-file` | `$APP_COMPOSE_PATH` or `/opt/pinqops/docker-compose.yml` | The fixed compose project to deploy |
-| `--no-prune` | prune enabled | Skip `docker image prune -f` after a successful update |
+| `--tag` | — | Image tag to pin as `PINQOPS_TAG` in the project's `.env` (CI passes `sha-<commit>`) |
+| `--no-prune` | prune enabled | Skip image cleanup after a successful update |
 | `--timeout-seconds` | `300` | Maximum time for the whole deploy |
+| `--health-timeout-seconds` | `60` | Wait for services to be running/healthy after `up -d`; `0` skips the check |
+| `--keep-images` | `5` | How many recent `sha-*` images to keep locally for rollback |
+
+## `pinqops rollback` / `pinqops history`
+
+```
+pinqops rollback [--to <tag>] [--compose-file <path>] [--health-timeout-seconds <n>]
+pinqops history  [--compose-file <path>] [--json]
+```
+
+`rollback` defaults to the last successful tag before the current one (from
+deploy history) and skips the registry pull when the image is still local —
+which it is, within the retention window. If the image is gone, the pull needs
+a `docker login ghcr.io` with a token that has `read:packages`. There is no
+automatic rollback: a failed health check marks the deploy failed and notifies,
+and the revert is always an explicit operator action.
+
+## Notifications (`.pinqops/notify.json`)
+
+Managed from the dashboard (Settings → Notifications) and read by the CLI on
+every deploy/rollback. Channels: generic webhook (full JSON payload), Slack
+incoming webhook (also Discord `/slack` and Mattermost), Telegram bot
+(token + chat id). Per-event toggles: deploy succeeded / deploy failed /
+health check failed / rolled back. Delivery is best-effort with a 5s
+per-channel timeout and never affects the deploy result.
 
 ## `pinqops install-runner` options
 
