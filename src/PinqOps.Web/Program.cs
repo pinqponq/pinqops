@@ -80,6 +80,9 @@ builder.Services.AddSingleton<GitHubDeviceFlow>();
 builder.Services.AddSingleton<LocalRunnerService>();
 builder.Services.AddSingleton<SystemInfoService>();
 builder.Services.AddSingleton<AppInstallJobs>();
+builder.Services.AddSingleton<DeployService>();
+builder.Services.AddSingleton<AppCredentialStore>();
+builder.Services.AddSingleton<CaddyService>();
 
 // Blunt per-client request ceiling on top of the login throttle, so a single
 // client cannot hammer the API (or the process-spawning docker endpoints).
@@ -591,7 +594,7 @@ app.MapPost("/api/setup/create-workflow", (GitHubDashboardService gitHub) =>
 app.MapPost("/api/setup/start-runner", (UiConfigStore store, LocalRunnerService runner) =>
     Safe(async () => await runner.StartServiceAsync(store.Current.RunnerDirectory)));
 
-app.MapPost("/api/setup/create-compose", (UiConfigStore store) =>
+app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService docker) =>
     Safe(async () =>
     {
         var config = store.Current;
@@ -604,6 +607,10 @@ app.MapPost("/api/setup/create-compose", (UiConfigStore store) =>
         {
             throw new InvalidOperationException($"{config.ComposeFile} already exists.");
         }
+
+        // The template references the shared pinqops-apps network as external;
+        // it must exist before the first compose up.
+        await docker.EnsureSharedNetworkAsync();
 
         var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
         var directory = Path.GetDirectoryName(config.ComposeFile);
@@ -784,13 +791,23 @@ app.MapPost("/api/apps/install", async (HttpContext context, DockerService docke
         return Error(409, "An install for this app is already in progress.");
     }
 
+    var credentialStore = context.RequestServices.GetRequiredService<AppCredentialStore>();
+
     _ = Task.Run(async () =>
     {
         try
         {
+            // Credential tokens resolve to per-app generated passwords; a
+            // reinstall reuses the stored one so existing volumes keep working.
+            var (env, credentials) = AppCatalog.ResolveEnv(appSpec, credentialStore.GetOrCreatePassword);
+            if (credentials.Count > 0)
+            {
+                credentialStore.SetEnv(appSpec.Id, credentials);
+            }
+
             await docker.PullImageAsync(appSpec.Image);
             job.Phase = "starting";
-            job.Output = await docker.InstallAppAsync(appSpec, hostPorts);
+            job.Output = await docker.InstallAppAsync(appSpec, hostPorts, env);
             job.Phase = "done";
         }
         catch (Exception exception)
@@ -819,6 +836,30 @@ app.MapPost("/api/apps/{id}/uninstall", (string id, DockerService docker) =>
         return new { ok = true, output = await docker.UninstallAppAsync(id) };
     }));
 
+// Stored generated credentials of an installed catalog app (behind dashboard
+// auth like everything else). Kept retrievable because volumes outlive the
+// container and a reinstall must reuse the same password.
+app.MapGet("/api/apps/{id}/credentials", (string id, AppCredentialStore credentials) =>
+{
+    var appSpec = AppCatalog.Find(id);
+    if (appSpec is null)
+    {
+        return Error(404, $"Unknown app '{id}'.");
+    }
+
+    var env = credentials.Get(appSpec.Id);
+    return Results.Json(new
+    {
+        appId = appSpec.Id,
+        items = env is null
+            ? Array.Empty<object>()
+            : env.Where(pair => pair.Key != "password")
+                .Select(pair => new { key = pair.Key, value = pair.Value })
+                .ToArray<object>(),
+        note = appSpec.Note,
+    });
+});
+
 // ---- Compose project ----------------------------------------------------------
 
 app.MapGet("/api/compose", (UiConfigStore store, DockerService docker) =>
@@ -831,6 +872,323 @@ app.MapGet("/api/compose", (UiConfigStore store, DockerService docker) =>
         }
 
         return new { composeFile, exists = true, items = await docker.ComposeServicesAsync(composeFile) };
+    }));
+
+// ---- Deploy history & rollback ------------------------------------------------
+
+app.MapGet("/api/deploy/state", (UiConfigStore store, DeployService deploys) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        return deploys.GetState(store.Current.ComposeFile);
+    }));
+
+app.MapGet("/api/deploy/history", (UiConfigStore store, DeployService deploys) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        return new { items = deploys.History(store.Current.ComposeFile) };
+    }));
+
+app.MapPost("/api/deploy/rollback", async (HttpContext context, UiConfigStore store, DeployService deploys) =>
+{
+    RollbackRequest? request;
+    try
+    {
+        request = await context.Request.ReadFromJsonAsync<RollbackRequest>();
+    }
+    catch (System.Text.Json.JsonException)
+    {
+        return Error(400, "Invalid request body.");
+    }
+
+    if (request?.Tag is not { Length: > 0 } tag)
+    {
+        return Error(400, "A tag is required.");
+    }
+
+    try
+    {
+        var job = deploys.TryStartRollback(store.Current.ComposeFile, tag);
+        if (job is null)
+        {
+            return Error(409, "A rollback is already in progress.");
+        }
+
+        logger.LogWarning("Rollback to {Tag} started from the dashboard", tag);
+        return Results.Json(new { jobId = job.Id });
+    }
+    catch (ArgumentException exception)
+    {
+        return Error(400, exception.Message);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Error(400, exception.Message);
+    }
+});
+
+app.MapGet("/api/deploy/job/{jobId}", (string jobId, DeployService deploys) =>
+{
+    var job = deploys.Find(jobId);
+    return job is null
+        ? Error(404, "Unknown rollback job.")
+        : Results.Json(new { tag = job.Tag, phase = job.Phase, done = job.Done, error = job.Error, log = job.Log() });
+});
+
+// ---- Reverse proxy / domains (Caddy) --------------------------------------------
+
+app.MapGet("/api/proxy", (CaddyService caddy) =>
+    Safe(async () => await caddy.StatusAsync()));
+
+app.MapPost("/api/proxy/install", (CaddyService caddy) =>
+    Safe(async () =>
+    {
+        var output = await caddy.InstallAsync();
+        logger.LogWarning("Caddy reverse proxy installed from the dashboard");
+        return new { ok = true, output };
+    }));
+
+app.MapPost("/api/proxy/email", (HttpContext context, CaddyService caddy) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<ProxyEmailRequest>();
+        var email = request?.Email?.Trim() ?? "";
+        if (email.Length > 0)
+        {
+            CaddyRoutesStore.ValidateEmail(email);
+        }
+
+        caddy.Store.Update(routes => routes.Email = email);
+        await caddy.ApplyAsync();
+        return new { ok = true };
+    }));
+
+app.MapPost("/api/proxy/routes", (HttpContext context, CaddyService caddy, DockerService docker) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<ProxyRouteRequest>()
+            ?? throw new ArgumentException("Invalid request body.");
+        var route = new CaddyRoute(
+            request.Domain?.Trim().ToLowerInvariant() ?? "",
+            request.Target?.Trim() ?? "",
+            request.Port ?? 0);
+        CaddyRoutesStore.Validate(route);
+
+        // Caddy reaches the target by container DNS, which only works on the
+        // shared network; connect it on demand (a compose recreate drops this —
+        // the durable fix is adding pinqops-apps to the app's compose file).
+        var connected = await caddy.IsOnSharedNetworkAsync(route.Target);
+        if (!connected && request.Connect == true)
+        {
+            await docker.ConnectNetworkAsync(AppCatalog.SharedNetwork, route.Target);
+            connected = true;
+        }
+
+        caddy.Store.Update(routes =>
+        {
+            routes.Routes.RemoveAll(existing => existing.Domain == route.Domain);
+            routes.Routes.Add(route);
+        });
+        await caddy.ApplyAsync();
+        logger.LogWarning("Proxy route added: {Domain} -> {Target}:{Port}", route.Domain, route.Target, route.Port);
+        return new { ok = true, targetOnSharedNetwork = connected };
+    }));
+
+app.MapPost("/api/proxy/routes/remove", (HttpContext context, CaddyService caddy) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<ProxyRouteRemoveRequest>();
+        if (request?.Domain is not { Length: > 0 } domain)
+        {
+            throw new ArgumentException("A domain is required.");
+        }
+
+        caddy.Store.Update(routes => routes.Routes.RemoveAll(route => route.Domain == domain.Trim().ToLowerInvariant()));
+        await caddy.ApplyAsync();
+        return new { ok = true };
+    }));
+
+app.MapPost("/api/proxy/uninstall", (CaddyService caddy) =>
+    Safe(async () => new { ok = true, output = await caddy.UninstallAsync() }));
+
+// ---- Compose project env (.env) -------------------------------------------------
+
+app.MapGet("/api/compose/env", (UiConfigStore store) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        var envFile = PinqOpsStatePaths.EnvFile(store.Current.ComposeFile);
+        return new
+        {
+            envFile,
+            items = EnvFileStore.GetAll(envFile).Select(pair => new
+            {
+                key = pair.Key,
+                // Values are secrets by assumption; the UI only ever sees a mask.
+                masked = pair.Value.Length > 4 ? $"••••{pair.Value[^4..]}" : "••••",
+                managed = pair.Key == Deployer.TagVariable,
+            }),
+        };
+    }));
+
+app.MapPost("/api/compose/env", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<ComposeEnvRequest>()
+            ?? throw new ArgumentException("Invalid request body.");
+        var envFile = PinqOpsStatePaths.EnvFile(store.Current.ComposeFile);
+
+        foreach (var key in request.Remove ?? [])
+        {
+            if (key == Deployer.TagVariable)
+            {
+                throw new ArgumentException($"{Deployer.TagVariable} is managed by pinqops deploy/rollback.");
+            }
+
+            EnvFileStore.RemoveValue(envFile, key);
+        }
+
+        foreach (var (key, value) in request.Set ?? new Dictionary<string, string>())
+        {
+            if (key == Deployer.TagVariable)
+            {
+                throw new ArgumentException($"{Deployer.TagVariable} is managed by pinqops deploy/rollback.");
+            }
+
+            EnvFileStore.SetValue(envFile, key, value);
+        }
+
+        logger.LogWarning("Compose .env edited from the dashboard");
+        return new { ok = true };
+    }));
+
+// New env only takes effect when the containers are recreated.
+app.MapPost("/api/compose/apply", (UiConfigStore store, IProcessRunner processRunner) =>
+    Safe(async () =>
+    {
+        var composeFile = store.Current.ComposeFile;
+        if (!File.Exists(composeFile))
+        {
+            throw new InvalidOperationException($"{composeFile} does not exist.");
+        }
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        var result = await processRunner.RunAsync(
+            "docker", DockerComposeCommandBuilder.Up(composeFile), workingDirectory: null, cts.Token);
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException($"compose up failed: {result.StandardError.Trim()}");
+        }
+
+        return new { ok = true, output = result.StandardOutput.Trim() };
+    }));
+
+// ---- Notifications --------------------------------------------------------------
+
+app.MapGet("/api/notifications", (UiConfigStore store) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        var config = new PinqOps.Notifications.NotificationConfigStore(store.Current.ComposeFile).Load();
+        return new
+        {
+            events = new
+            {
+                deploySucceeded = config.Events.DeploySucceeded,
+                deployFailed = config.Events.DeployFailed,
+                healthCheckFailed = config.Events.HealthCheckFailed,
+                rolledBack = config.Events.RolledBack,
+            },
+            webhook = new { enabled = config.Webhook.Enabled, url = config.Webhook.Url },
+            slack = new { enabled = config.Slack.Enabled, webhookUrl = config.Slack.WebhookUrl },
+            telegram = new
+            {
+                enabled = config.Telegram.Enabled,
+                botTokenMasked = config.Telegram.BotToken is { Length: > 4 } token ? $"••••••••{token[^4..]}" : null,
+                chatId = config.Telegram.ChatId,
+            },
+        };
+    }));
+
+app.MapPost("/api/notifications", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<NotificationsRequest>()
+            ?? throw new ArgumentException("Invalid request body.");
+
+        var configStore = new PinqOps.Notifications.NotificationConfigStore(store.Current.ComposeFile);
+        var config = configStore.Load();
+
+        if (request.Events is { } events)
+        {
+            config.Events.DeploySucceeded = events.DeploySucceeded ?? config.Events.DeploySucceeded;
+            config.Events.DeployFailed = events.DeployFailed ?? config.Events.DeployFailed;
+            config.Events.HealthCheckFailed = events.HealthCheckFailed ?? config.Events.HealthCheckFailed;
+            config.Events.RolledBack = events.RolledBack ?? config.Events.RolledBack;
+        }
+
+        if (request.Webhook is { } webhook)
+        {
+            config.Webhook.Enabled = webhook.Enabled ?? config.Webhook.Enabled;
+            if (webhook.Url is not null)
+            {
+                config.Webhook.Url = webhook.Url.Trim();
+            }
+        }
+
+        if (request.Slack is { } slack)
+        {
+            config.Slack.Enabled = slack.Enabled ?? config.Slack.Enabled;
+            if (slack.WebhookUrl is not null)
+            {
+                config.Slack.WebhookUrl = slack.WebhookUrl.Trim();
+            }
+        }
+
+        if (request.Telegram is { } telegram)
+        {
+            config.Telegram.Enabled = telegram.Enabled ?? config.Telegram.Enabled;
+            // An absent/blank token means "keep the stored one" (it is masked in GET).
+            if (!string.IsNullOrWhiteSpace(telegram.BotToken))
+            {
+                config.Telegram.BotToken = telegram.BotToken.Trim();
+            }
+
+            if (telegram.ChatId is not null)
+            {
+                config.Telegram.ChatId = telegram.ChatId.Trim();
+            }
+        }
+
+        // URLs are validated eagerly so a typo is a 400 now, not a silent
+        // delivery failure later.
+        if (config.Webhook.Enabled && config.Webhook.Url.Length > 0)
+        {
+            PinqOps.Notifications.WebhookNotifier.ValidateHttpUrl(config.Webhook.Url);
+        }
+
+        if (config.Slack.Enabled && config.Slack.WebhookUrl.Length > 0)
+        {
+            PinqOps.Notifications.WebhookNotifier.ValidateHttpUrl(config.Slack.WebhookUrl);
+        }
+
+        configStore.Save(config);
+        return new { ok = true };
+    }));
+
+app.MapPost("/api/notifications/test", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<NotificationTestRequest>();
+        if (request?.Channel is not { Length: > 0 } channel)
+        {
+            throw new ArgumentException("A channel is required.");
+        }
+
+        using var dispatcher = new PinqOps.Notifications.NotificationDispatcher(store.Current.ComposeFile);
+        var delivered = await dispatcher.SendTestAsync(channel);
+        return new { ok = delivered, delivered };
     }));
 
 // ---- Local runner & system ------------------------------------------------------

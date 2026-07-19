@@ -250,6 +250,21 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
 
       <!-- deployments -->
       <section id="view-deployments" class="view hidden">
+        <div class="section" style="margin-bottom:16px">
+          <div class="section-head"><h2 data-i18n="dh.title">Deploy history</h2><div class="spacer"></div><span id="dep-current" class="muted"></span></div>
+          <div id="dep-tagvar-hint" class="muted hidden" style="font-size:12px;margin-bottom:8px"></div>
+          <div class="tablewrap"><table id="dep-history-table"></table></div>
+        </div>
+        <div class="section" style="margin-bottom:16px">
+          <div class="section-head"><h2 data-i18n="ev.title">Environment (.env)</h2><div class="spacer"></div><span class="muted mono" id="env-file" style="font-size:12px"></span></div>
+          <div class="tablewrap"><table id="env-table"></table></div>
+          <form id="env-add" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
+            <input id="env-key" placeholder="KEY" style="width:180px">
+            <input id="env-val" placeholder="value" style="flex:1;min-width:160px">
+            <button type="submit" class="small" data-i18n="ev.set">Set</button>
+            <button type="button" class="small primary" id="env-apply" data-i18n="ev.apply">Apply (recreates containers)</button>
+          </form>
+        </div>
         <div class="card" style="margin-bottom:16px">
           <h3 data-i18n="dp.lastJob">Runner last executed a job</h3>
           <div id="lastjob-detail" class="muted">–</div>
@@ -328,6 +343,34 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
             </form>
           </div>
           <div class="tablewrap"><table id="networks-table"></table></div>
+        </div>
+      </section>
+
+      <!-- domains / reverse proxy -->
+      <section id="view-domains" class="view hidden">
+        <div class="card" id="proxy-status-card" style="margin-bottom:16px">
+          <h3 data-i18n="dm.proxy">Reverse proxy (Caddy)</h3>
+          <p class="muted" style="font-size:13px" data-i18n="dm.help">One managed Caddy container publishes ports 80/443 and terminates TLS with automatic Let's Encrypt certificates. Point a DNS A record at this server, then add a route: domain → container:port.</p>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <span id="proxy-state" class="chip mut">–</span>
+            <button class="small primary" id="proxy-install" data-i18n="dm.install">Install proxy</button>
+            <button class="small danger hidden" id="proxy-uninstall" data-i18n="dm.uninstall">Remove proxy</button>
+            <div class="spacer"></div>
+            <label style="margin:0;font-size:12.5px" data-i18n="dm.email">ACME email (Let's Encrypt)</label>
+            <input id="proxy-email" type="email" placeholder="you@example.com" style="width:220px">
+            <button class="small" id="proxy-email-save" data-i18n="c.save">Save</button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-head"><h2 data-i18n="dm.routes">Routes</h2></div>
+          <div class="tablewrap"><table id="proxy-routes-table"></table></div>
+          <form id="proxy-add" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
+            <input id="proxy-domain" placeholder="app.example.com" style="width:220px">
+            <select id="proxy-target" style="width:auto;min-width:180px"></select>
+            <input id="proxy-port" type="number" min="1" max="65535" placeholder="8080" style="width:110px">
+            <button type="submit" class="small primary" data-i18n="dm.addRoute">Add route</button>
+          </form>
+          <p class="muted" style="font-size:12px;margin-top:6px" data-i18n="dm.dnsHint">The domain's DNS A record must point at this server before the certificate can be issued.</p>
         </div>
       </section>
 
@@ -434,6 +477,38 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
         </div>
 
         <div class="card" style="margin-top:16px">
+          <h3 data-i18n="nf.card">Notifications</h3>
+          <p class="muted" style="font-size:13px" data-i18n="nf.help">Deploy results (success, failure, rollback) are sent to the enabled channels. Settings are stored next to the compose project, so CLI deploys on the runner send them too.</p>
+          <form id="notif-form">
+            <div class="form-grid">
+              <div class="full" style="display:flex;gap:16px;flex-wrap:wrap">
+                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="nf-ev-ok" style="width:auto" checked> <span data-i18n="nf.evOk">deploy succeeded</span></label>
+                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="nf-ev-fail" style="width:auto" checked> <span data-i18n="nf.evFail">deploy failed</span></label>
+                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="nf-ev-health" style="width:auto" checked> <span data-i18n="nf.evHealth">health check failed</span></label>
+                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="nf-ev-rb" style="width:auto" checked> <span data-i18n="nf.evRb">rolled back</span></label>
+              </div>
+              <div class="full" style="display:flex;gap:8px;align-items:center">
+                <label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="nf-webhook-on" style="width:auto"> Webhook</label>
+                <input id="nf-webhook-url" placeholder="https://example.com/hook" style="flex:1">
+                <button type="button" class="small" id="nf-test-webhook" data-i18n="nf.test">Test</button>
+              </div>
+              <div class="full" style="display:flex;gap:8px;align-items:center">
+                <label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="nf-slack-on" style="width:auto"> Slack</label>
+                <input id="nf-slack-url" placeholder="https://hooks.slack.com/services/…" style="flex:1">
+                <button type="button" class="small" id="nf-test-slack" data-i18n="nf.test">Test</button>
+              </div>
+              <div class="full" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="nf-tg-on" style="width:auto"> Telegram</label>
+                <input id="nf-tg-token" data-i18n-ph="nf.tgToken" style="flex:1;min-width:160px">
+                <input id="nf-tg-chat" data-i18n-ph="nf.tgChat" style="width:140px">
+                <button type="button" class="small" id="nf-test-telegram" data-i18n="nf.test">Test</button>
+              </div>
+              <div class="full" style="margin-top:6px"><button type="submit" data-i18n="c.save">Save</button></div>
+            </div>
+          </form>
+        </div>
+
+        <div class="card" style="margin-top:16px">
           <h3 data-i18n="se.pwCard">Dashboard password</h3>
           <form id="password-form" class="form-grid">
             <div><label for="pw-current" data-i18n="se.pwCur">Current password</label><input id="pw-current" type="password" autocomplete="current-password" required></div>
@@ -467,7 +542,16 @@ en:{
  "nav.grp.monitor":"Monitor","nav.grp.docker":"Docker","nav.grp.server":"Server","nav.grp.github":"Publishing",
  "nav.overview":"Overview","nav.deployments":"Deployments","nav.runner":"Runner","nav.containers":"Containers",
  "nav.images":"Images","nav.storage":"Storage & Networks","nav.system":"System","nav.settings":"Settings",
- "nav.apps":"Apps","nav.github":"GitHub",
+ "nav.apps":"Apps","nav.github":"GitHub","nav.domains":"Domains & SSL",
+ "dm.proxy":"Reverse proxy (Caddy)","dm.install":"Install proxy","dm.uninstall":"Remove proxy","dm.notInstalled":"not installed",
+ "dm.help":"One managed Caddy container publishes ports 80/443 and terminates TLS with automatic Let's Encrypt certificates. Point a DNS A record at this server, then add a route: domain → container:port.",
+ "dm.email":"ACME email (Let's Encrypt)","dm.emailSaved":"Email saved and proxy reloaded",
+ "dm.routes":"Routes","dm.domain":"Domain","dm.target":"Target","dm.addRoute":"Add route","dm.noRoutes":"No routes yet.",
+ "dm.installed":"Proxy installed — ports 80/443 are live","dm.uninstalled":"Proxy removed (certificates kept)",
+ "dm.uninstallConfirm":"Remove the Caddy proxy container? All routes go offline; certificates are kept in volumes for a reinstall.",
+ "dm.routeAdded":"{d} routed","dm.routeRemoved":"{d} removed",
+ "dm.networkWarn":"Target is not on the pinqops-apps network — routing may fail. Add the network to its compose file for a durable fix.",
+ "dm.dnsHint":"The domain's DNS A record must point at this server before the certificate can be issued.",
  "gh.locked":"Not connected — click to sign in","gh.pickTitle":"Set up a repository",
  "gh.pickHelp":"Search your repositories, pick one, and Install — the wizard commits the deploy workflow, creates the compose project, and registers the runner automatically.",
  "gh.installBtn":"Install","gh.moreRepos":"{n} more — keep typing to narrow down","gh.noRepos":"No repository matches.",
@@ -522,6 +606,12 @@ en:{
  "th.cpu":"CPU","th.mem":"Memory","th.actions":"Actions","th.repo":"Repository","th.tag":"Tag","th.imageId":"Image ID","th.created":"Created",
  "th.size":"Size","th.driver":"Driver","th.scope":"Scope","th.mount":"Mountpoint","th.internal":"Internal","th.type":"Type","th.total":"Total",
  "th.active":"Active","th.reclaimable":"Reclaimable",
+ "dh.title":"Deploy history","dh.current":"deployed: {tag}","dh.rollback":"Roll back","dh.result":"Result","dh.health":"Health",
+ "dh.rSucceeded":"✓ succeeded","dh.rFailed":"✕ failed","dh.rRolledBack":"↩ rolled back",
+ "dh.rbTitle":"Roll back","dh.rbConfirm":"Redeploy image tag {tag}? The compose project is restarted with that version.",
+ "dh.rbStarted":"Rollback to {tag} started…","dh.rbDone":"Rolled back to {tag}","dh.rbFail":"Rollback failed: {e}",
+ "dh.none":"No deploys recorded yet — they appear here after the first `pinqops deploy --tag`.",
+ "dh.migrate":"Tip: point the compose image at :${PINQOPS_TAG:-latest} and deploy with --tag to enable version history and rollback.",
  "dp.lastJob":"Runner last executed a job","dp.runs":"Workflow runs","dp.openActions":"open GitHub Actions ↗",
  "dp.noSelfJob":"No job on a self-hosted runner was found in the recent runs.",
  "dp.job":"job","dp.runner":"Runner","dp.started":"Started","dp.finished":"Finished","dp.link":"Link","dp.openJob":"open job on GitHub ↗",
@@ -555,6 +645,16 @@ en:{
  "se.connected":"Connected to {r}","se.configFile":"Config file",
  "se.pwCard":"Dashboard password","se.pwCur":"Current password","se.pwNew":"New password (min 8)","se.pwChange":"Change password",
  "se.pwChanged":"Password changed — sign in again","se.tokenOk":"Token verified — now pick a repository",
+ "ev.title":"Environment (.env)","ev.set":"Set","ev.apply":"Apply (recreates containers)","ev.applied":"Environment applied — containers recreated",
+ "ev.applyConfirm":"Run <code>docker compose up -d</code> so the new environment takes effect? Containers with changed env are recreated.",
+ "ev.saved":"{k} saved","ev.removed":"{k} removed","ev.none":"No variables in the compose project's .env yet.","ev.managed":"managed",
+ "ap.credsTitle":"{n} — credentials","ap.noCreds":"No stored credentials for this app.","ap.reveal":"reveal","ap.copied":"copied",
+ "ap.credsHint":"Generated at install and stored on this server (0600). A reinstall reuses the same password so existing data keeps working.",
+ "nf.card":"Notifications","nf.test":"Test","nf.saved":"Notification settings saved",
+ "nf.help":"Deploy results (success, failure, rollback) are sent to the enabled channels. Settings are stored next to the compose project, so CLI deploys on the runner send them too.",
+ "nf.evOk":"deploy succeeded","nf.evFail":"deploy failed","nf.evHealth":"health check failed","nf.evRb":"rolled back",
+ "nf.tgToken":"bot token","nf.tgChat":"chat id","nf.tgTokenKeep":"saved: {m} (leave empty to keep)",
+ "nf.testOk":"{c}: test notification delivered","nf.testFail":"{c}: delivery failed — check the settings",
  "lk.login":"Dashboard login","lk.setup":"First run — create the dashboard password.","lk.code":"Setup code",
  "lk.codeHint":"(printed on the server console)","lk.pw":"Password","lk.pw2":"Repeat password","lk.signIn":"Sign in",
  "lk.create":"Create password","lk.min8":"At least 8 characters.","lk.mismatch":"Passwords do not match.","lk.noApi":"Cannot reach the API: {e}",
@@ -564,7 +664,16 @@ tr:{
  "nav.grp.monitor":"İzleme","nav.grp.docker":"Docker","nav.grp.server":"Sunucu","nav.grp.github":"Yayınlama",
  "nav.overview":"Genel Bakış","nav.deployments":"Dağıtımlar","nav.runner":"Runner","nav.containers":"Konteynerler",
  "nav.images":"İmajlar","nav.storage":"Depolama ve Ağlar","nav.system":"Sistem","nav.settings":"Ayarlar",
- "nav.apps":"Uygulamalar","nav.github":"GitHub",
+ "nav.apps":"Uygulamalar","nav.github":"GitHub","nav.domains":"Alan Adları ve SSL",
+ "dm.proxy":"Reverse proxy (Caddy)","dm.install":"Proxy'yi kur","dm.uninstall":"Proxy'yi kaldır","dm.notInstalled":"kurulu değil",
+ "dm.help":"Tek bir yönetilen Caddy konteyneri 80/443 portlarını yayınlar ve otomatik Let's Encrypt sertifikalarıyla TLS'i sonlandırır. DNS A kaydını bu sunucuya yönlendir, sonra bir rota ekle: alan adı → konteyner:port.",
+ "dm.email":"ACME e-postası (Let's Encrypt)","dm.emailSaved":"E-posta kaydedildi, proxy yeniden yüklendi",
+ "dm.routes":"Rotalar","dm.domain":"Alan adı","dm.target":"Hedef","dm.addRoute":"Rota ekle","dm.noRoutes":"Henüz rota yok.",
+ "dm.installed":"Proxy kuruldu — 80/443 portları yayında","dm.uninstalled":"Proxy kaldırıldı (sertifikalar korundu)",
+ "dm.uninstallConfirm":"Caddy proxy konteyneri kaldırılsın mı? Tüm rotalar çevrimdışı olur; sertifikalar yeniden kurulum için volume'larda korunur.",
+ "dm.routeAdded":"{d} yönlendirildi","dm.routeRemoved":"{d} silindi",
+ "dm.networkWarn":"Hedef pinqops-apps ağında değil — yönlendirme çalışmayabilir. Kalıcı çözüm için ağı compose dosyasına ekle.",
+ "dm.dnsHint":"Sertifika alınabilmesi için alan adının DNS A kaydı önce bu sunucuyu göstermeli.",
  "gh.locked":"Bağlı değil — giriş için tıkla","gh.pickTitle":"Depo kur",
  "gh.pickHelp":"Depolarında ara, birini seç ve Kur'a bas — sihirbaz deploy workflow'unu commit'ler, compose projesini oluşturur ve runner'ı otomatik kaydeder.",
  "gh.installBtn":"Kur","gh.moreRepos":"{n} depo daha — daraltmak için yazmaya devam et","gh.noRepos":"Eşleşen depo yok.",
@@ -619,6 +728,12 @@ tr:{
  "th.cpu":"CPU","th.mem":"Bellek","th.actions":"İşlemler","th.repo":"Depo","th.tag":"Etiket","th.imageId":"İmaj ID","th.created":"Oluşturulma",
  "th.size":"Boyut","th.driver":"Sürücü","th.scope":"Kapsam","th.mount":"Bağlama noktası","th.internal":"Dahili","th.type":"Tür","th.total":"Toplam",
  "th.active":"Aktif","th.reclaimable":"Geri kazanılabilir",
+ "dh.title":"Dağıtım geçmişi","dh.current":"yayında: {tag}","dh.rollback":"Geri al","dh.result":"Sonuç","dh.health":"Sağlık",
+ "dh.rSucceeded":"✓ başarılı","dh.rFailed":"✕ başarısız","dh.rRolledBack":"↩ geri alındı",
+ "dh.rbTitle":"Geri al","dh.rbConfirm":"{tag} imaj etiketi yeniden yayınlansın mı? Compose projesi o sürümle yeniden başlatılır.",
+ "dh.rbStarted":"{tag} sürümüne geri alma başladı…","dh.rbDone":"{tag} sürümüne geri alındı","dh.rbFail":"Geri alma başarısız: {e}",
+ "dh.none":"Henüz kayıtlı dağıtım yok — ilk `pinqops deploy --tag` sonrasında burada görünür.",
+ "dh.migrate":"İpucu: compose imajını :${PINQOPS_TAG:-latest} olarak ayarla ve --tag ile dağıt; sürüm geçmişi ve geri alma aktifleşir.",
  "dp.lastJob":"Runner en son iş çalıştırdı","dp.runs":"Workflow çalıştırmaları","dp.openActions":"GitHub Actions'ı aç ↗",
  "dp.noSelfJob":"Son çalıştırmalarda self-hosted runner'da koşan iş bulunamadı.",
  "dp.job":"iş","dp.runner":"Runner","dp.started":"Başlangıç","dp.finished":"Bitiş","dp.link":"Bağlantı","dp.openJob":"işi GitHub'da aç ↗",
@@ -652,6 +767,16 @@ tr:{
  "se.connected":"{r} bağlandı","se.configFile":"Yapılandırma dosyası",
  "se.pwCard":"Panel şifresi","se.pwCur":"Mevcut şifre","se.pwNew":"Yeni şifre (en az 8)","se.pwChange":"Şifreyi değiştir",
  "se.pwChanged":"Şifre değişti — tekrar giriş yap","se.tokenOk":"Token doğrulandı — şimdi bir depo seç",
+ "ev.title":"Ortam değişkenleri (.env)","ev.set":"Kaydet","ev.apply":"Uygula (konteynerleri yeniden oluşturur)","ev.applied":"Ortam uygulandı — konteynerler yeniden oluşturuldu",
+ "ev.applyConfirm":"Yeni ortam değişkenlerinin etkinleşmesi için <code>docker compose up -d</code> çalıştırılsın mı? Değişen env'e sahip konteynerler yeniden oluşturulur.",
+ "ev.saved":"{k} kaydedildi","ev.removed":"{k} silindi","ev.none":"Compose projesinin .env dosyasında henüz değişken yok.","ev.managed":"yönetilen",
+ "ap.credsTitle":"{n} — kimlik bilgileri","ap.noCreds":"Bu uygulama için kayıtlı kimlik bilgisi yok.","ap.reveal":"göster","ap.copied":"kopyalandı",
+ "ap.credsHint":"Kurulumda üretildi ve bu sunucuda saklanıyor (0600). Yeniden kurulumda aynı şifre kullanılır, mevcut veriler çalışmaya devam eder.",
+ "nf.card":"Bildirimler","nf.test":"Dene","nf.saved":"Bildirim ayarları kaydedildi",
+ "nf.help":"Dağıtım sonuçları (başarı, hata, geri alma) etkin kanallara gönderilir. Ayarlar compose projesinin yanında saklanır; runner'daki CLI dağıtımları da bildirim yollar.",
+ "nf.evOk":"dağıtım başarılı","nf.evFail":"dağıtım başarısız","nf.evHealth":"sağlık kontrolü başarısız","nf.evRb":"geri alındı",
+ "nf.tgToken":"bot token","nf.tgChat":"chat id","nf.tgTokenKeep":"kayıtlı: {m} (korumak için boş bırak)",
+ "nf.testOk":"{c}: test bildirimi ulaştı","nf.testFail":"{c}: gönderilemedi — ayarları kontrol et",
  "lk.login":"Panel girişi","lk.setup":"İlk çalıştırma — panel şifresini oluştur.","lk.code":"Kurulum kodu",
  "lk.codeHint":"(sunucu konsolunda yazar)","lk.pw":"Şifre","lk.pw2":"Şifreyi tekrar gir","lk.signIn":"Giriş yap",
  "lk.create":"Şifre oluştur","lk.min8":"En az 8 karakter.","lk.mismatch":"Şifreler eşleşmiyor.","lk.noApi":"API'ye ulaşılamıyor: {e}",
@@ -705,6 +830,7 @@ const IC={
  zap:'<svg class="ic" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
  github:'<svg class="ic brand" viewBox="0 0 16 16" style="width:16px;height:16px"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>',
  lock:'<svg class="ic" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+ globe:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
 };
 
 /* ================= state ================= */
@@ -712,7 +838,7 @@ let token=localStorage.getItem("pinqops.token")||"";
 let view="overview", refreshMs=10000, timer=null, logTimer=null, needsSetup=false, ghConfigured=false;
 let deviceTimer=null, deviceHandle=null, repoList=[];
 const NAV=[["nav.grp.monitor",[["overview",IC.grid],["deployments",IC.rocket],["runner",IC.cpu]]],
-           ["nav.grp.docker",[["containers",IC.box],["apps",IC.zap],["images",IC.layers],["storage",IC.db]]],
+           ["nav.grp.docker",[["containers",IC.box],["apps",IC.zap],["images",IC.layers],["storage",IC.db],["domains",IC.globe]]],
            ["nav.grp.github",[["github",IC.github]]],
            ["nav.grp.server",[["system",IC.activity],["settings",IC.sliders]]]];
 
@@ -887,6 +1013,10 @@ async function refresh(quiet){
     else if(view==="images")await loadImages();
     else if(view==="storage")await loadStorage();
     else if(view==="system")await loadSystem();
+    else if(view==="domains")await loadDomains();
+    // Settings holds form state the user may be editing; populate only on
+    // view entry / manual refresh, never on the auto-refresh tick.
+    else if(view==="settings"&&!quiet)await loadNotifSettings();
     // The GitHub view talks to the GitHub API (identity, repos, readiness) —
     // refresh it only on view entry / manual refresh, never on the auto-refresh
     // tick, to protect the rate limit and the user's in-progress search.
@@ -1036,7 +1166,160 @@ function renderRunsTable(el,runs){
         {h:`<a href="${esc(r.htmlUrl)}" target="_blank" rel="noopener">${t("c.view")}</a>`}];}),
     t("dp.noRuns"));
 }
+/* ---- deploy history & rollback (server-side state; works without GitHub) ---- */
+function shortTag(tag){return /^sha-[0-9a-f]{12,}$/i.test(tag||"")?tag.slice(0,12):esc(tag||"–");}
+function deployResultChip(r){
+  const map={succeeded:["ok",t("dh.rSucceeded")],failed:["err",t("dh.rFailed")],rolled_back:["warn",t("dh.rRolledBack")]};
+  const[k,l]=map[r]||["mut",r||"?"];return`<span class="chip ${k}">${esc(l)}</span>`;}
+async function loadDeployHistory(){
+  try{
+    const[state,history]=await Promise.all([api("/api/deploy/state"),api("/api/deploy/history")]);
+    $("#dep-current").textContent=state.currentTag
+      ?t("dh.current",{tag:shortTag(state.currentTag)})
+      :"";
+    const hint=$("#dep-tagvar-hint");
+    if(!state.composeUsesTagVariable&&history.items.length===0){hint.textContent=t("dh.migrate");hint.classList.remove("hidden");}
+    else hint.classList.add("hidden");
+    table($("#dep-history-table"),
+      [t("th.tag"),t("th.started"),t("th.duration"),t("dh.result"),t("th.trigger"),t("dh.health"),""],
+      history.items.map(d=>[
+        {h:`<span class="mono" title="${esc(d.tag)}">${shortTag(d.tag)}</span>`},
+        {h:`<span title="${fullTime(d.startedAt)}">${timeAgo(d.startedAt)}</span>`},
+        d.durationSeconds?Math.round(d.durationSeconds)+"s":"–",
+        {h:deployResultChip(d.result)},
+        esc(d.trigger||"–"),
+        esc(d.healthCheck||"–"),
+        {h:(d.result==="succeeded"||d.result==="rolled_back")&&d.tag!==state.currentTag&&state.composeUsesTagVariable
+          ?`<button class="small" data-rollback="${esc(d.tag)}">${t("dh.rollback")}</button>`:""}]),
+      t("dh.none"));
+  }catch(ex){table($("#dep-history-table"),[],[],esc(ex.message));}
+}
+$("#dep-history-table").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-rollback]");if(!b)return;
+  const tag=b.dataset.rollback;
+  openModal(t("dh.rbTitle"),t("dh.rbConfirm",{tag:`<span class="mono">${shortTag(tag)}</span>`}),[
+    {label:t("c.cancel")},
+    {label:t("dh.rollback"),danger:true,onClick:async()=>{
+      closeModal();
+      try{
+        const{jobId}=await api("/api/deploy/rollback",{method:"POST",body:JSON.stringify({tag})});
+        toast(t("dh.rbStarted",{tag:shortTag(tag)}),"ok");
+        const poll=setInterval(async()=>{
+          try{
+            const job=await api(`/api/deploy/job/${encodeURIComponent(jobId)}`);
+            if(!job.done)return;
+            clearInterval(poll);
+            toast(job.phase==="done"?t("dh.rbDone",{tag:shortTag(tag)}):t("dh.rbFail",{e:job.error||""}),job.phase==="done"?"ok":"err");
+            await loadDeployHistory();
+          }catch(ex){clearInterval(poll);toast(ex.message,"err");}
+        },2000);
+      }catch(ex){toast(ex.message,"err");}
+    }}]);
+});
+/* ---- compose project .env editor ---- */
+async function loadComposeEnv(){
+  try{
+    const env=await api("/api/compose/env");
+    $("#env-file").textContent=env.envFile;
+    table($("#env-table"),[t("th.name"),"",""],
+      env.items.map(i=>[
+        {h:`<span class="mono">${esc(i.key)}</span>${i.managed?` <span class="chip mut">${t("ev.managed")}</span>`:""}`},
+        {h:`<span class="mono muted">${esc(i.masked)}</span>`},
+        {h:i.managed?"":`<button class="small danger" data-env-rm="${esc(i.key)}">${t("c.remove")}</button>`}]),
+      t("ev.none"));
+  }catch(ex){table($("#env-table"),[],[],esc(ex.message));}
+}
+$("#env-table").addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-env-rm]");if(!b)return;
+  try{await api("/api/compose/env",{method:"POST",body:JSON.stringify({remove:[b.dataset.envRm]})});
+    toast(t("ev.removed",{k:b.dataset.envRm}),"ok");await loadComposeEnv();}
+  catch(ex){toast(ex.message,"err");}
+});
+$("#env-add").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const key=$("#env-key").value.trim(),val=$("#env-val").value;
+  if(!key)return;
+  try{await api("/api/compose/env",{method:"POST",body:JSON.stringify({set:{[key]:val}})});
+    $("#env-key").value="";$("#env-val").value="";
+    toast(t("ev.saved",{k:key}),"ok");await loadComposeEnv();}
+  catch(ex){toast(ex.message,"err");}
+});
+$("#env-apply").addEventListener("click",()=>{
+  openModal(t("ev.apply"),t("ev.applyConfirm"),[
+    {label:t("c.cancel")},
+    {label:t("ev.apply"),primary:true,onClick:async()=>{
+      closeModal();
+      try{await api("/api/compose/apply",{method:"POST"});toast(t("ev.applied"),"ok");}
+      catch(ex){toast(ex.message,"err");}
+    }}]);
+});
+/* ---- domains / reverse proxy (Caddy) ---- */
+async function loadDomains(){
+  try{
+    const p=await api("/api/proxy");
+    const chip=$("#proxy-state");
+    chip.className="chip "+(p.installed?(p.state==="running"?"ok":"warn"):"mut");
+    chip.textContent=p.installed?(p.state||"?"):t("dm.notInstalled");
+    $("#proxy-install").classList.toggle("hidden",p.installed&&p.state==="running");
+    $("#proxy-uninstall").classList.toggle("hidden",!p.installed);
+    if(document.activeElement!==$("#proxy-email"))$("#proxy-email").value=p.email||"";
+    table($("#proxy-routes-table"),[t("dm.domain"),t("dm.target"),t("th.actions")],
+      (p.routes||[]).map(r=>[
+        {h:`<a href="https://${esc(r.domain)}" target="_blank" rel="noopener" class="mono">${esc(r.domain)} ↗</a>`},
+        {h:`<span class="mono">${esc(r.target)}:${r.port}</span>`},
+        {h:`<button class="small danger" data-route-rm="${esc(r.domain)}">${t("c.remove")}</button>`}]),
+      t("dm.noRoutes"));
+    try{
+      const c=await api("/api/docker/containers");
+      const sel=$("#proxy-target"),cur=sel.value;
+      sel.innerHTML=`<option value="">${t("st.pickContainer")}</option>`+c.items
+        .map(x=>(x.Names||"").split(",")[0]).filter(n=>n&&n!=="pinqops-caddy")
+        .map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
+      if(cur)sel.value=cur;
+    }catch{/* docker unreachable — the routes table still renders */}
+  }catch(ex){table($("#proxy-routes-table"),[],[],esc(ex.message));}
+}
+$("#proxy-install").addEventListener("click",async()=>{
+  $("#proxy-install").disabled=true;
+  try{await api("/api/proxy/install",{method:"POST"});toast(t("dm.installed"),"ok");await loadDomains();}
+  catch(ex){toast(ex.message,"err");}
+  finally{$("#proxy-install").disabled=false;}
+});
+$("#proxy-uninstall").addEventListener("click",()=>{
+  openModal(t("dm.uninstall"),t("dm.uninstallConfirm"),[
+    {label:t("c.cancel")},
+    {label:t("c.remove"),danger:true,onClick:async()=>{
+      closeModal();
+      try{await api("/api/proxy/uninstall",{method:"POST"});toast(t("dm.uninstalled"),"ok");await loadDomains();}
+      catch(ex){toast(ex.message,"err");}
+    }}]);
+});
+$("#proxy-email-save").addEventListener("click",async()=>{
+  try{await api("/api/proxy/email",{method:"POST",body:JSON.stringify({email:$("#proxy-email").value.trim()})});
+    toast(t("dm.emailSaved"),"ok");}
+  catch(ex){toast(ex.message,"err");}
+});
+$("#proxy-add").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const domain=$("#proxy-domain").value.trim(),target=$("#proxy-target").value,port=parseInt($("#proxy-port").value,10);
+  if(!domain||!target||!port)return;
+  try{
+    const r=await api("/api/proxy/routes",{method:"POST",body:JSON.stringify({domain,target,port,connect:true})});
+    $("#proxy-domain").value="";$("#proxy-port").value="";
+    toast(t("dm.routeAdded",{d:domain}),"ok");
+    if(!r.targetOnSharedNetwork)toast(t("dm.networkWarn"),"err");
+    await loadDomains();
+  }catch(ex){toast(ex.message,"err");}
+});
+$("#proxy-routes-table").addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-route-rm]");if(!b)return;
+  try{await api("/api/proxy/routes/remove",{method:"POST",body:JSON.stringify({domain:b.dataset.routeRm})});
+    toast(t("dm.routeRemoved",{d:b.dataset.routeRm}),"ok");await loadDomains();}
+  catch(ex){toast(ex.message,"err");}
+});
 async function loadDeployments(){
+  await loadDeployHistory();
+  await loadComposeEnv();
   const gh=await githubOverview();
   if(!gh){table($("#runs-table"),[],[],t("dp.connectFirst"));return;}
   $("#actions-link").href=gh.repo.htmlUrl+"/actions";
@@ -1225,7 +1508,8 @@ function renderApps(){
       <span class="aact">
         ${a.installed&&openPort?`<a href="http://${location.hostname}:${openPort}" target="_blank" rel="noopener" style="font-size:12px">${t("ap.open")} :${openPort} ↗</a>`:""}
         ${a.installed
-          ?`<button class="small danger" data-app-rm="${esc(a.id)}" data-app-name="${esc(a.name)}">${t("ap.uninstall")}</button>`
+          ?`<button class="small" data-app-creds="${esc(a.id)}" data-app-name="${esc(a.name)}" title="${esc(t("ap.credsTitle",{n:a.name}))}">🔑</button>
+            <button class="small danger" data-app-rm="${esc(a.id)}" data-app-name="${esc(a.name)}">${t("ap.uninstall")}</button>`
           :`<button class="small primary" data-app-install="${esc(a.id)}" ${installing?"disabled":""}>${t("ap.install")}</button>`}
       </span>
     </div>`;}).join("")||`<div class="empty">—</div>`;
@@ -1268,6 +1552,7 @@ async function watchInstallJob(app,jobId){
     pendingInstalls.delete(app.id);
     if(owns()&&visible())closeModal();
     toast(t("ap.installOk",{n:app.name}),"ok");await loadApps();
+    await showAppCredentials(app.id,app.name,true); // show generated credentials once installed
   }catch(ex){
     pendingInstalls.delete(app.id);
     if(owns()&&visible()){
@@ -1279,8 +1564,30 @@ async function watchInstallJob(app,jobId){
     await loadApps();
   }
 }
+/* Generated credentials modal — values stay masked until revealed; volumes
+   outlive uninstalls, so the same password is reused on reinstall. */
+async function showAppCredentials(appId,appName,quiet){
+  try{
+    const c=await api(`/api/apps/${encodeURIComponent(appId)}/credentials`);
+    if(!c.items.length){if(!quiet)toast(t("ap.noCreds"),"ok");return;}
+    openModal(t("ap.credsTitle",{n:appName}),
+      `${c.note?`<div class="muted" style="font-size:12px;margin-bottom:8px">${esc(c.note)}</div>`:""}
+       <dl class="kv">${c.items.map(i=>`<dt>${esc(i.key)}</dt>
+         <dd><span class="mono" data-secret="${esc(i.value)}">••••••••</span>
+             <button class="small ghost" data-reveal>${t("ap.reveal")}</button>
+             <button class="small ghost" data-copy="${esc(i.value)}">⧉</button></dd>`).join("")}</dl>
+       <p class="muted" style="font-size:12px;margin-top:8px">${t("ap.credsHint")}</p>`);
+  }catch(ex){toast(ex.message,"err");}
+}
+$("#modal-body").addEventListener("click",async e=>{
+  const reveal=e.target.closest("button[data-reveal]");
+  if(reveal){const s=reveal.parentElement.querySelector("[data-secret]");if(s){s.textContent=s.dataset.secret;reveal.remove();}return;}
+  const copy=e.target.closest("button[data-copy]");
+  if(copy){try{await navigator.clipboard.writeText(copy.dataset.copy);toast(t("ap.copied"),"ok");}catch{toast("clipboard unavailable","err");}}
+});
 $("#apps-list").addEventListener("click",async e=>{
   const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.appCreds){await showAppCredentials(b.dataset.appCreds,b.dataset.appName,false);return;}
   if(b.dataset.appInstall){
     const app=appsCache.find(x=>x.id===b.dataset.appInstall);if(!app)return;
     // Per-port host inputs so any port (not just the first) can be relocated.
@@ -1840,6 +2147,41 @@ $("#settings-form").addEventListener("submit",async e=>{
     await loadGithubView();
   }catch(ex){toast(ex.message,"err");}
 });
+/* ================= notifications settings ================= */
+async function loadNotifSettings(){
+  try{
+    const n=await api("/api/notifications");
+    $("#nf-ev-ok").checked=n.events.deploySucceeded;$("#nf-ev-fail").checked=n.events.deployFailed;
+    $("#nf-ev-health").checked=n.events.healthCheckFailed;$("#nf-ev-rb").checked=n.events.rolledBack;
+    $("#nf-webhook-on").checked=n.webhook.enabled;$("#nf-webhook-url").value=n.webhook.url||"";
+    $("#nf-slack-on").checked=n.slack.enabled;$("#nf-slack-url").value=n.slack.webhookUrl||"";
+    $("#nf-tg-on").checked=n.telegram.enabled;$("#nf-tg-chat").value=n.telegram.chatId||"";
+    $("#nf-tg-token").value="";
+    $("#nf-tg-token").placeholder=n.telegram.botTokenMasked?t("nf.tgTokenKeep",{m:n.telegram.botTokenMasked}):t("nf.tgToken");
+  }catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
+}
+async function saveNotifSettings(){
+  await api("/api/notifications",{method:"POST",body:JSON.stringify({
+    events:{deploySucceeded:$("#nf-ev-ok").checked,deployFailed:$("#nf-ev-fail").checked,
+            healthCheckFailed:$("#nf-ev-health").checked,rolledBack:$("#nf-ev-rb").checked},
+    webhook:{enabled:$("#nf-webhook-on").checked,url:$("#nf-webhook-url").value.trim()},
+    slack:{enabled:$("#nf-slack-on").checked,webhookUrl:$("#nf-slack-url").value.trim()},
+    telegram:{enabled:$("#nf-tg-on").checked,botToken:$("#nf-tg-token").value.trim()||null,chatId:$("#nf-tg-chat").value.trim()}})});
+}
+$("#notif-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  try{await saveNotifSettings();toast(t("nf.saved"),"ok");await loadNotifSettings();}
+  catch(ex){toast(ex.message,"err");}
+});
+for(const ch of["webhook","slack","telegram"]){
+  $(`#nf-test-${ch}`).addEventListener("click",async()=>{
+    try{
+      await saveNotifSettings(); // test what's on screen, not stale disk state
+      const r=await api("/api/notifications/test",{method:"POST",body:JSON.stringify({channel:ch})});
+      toast(r.delivered?t("nf.testOk",{c:ch}):t("nf.testFail",{c:ch}),r.delivered?"ok":"err");
+    }catch(ex){toast(ex.message,"err");}
+  });
+}
 $("#password-form").addEventListener("submit",async e=>{
   e.preventDefault();
   try{await api("/api/auth/change-password",{method:"POST",body:JSON.stringify({

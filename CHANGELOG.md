@@ -5,6 +5,66 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to a rolling release model (latest `master` only).
 
+## [0.5.0] - 2026-07-19
+
+### Added
+
+- **Safe deploys: SHA tags, history, health checks and rollback.** Builds now
+  push an immutable `sha-<commit>` tag alongside `:latest`, and
+  `pinqops deploy --tag sha-<commit>` pins it in the compose project's `.env`
+  (compose file references the image as `:${PINQOPS_TAG:-latest}` — fully
+  backward compatible without a `.env`). After `up -d` the services are
+  health-checked (`compose ps` until running/healthy, default 60s,
+  `--health-timeout-seconds`, 0 skips); every deploy is recorded in
+  `.pinqops/history.json` next to the compose file. New commands:
+  **`pinqops rollback [--to <tag>]`** (defaults to the last successful tag;
+  uses the locally kept image, so no registry login needed) and
+  **`pinqops history [--json]`**. Instead of blanket image pruning, the newest
+  N `sha-*` images are kept for rollback (`--keep-images`, default 5). There is
+  deliberately **no automatic rollback** — a failed deploy shows red in CI and
+  rolling back is an explicit operator action. The dashboard's Deployments view
+  gains a deploy-history card with the current version and a one-click
+  **Roll back** button.
+- **Notifications.** Deploy results (success, failure, health-check failure,
+  rollback) are sent to a generic **webhook** (full JSON), **Slack**-compatible
+  incoming webhooks (also Discord `/slack`, Mattermost) and **Telegram** bots.
+  Configured per event and per channel in `.pinqops/notify.json` (0600) next to
+  the compose file, so CLI deploys on the runner and dashboard rollbacks both
+  notify. Settings UI with per-channel Test buttons. Best-effort by design: a
+  notification failure never fails a deploy.
+- **Generated catalog passwords + credential storage.** Catalog apps no longer
+  ship hardcoded defaults (`postgres/pinqops` etc.) — every credential is
+  generated per install (CSPRNG, 20 chars) and stored 0600 in
+  `~/.config/pinqops/app-credentials.json`. The dashboard shows them after
+  install and behind a key button on installed apps (masked, reveal/copy). A
+  reinstall reuses the stored password so data in surviving volumes keeps
+  working; WordPress automatically receives the MySQL app's password. A guard
+  test keeps hardcoded passwords from coming back.
+- **Compose `.env` editor.** The Deployments view manages the compose project's
+  `.env` (masked values, `PINQOPS_TAG` shown read-only) with an explicit
+  *Apply* that recreates containers via `compose up -d`.
+- **Domains & SSL (Caddy reverse proxy).** A new dashboard view installs a
+  managed `pinqops-caddy` container publishing 80/443 with automatic Let's
+  Encrypt certificates (persisted in named volumes). Routes map a domain to a
+  container port over the shared `pinqops-apps` network; the Caddyfile is
+  generated from strictly validated fields and hot-reloaded. The generated
+  compose template now joins `pinqops-apps` so the deployed app is routable by
+  container DNS.
+- **First web test project** — `tests/PinqOps.Web.Tests` covers catalog
+  password substitution, the credential store, docker run arguments, the
+  Caddyfile generator (golden + injection rejection) and the Caddy service
+  sequences.
+
+### Changed
+
+- `examples/workflows/deploy.yml`, the dashboard's generated workflow/compose
+  templates and `deploy/app.docker-compose.example.yml` moved to the SHA-tag +
+  `${PINQOPS_TAG:-latest}` scheme. Existing users: add the interpolation to
+  your compose file's `image:` line to enable history/rollback — nothing breaks
+  if you don't.
+- `docker image prune -f` after deploys is replaced by tag-aware retention
+  (keep `latest` + newest N `sha-*`), then a dangling-layer prune.
+
 ## [0.4.0] - 2026-07-18
 
 ### Added

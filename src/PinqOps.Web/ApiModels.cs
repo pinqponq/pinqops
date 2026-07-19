@@ -27,3 +27,33 @@ public sealed record NetworkContainerRequest(string? Container);
 public sealed record AppInstallRequest(string? Id, int? HostPort, int[]? HostPorts);
 
 public sealed record ContainerActionRequest(string? Action);
+
+public sealed record RollbackRequest(string? Tag);
+
+public sealed record NotificationsRequest(
+    NotificationEventsRequest? Events,
+    NotificationWebhookRequest? Webhook,
+    NotificationSlackRequest? Slack,
+    NotificationTelegramRequest? Telegram);
+
+public sealed record NotificationEventsRequest(
+    bool? DeploySucceeded,
+    bool? DeployFailed,
+    bool? HealthCheckFailed,
+    bool? RolledBack);
+
+public sealed record NotificationWebhookRequest(bool? Enabled, string? Url);
+
+public sealed record NotificationSlackRequest(bool? Enabled, string? WebhookUrl);
+
+public sealed record NotificationTelegramRequest(bool? Enabled, string? BotToken, string? ChatId);
+
+public sealed record NotificationTestRequest(string? Channel);
+
+public sealed record ComposeEnvRequest(Dictionary<string, string>? Set, string[]? Remove);
+
+public sealed record ProxyEmailRequest(string? Email);
+
+public sealed record ProxyRouteRequest(string? Domain, string? Target, int? Port, bool? Connect);
+
+public sealed record ProxyRouteRemoveRequest(string? Domain);

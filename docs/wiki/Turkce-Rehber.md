@@ -37,6 +37,30 @@ sudo journalctl -u pinqops-ui | grep "setup code"
 Sihirbaz bittiğinde tek yapman gereken: bir PR'ı `master`'a merge etmek.
 Gerisi otomatik.
 
+## Dağıtım geçmişi ve geri alma
+
+Her build artık `:latest` yanında değişmez bir `sha-<commit>` etiketi de
+gönderir; dağıtım bu etiketi compose dizinindeki `.env` dosyasına sabitler.
+**Dağıtımlar** görünümündeki *Dağıtım geçmişi* kartında hangi sürümün ne zaman
+yayına alındığını, sağlık kontrolü sonucunu görürsün; başarılı bir satırdaki
+**Geri al** düğmesi o sürümü tek tıkla geri getirir (CLI: `pinqops rollback`).
+Dağıtım sonrası sağlık kontrolü başarısız olursa dağıtım "failed" kaydedilir ve
+bildirim gider — otomatik geri alma yoktur, karar senindir.
+
+## Bildirimler
+
+**Ayarlar → Bildirimler**: dağıtım sonuçları webhook, Slack (Discord/Mattermost
+uyumlu) veya Telegram'a gönderilir. Kanal başına **Dene** düğmesiyle test et.
+Ayarlar compose projesinin yanındaki `.pinqops/notify.json` dosyasında durur;
+runner'daki CLI dağıtımları da aynı ayarları kullanır.
+
+## Alan adları ve SSL
+
+**Alan Adları ve SSL** görünümü tek tıkla yönetilen bir Caddy reverse proxy
+kurar (80/443). DNS A kaydını sunucuya yönlendir, rota ekle
+(alan adı → konteyner:port) — Let's Encrypt sertifikası otomatik alınır ve
+yenilenir.
+
 ## Uygulama kataloğu
 
 **Uygulamalar** menüsünde ~50 hazır uygulama var (Redis, PostgreSQL,
@@ -44,6 +68,11 @@ Grafana, MinIO, n8n, …). **Kur**'a bas, istersen portları değiştir — kuru
 arka planda yürür ve "imaj çekiliyor → başlatılıyor" ilerlemesi sayfa
 yenilemeden görünür. Veriler adlandırılmış volume'larda tutulur; **Kaldır**
 konteyneri siler, veriyi korur.
+
+Şifre gerektiren uygulamalar artık sabit şifreyle değil, kurulumda üretilen
+rastgele şifreyle gelir. Kurulum sonunda gösterilir; sonradan uygulama
+satırındaki 🔑 düğmesiyle (maskeli, göster/kopyala) erişirsin. Yeniden
+kurulumda aynı şifre kullanılır, mevcut veri bozulmaz.
 
 ## Loglar
 

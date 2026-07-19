@@ -57,13 +57,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Moving :latest tag by design (no rollback/version tracking in scope).
+      # Each build is pushed twice: :latest for convenience and an immutable
+      # :sha-<commit> tag. The deploy pins the SHA tag in the server's .env so
+      # the exact deployed version is recorded and `pinqops rollback` can
+      # return to any recent one.
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ env.IMAGE }}:latest
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -92,9 +97,12 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" \
             | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-          # pinqops runs the fixed compose pull + up -d against the fixed project.
-          # No repository content is checked out or executed on the server.
-          pinqops deploy --compose-file "$APP_COMPOSE_PATH"
+          # pinqops pins PINQOPS_TAG in the project's .env, runs the fixed
+          # compose pull + up -d, health-checks the services and records the
+          # deploy in history. No repository content is checked out or executed
+          # on the server. (Requires the compose file to reference the image as
+          # `image: ...:${PINQOPS_TAG:-latest}` — see deploy/app.docker-compose.example.yml.)
+          pinqops deploy --compose-file "$APP_COMPOSE_PATH" --tag "sha-${{ github.sha }}"
 
       - name: Log out of GHCR
         if: always()

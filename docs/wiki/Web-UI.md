@@ -23,14 +23,15 @@ password. Options: `--port <n>`, `--host <addr>`, `--cert <pfx>` (HTTPS),
 | Menu | What you get |
 |---|---|
 | Overview | Container/runner/disk stat cards, run-duration chart, resource chart, compose project, recent workflow runs |
-| Deployments | Workflow runs and the last job the runner executed |
+| Deployments | [Deploy history with rollback](Deploy-History-and-Rollback), the compose `.env` editor, workflow runs and the last runner job |
 | Runner | Repository runners on GitHub + the local runner (unit, registration, last job) |
 | Containers | List with start/stop/restart/inspect — and an **inline log panel** (tail, follow, download) that opens from a container's `logs` button |
 | Apps | The [App Catalog](App-Catalog) as a compact list |
 | Images / Storage | Images with prune; volumes, disk usage, networks with a visual map |
+| **Domains & SSL** | [Caddy reverse proxy](Domains-and-SSL): routes, automatic Let's Encrypt certificates |
 | **GitHub** | Sign-in, repository picker, and the [Repository Wizard](Repository-Wizard). Carries a lock icon until connected |
 | System | Memory, disk, load, uptime, host + Docker info |
-| Settings | Language, auto-refresh, dashboard password |
+| Settings | Language, auto-refresh, [notification channels](Notifications), dashboard password |
 
 There is deliberately **no deploy button**: deploys happen by merging to
 `master`, which is the whole point of the pipeline.

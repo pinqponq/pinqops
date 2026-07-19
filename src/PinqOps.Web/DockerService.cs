@@ -153,7 +153,7 @@ public sealed class DockerService
     /// pinqops-apps network. Each entry in <paramref name="hostPorts"/>
     /// overrides the corresponding catalog port (0/absent keeps the default).
     /// </summary>
-    public async Task<string> InstallAppAsync(AppSpec app, IReadOnlyList<int>? hostPorts)
+    public async Task<string> InstallAppAsync(AppSpec app, IReadOnlyList<int>? hostPorts, IReadOnlyList<string>? envOverride = null)
     {
         if (hostPorts is not null && hostPorts.Any(port => port is not 0 and (< 1 or > 65535)))
         {
@@ -182,7 +182,7 @@ public sealed class DockerService
             arguments.AddRange(["-p", $"{host}:{container}"]);
         }
 
-        foreach (var env in app.Env)
+        foreach (var env in envOverride ?? app.Env)
         {
             arguments.AddRange(["-e", env]);
         }
@@ -205,7 +205,7 @@ public sealed class DockerService
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
-    private async Task EnsureSharedNetworkAsync()
+    public async Task EnsureSharedNetworkAsync()
     {
         var inspect = await RunAsync("network", "inspect", AppCatalog.SharedNetwork).ConfigureAwait(false);
         if (!inspect.Succeeded)
@@ -251,35 +251,7 @@ public sealed class DockerService
     /// Docker's <c>--format json</c> output is NDJSON in some versions and a
     /// single array in others; accept both.
     /// </summary>
-    internal static List<JsonElement> ParseJsonLinesOrArray(string output)
-    {
-        var items = new List<JsonElement>();
-        var trimmed = output.Trim();
-        if (trimmed.Length == 0)
-        {
-            return items;
-        }
-
-        if (trimmed.StartsWith('['))
-        {
-            using var document = JsonDocument.Parse(trimmed);
-            items.AddRange(document.RootElement.EnumerateArray().Select(element => element.Clone()));
-            return items;
-        }
-
-        foreach (var line in trimmed.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (!line.StartsWith('{'))
-            {
-                continue;
-            }
-
-            using var document = JsonDocument.Parse(line);
-            items.Add(document.RootElement.Clone());
-        }
-
-        return items;
-    }
+    internal static List<JsonElement> ParseJsonLinesOrArray(string output) => JsonLines.Parse(output);
 
     private static JsonElement ParseElement(string json)
     {

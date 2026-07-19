@@ -29,6 +29,11 @@ pinqops setup --repo-url https://github.com/<owner>/<repo>
 **Deploy:** merge a PR into `master`. That's it. Full walkthrough:
 [docs/SETUP.md](docs/SETUP.md).
 
+Every deploy is pinned to the commit's `sha-<...>` image tag, health-checked
+after `up -d`, recorded in a deploy history, and reversible with
+**`pinqops rollback`** (or one click in the dashboard). Deploy results can be
+sent to a webhook, Slack or Telegram.
+
 ## Web UI (optional)
 
 A minimal dashboard for the server — containers (with inline logs), images,
@@ -44,9 +49,12 @@ one), streams the install log live, and verifies on GitHub that the runner
 actually appeared. Deploys then happen the intended way: merge to `master`.
 
 There is also a curated catalog of ~50 one-click apps (Redis, PostgreSQL,
-Grafana, MinIO, …); installs run in the background with live
-pulling → starting progress. You don't have to install the UI; everything
-also works from the CLI.
+Grafana, MinIO, …) — installed with generated passwords (retrievable in the
+dashboard, reused on reinstall), running in the background with live
+pulling → starting progress. A **Domains & SSL** view manages a Caddy reverse
+proxy with automatic Let's Encrypt certificates, and the Deployments view
+shows deploy history with one-click rollback plus a compose `.env` editor.
+You don't have to install the UI; everything also works from the CLI.
 
 ```bash
 sudo curl -fsSL -o /usr/local/bin/pinqops-ui \
