@@ -54,13 +54,6 @@ uyumlu) veya Telegram'a gönderilir. Kanal başına **Dene** düğmesiyle test e
 Ayarlar compose projesinin yanındaki `.pinqops/notify.json` dosyasında durur;
 runner'daki CLI dağıtımları da aynı ayarları kullanır.
 
-## Alan adları ve SSL
-
-**Alan Adları ve SSL** görünümü tek tıkla yönetilen bir Caddy reverse proxy
-kurar (80/443). DNS A kaydını sunucuya yönlendir, rota ekle
-(alan adı → konteyner:port) — Let's Encrypt sertifikası otomatik alınır ve
-yenilenir.
-
 ## Uygulama kataloğu
 
 **Uygulamalar** menüsünde ~50 hazır uygulama var (Redis, PostgreSQL,

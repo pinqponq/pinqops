@@ -346,34 +346,6 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
         </div>
       </section>
 
-      <!-- domains / reverse proxy -->
-      <section id="view-domains" class="view hidden">
-        <div class="card" id="proxy-status-card" style="margin-bottom:16px">
-          <h3 data-i18n="dm.proxy">Reverse proxy (Caddy)</h3>
-          <p class="muted" style="font-size:13px" data-i18n="dm.help">One managed Caddy container publishes ports 80/443 and terminates TLS with automatic Let's Encrypt certificates. Point a DNS A record at this server, then add a route: domain → container:port.</p>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <span id="proxy-state" class="chip mut">–</span>
-            <button class="small primary" id="proxy-install" data-i18n="dm.install">Install proxy</button>
-            <button class="small danger hidden" id="proxy-uninstall" data-i18n="dm.uninstall">Remove proxy</button>
-            <div class="spacer"></div>
-            <label style="margin:0;font-size:12.5px" data-i18n="dm.email">ACME email (Let's Encrypt)</label>
-            <input id="proxy-email" type="email" placeholder="you@example.com" style="width:220px">
-            <button class="small" id="proxy-email-save" data-i18n="c.save">Save</button>
-          </div>
-        </div>
-        <div class="section">
-          <div class="section-head"><h2 data-i18n="dm.routes">Routes</h2></div>
-          <div class="tablewrap"><table id="proxy-routes-table"></table></div>
-          <form id="proxy-add" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
-            <input id="proxy-domain" placeholder="app.example.com" style="width:220px">
-            <select id="proxy-target" style="width:auto;min-width:180px"></select>
-            <input id="proxy-port" type="number" min="1" max="65535" placeholder="8080" style="width:110px">
-            <button type="submit" class="small primary" data-i18n="dm.addRoute">Add route</button>
-          </form>
-          <p class="muted" style="font-size:12px;margin-top:6px" data-i18n="dm.dnsHint">The domain's DNS A record must point at this server before the certificate can be issued.</p>
-        </div>
-      </section>
-
       <!-- system -->
       <section id="view-system" class="view hidden">
         <div class="grid cards">
@@ -542,16 +514,7 @@ en:{
  "nav.grp.monitor":"Monitor","nav.grp.docker":"Docker","nav.grp.server":"Server","nav.grp.github":"Publishing",
  "nav.overview":"Overview","nav.deployments":"Deployments","nav.runner":"Runner","nav.containers":"Containers",
  "nav.images":"Images","nav.storage":"Storage & Networks","nav.system":"System","nav.settings":"Settings",
- "nav.apps":"Apps","nav.github":"GitHub","nav.domains":"Domains & SSL",
- "dm.proxy":"Reverse proxy (Caddy)","dm.install":"Install proxy","dm.uninstall":"Remove proxy","dm.notInstalled":"not installed",
- "dm.help":"One managed Caddy container publishes ports 80/443 and terminates TLS with automatic Let's Encrypt certificates. Point a DNS A record at this server, then add a route: domain → container:port.",
- "dm.email":"ACME email (Let's Encrypt)","dm.emailSaved":"Email saved and proxy reloaded",
- "dm.routes":"Routes","dm.domain":"Domain","dm.target":"Target","dm.addRoute":"Add route","dm.noRoutes":"No routes yet.",
- "dm.installed":"Proxy installed — ports 80/443 are live","dm.uninstalled":"Proxy removed (certificates kept)",
- "dm.uninstallConfirm":"Remove the Caddy proxy container? All routes go offline; certificates are kept in volumes for a reinstall.",
- "dm.routeAdded":"{d} routed","dm.routeRemoved":"{d} removed",
- "dm.networkWarn":"Target is not on the pinqops-apps network — routing may fail. Add the network to its compose file for a durable fix.",
- "dm.dnsHint":"The domain's DNS A record must point at this server before the certificate can be issued.",
+ "nav.apps":"Apps","nav.github":"GitHub",
  "gh.locked":"Not connected — click to sign in","gh.pickTitle":"Set up a repository",
  "gh.pickHelp":"Search your repositories, pick one, and Install — the wizard commits the deploy workflow, creates the compose project, and registers the runner automatically.",
  "gh.installBtn":"Install","gh.moreRepos":"{n} more — keep typing to narrow down","gh.noRepos":"No repository matches.",
@@ -664,16 +627,7 @@ tr:{
  "nav.grp.monitor":"İzleme","nav.grp.docker":"Docker","nav.grp.server":"Sunucu","nav.grp.github":"Yayınlama",
  "nav.overview":"Genel Bakış","nav.deployments":"Dağıtımlar","nav.runner":"Runner","nav.containers":"Konteynerler",
  "nav.images":"İmajlar","nav.storage":"Depolama ve Ağlar","nav.system":"Sistem","nav.settings":"Ayarlar",
- "nav.apps":"Uygulamalar","nav.github":"GitHub","nav.domains":"Alan Adları ve SSL",
- "dm.proxy":"Reverse proxy (Caddy)","dm.install":"Proxy'yi kur","dm.uninstall":"Proxy'yi kaldır","dm.notInstalled":"kurulu değil",
- "dm.help":"Tek bir yönetilen Caddy konteyneri 80/443 portlarını yayınlar ve otomatik Let's Encrypt sertifikalarıyla TLS'i sonlandırır. DNS A kaydını bu sunucuya yönlendir, sonra bir rota ekle: alan adı → konteyner:port.",
- "dm.email":"ACME e-postası (Let's Encrypt)","dm.emailSaved":"E-posta kaydedildi, proxy yeniden yüklendi",
- "dm.routes":"Rotalar","dm.domain":"Alan adı","dm.target":"Hedef","dm.addRoute":"Rota ekle","dm.noRoutes":"Henüz rota yok.",
- "dm.installed":"Proxy kuruldu — 80/443 portları yayında","dm.uninstalled":"Proxy kaldırıldı (sertifikalar korundu)",
- "dm.uninstallConfirm":"Caddy proxy konteyneri kaldırılsın mı? Tüm rotalar çevrimdışı olur; sertifikalar yeniden kurulum için volume'larda korunur.",
- "dm.routeAdded":"{d} yönlendirildi","dm.routeRemoved":"{d} silindi",
- "dm.networkWarn":"Hedef pinqops-apps ağında değil — yönlendirme çalışmayabilir. Kalıcı çözüm için ağı compose dosyasına ekle.",
- "dm.dnsHint":"Sertifika alınabilmesi için alan adının DNS A kaydı önce bu sunucuyu göstermeli.",
+ "nav.apps":"Uygulamalar","nav.github":"GitHub",
  "gh.locked":"Bağlı değil — giriş için tıkla","gh.pickTitle":"Depo kur",
  "gh.pickHelp":"Depolarında ara, birini seç ve Kur'a bas — sihirbaz deploy workflow'unu commit'ler, compose projesini oluşturur ve runner'ı otomatik kaydeder.",
  "gh.installBtn":"Kur","gh.moreRepos":"{n} depo daha — daraltmak için yazmaya devam et","gh.noRepos":"Eşleşen depo yok.",
@@ -838,7 +792,7 @@ let token=localStorage.getItem("pinqops.token")||"";
 let view="overview", refreshMs=10000, timer=null, logTimer=null, needsSetup=false, ghConfigured=false;
 let deviceTimer=null, deviceHandle=null, repoList=[];
 const NAV=[["nav.grp.monitor",[["overview",IC.grid],["deployments",IC.rocket],["runner",IC.cpu]]],
-           ["nav.grp.docker",[["containers",IC.box],["apps",IC.zap],["images",IC.layers],["storage",IC.db],["domains",IC.globe]]],
+           ["nav.grp.docker",[["containers",IC.box],["apps",IC.zap],["images",IC.layers],["storage",IC.db]]],
            ["nav.grp.github",[["github",IC.github]]],
            ["nav.grp.server",[["system",IC.activity],["settings",IC.sliders]]]];
 
@@ -1013,7 +967,6 @@ async function refresh(quiet){
     else if(view==="images")await loadImages();
     else if(view==="storage")await loadStorage();
     else if(view==="system")await loadSystem();
-    else if(view==="domains")await loadDomains();
     // Settings holds form state the user may be editing; populate only on
     // view entry / manual refresh, never on the auto-refresh tick.
     else if(view==="settings"&&!quiet)await loadNotifSettings();
@@ -1252,70 +1205,6 @@ $("#env-apply").addEventListener("click",()=>{
       try{await api("/api/compose/apply",{method:"POST"});toast(t("ev.applied"),"ok");}
       catch(ex){toast(ex.message,"err");}
     }}]);
-});
-/* ---- domains / reverse proxy (Caddy) ---- */
-async function loadDomains(){
-  try{
-    const p=await api("/api/proxy");
-    const chip=$("#proxy-state");
-    chip.className="chip "+(p.installed?(p.state==="running"?"ok":"warn"):"mut");
-    chip.textContent=p.installed?(p.state||"?"):t("dm.notInstalled");
-    $("#proxy-install").classList.toggle("hidden",p.installed&&p.state==="running");
-    $("#proxy-uninstall").classList.toggle("hidden",!p.installed);
-    if(document.activeElement!==$("#proxy-email"))$("#proxy-email").value=p.email||"";
-    table($("#proxy-routes-table"),[t("dm.domain"),t("dm.target"),t("th.actions")],
-      (p.routes||[]).map(r=>[
-        {h:`<a href="https://${esc(r.domain)}" target="_blank" rel="noopener" class="mono">${esc(r.domain)} ↗</a>`},
-        {h:`<span class="mono">${esc(r.target)}:${r.port}</span>`},
-        {h:`<button class="small danger" data-route-rm="${esc(r.domain)}">${t("c.remove")}</button>`}]),
-      t("dm.noRoutes"));
-    try{
-      const c=await api("/api/docker/containers");
-      const sel=$("#proxy-target"),cur=sel.value;
-      sel.innerHTML=`<option value="">${t("st.pickContainer")}</option>`+c.items
-        .map(x=>(x.Names||"").split(",")[0]).filter(n=>n&&n!=="pinqops-caddy")
-        .map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
-      if(cur)sel.value=cur;
-    }catch{/* docker unreachable — the routes table still renders */}
-  }catch(ex){table($("#proxy-routes-table"),[],[],esc(ex.message));}
-}
-$("#proxy-install").addEventListener("click",async()=>{
-  $("#proxy-install").disabled=true;
-  try{await api("/api/proxy/install",{method:"POST"});toast(t("dm.installed"),"ok");await loadDomains();}
-  catch(ex){toast(ex.message,"err");}
-  finally{$("#proxy-install").disabled=false;}
-});
-$("#proxy-uninstall").addEventListener("click",()=>{
-  openModal(t("dm.uninstall"),t("dm.uninstallConfirm"),[
-    {label:t("c.cancel")},
-    {label:t("c.remove"),danger:true,onClick:async()=>{
-      closeModal();
-      try{await api("/api/proxy/uninstall",{method:"POST"});toast(t("dm.uninstalled"),"ok");await loadDomains();}
-      catch(ex){toast(ex.message,"err");}
-    }}]);
-});
-$("#proxy-email-save").addEventListener("click",async()=>{
-  try{await api("/api/proxy/email",{method:"POST",body:JSON.stringify({email:$("#proxy-email").value.trim()})});
-    toast(t("dm.emailSaved"),"ok");}
-  catch(ex){toast(ex.message,"err");}
-});
-$("#proxy-add").addEventListener("submit",async e=>{
-  e.preventDefault();
-  const domain=$("#proxy-domain").value.trim(),target=$("#proxy-target").value,port=parseInt($("#proxy-port").value,10);
-  if(!domain||!target||!port)return;
-  try{
-    const r=await api("/api/proxy/routes",{method:"POST",body:JSON.stringify({domain,target,port,connect:true})});
-    $("#proxy-domain").value="";$("#proxy-port").value="";
-    toast(t("dm.routeAdded",{d:domain}),"ok");
-    if(!r.targetOnSharedNetwork)toast(t("dm.networkWarn"),"err");
-    await loadDomains();
-  }catch(ex){toast(ex.message,"err");}
-});
-$("#proxy-routes-table").addEventListener("click",async e=>{
-  const b=e.target.closest("button[data-route-rm]");if(!b)return;
-  try{await api("/api/proxy/routes/remove",{method:"POST",body:JSON.stringify({domain:b.dataset.routeRm})});
-    toast(t("dm.routeRemoved",{d:b.dataset.routeRm}),"ok");await loadDomains();}
-  catch(ex){toast(ex.message,"err");}
 });
 async function loadDeployments(){
   await loadDeployHistory();

@@ -97,9 +97,8 @@ public static class SetupTemplates
             # rolled back. Without a .env it falls back to :latest.
             image: ghcr.io/{{owner.ToLowerInvariant()}}/{{repo.ToLowerInvariant()}}:${PINQOPS_TAG:-latest}
             restart: unless-stopped
-            # pinqops-apps is the shared network catalog apps (and the managed
-            # Caddy reverse proxy) live on — it lets the proxy reach this app by
-            # container DNS for Domains & SSL routing.
+            # pinqops-apps is the shared network the catalog apps live on — it
+            # lets this app reach them (Redis, PostgreSQL, …) by container DNS.
             networks: [default, pinqops-apps]
             # Add whatever YOUR application needs here (ports, volumes, env):
             # ports:

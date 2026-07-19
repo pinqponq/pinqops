@@ -28,7 +28,6 @@ password. Options: `--port <n>`, `--host <addr>`, `--cert <pfx>` (HTTPS),
 | Containers | List with start/stop/restart/inspect — and an **inline log panel** (tail, follow, download) that opens from a container's `logs` button |
 | Apps | The [App Catalog](App-Catalog) as a compact list |
 | Images / Storage | Images with prune; volumes, disk usage, networks with a visual map |
-| **Domains & SSL** | [Caddy reverse proxy](Domains-and-SSL): routes, automatic Let's Encrypt certificates |
 | **GitHub** | Sign-in, repository picker, and the [Repository Wizard](Repository-Wizard). Carries a lock icon until connected |
 | System | Memory, disk, load, uptime, host + Docker info |
 | Settings | Language, auto-refresh, [notification channels](Notifications), dashboard password |

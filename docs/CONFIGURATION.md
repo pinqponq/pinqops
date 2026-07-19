@@ -13,7 +13,6 @@ itself. This page lists the knobs that exist.
 | `<compose-dir>/.pinqops/notify.json` | dashboard (read by the CLI) | 0600 | Notification channels + event toggles |
 | `~/.config/pinqops/ui.json` | dashboard | 0600 | Dashboard password hash, GitHub connection (PAT) |
 | `~/.config/pinqops/app-credentials.json` | dashboard | 0600 | Generated catalog app credentials |
-| `~/.config/pinqops/caddy/` | dashboard | — | `routes.json` + generated `Caddyfile` |
 
 ## Runner label
 

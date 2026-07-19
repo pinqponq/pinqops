@@ -7,17 +7,25 @@ and this project adheres to a rolling release model (latest `master` only).
 
 ## [Unreleased]
 
+### Removed
+
+- **Domains & SSL (Caddy reverse proxy).** The managed `pinqops-caddy` reverse
+  proxy, its dashboard view, routes store, Caddyfile generator, and the
+  `/api/proxy` endpoints have been removed — the feature was more surface area
+  than the tool needs. Publish app ports directly, or run your own proxy. The
+  shared `pinqops-apps` network stays for catalog-app connectivity.
+
 ### Fixed
 
 - **Atomic, owner-only writes for secret state.** `ui.json` (GitHub PAT),
-  `app-credentials.json` (plaintext app passwords), the compose `.env`, deploy
-  history and Caddy routes are now written via a temp-file-plus-rename that
+  `app-credentials.json` (plaintext app passwords), the compose `.env`, and
+  deploy history are now written via a temp-file-plus-rename that
   creates the file `0600` *before* any bytes are written. This closes a
   create-then-`chmod` window where secrets briefly existed at the process umask,
   and prevents a crash mid-write from truncating `ui.json` and silently dropping
   the dashboard back to the unauthenticated setup flow.
-- **Docker argument injection hardening.** Container/network names and Caddy
-  route targets that begin with `-` are now rejected, and every dashboard docker
+- **Docker argument injection hardening.** Container/network names that begin
+  with `-` are now rejected, and every dashboard docker
   call passes `--` before the user-supplied positional, so a crafted name can no
   longer be parsed as a docker flag.
 - **Image retention no longer trusts `docker images` ordering.** Retention now

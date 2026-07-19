@@ -82,7 +82,6 @@ builder.Services.AddSingleton<SystemInfoService>();
 builder.Services.AddSingleton<AppInstallJobs>();
 builder.Services.AddSingleton<DeployService>();
 builder.Services.AddSingleton<AppCredentialStore>();
-builder.Services.AddSingleton<CaddyService>();
 
 // Blunt per-client request ceiling on top of the login throttle, so a single
 // client cannot hammer the API (or the process-spawning docker endpoints).
@@ -944,82 +943,6 @@ app.MapGet("/api/deploy/job/{jobId}", (string jobId, DeployService deploys) =>
         ? Error(404, "Unknown rollback job.")
         : Results.Json(new { tag = job.Tag, phase = job.Phase, done = job.Done, error = job.Error, log = job.Log() });
 });
-
-// ---- Reverse proxy / domains (Caddy) --------------------------------------------
-
-app.MapGet("/api/proxy", (CaddyService caddy) =>
-    Safe(async () => await caddy.StatusAsync()));
-
-app.MapPost("/api/proxy/install", (CaddyService caddy) =>
-    Safe(async () =>
-    {
-        var output = await caddy.InstallAsync();
-        logger.LogWarning("Caddy reverse proxy installed from the dashboard");
-        return new { ok = true, output };
-    }));
-
-app.MapPost("/api/proxy/email", (HttpContext context, CaddyService caddy) =>
-    Safe(async () =>
-    {
-        var request = await context.Request.ReadFromJsonAsync<ProxyEmailRequest>();
-        var email = request?.Email?.Trim() ?? "";
-        if (email.Length > 0)
-        {
-            CaddyRoutesStore.ValidateEmail(email);
-        }
-
-        caddy.Store.Update(routes => routes.Email = email);
-        await caddy.ApplyAsync();
-        return new { ok = true };
-    }));
-
-app.MapPost("/api/proxy/routes", (HttpContext context, CaddyService caddy, DockerService docker) =>
-    Safe(async () =>
-    {
-        var request = await context.Request.ReadFromJsonAsync<ProxyRouteRequest>()
-            ?? throw new ArgumentException("Invalid request body.");
-        var route = new CaddyRoute(
-            request.Domain?.Trim().ToLowerInvariant() ?? "",
-            request.Target?.Trim() ?? "",
-            request.Port ?? 0);
-        CaddyRoutesStore.Validate(route);
-
-        // Caddy reaches the target by container DNS, which only works on the
-        // shared network; connect it on demand (a compose recreate drops this —
-        // the durable fix is adding pinqops-apps to the app's compose file).
-        var connected = await caddy.IsOnSharedNetworkAsync(route.Target);
-        if (!connected && request.Connect == true)
-        {
-            await docker.ConnectNetworkAsync(AppCatalog.SharedNetwork, route.Target);
-            connected = true;
-        }
-
-        caddy.Store.Update(routes =>
-        {
-            routes.Routes.RemoveAll(existing => existing.Domain == route.Domain);
-            routes.Routes.Add(route);
-        });
-        await caddy.ApplyAsync();
-        logger.LogWarning("Proxy route added: {Domain} -> {Target}:{Port}", route.Domain, route.Target, route.Port);
-        return new { ok = true, targetOnSharedNetwork = connected };
-    }));
-
-app.MapPost("/api/proxy/routes/remove", (HttpContext context, CaddyService caddy) =>
-    Safe(async () =>
-    {
-        var request = await context.Request.ReadFromJsonAsync<ProxyRouteRemoveRequest>();
-        if (request?.Domain is not { Length: > 0 } domain)
-        {
-            throw new ArgumentException("A domain is required.");
-        }
-
-        caddy.Store.Update(routes => routes.Routes.RemoveAll(route => route.Domain == domain.Trim().ToLowerInvariant()));
-        await caddy.ApplyAsync();
-        return new { ok = true };
-    }));
-
-app.MapPost("/api/proxy/uninstall", (CaddyService caddy) =>
-    Safe(async () => new { ok = true, output = await caddy.UninstallAsync() }));
 
 // ---- Compose project env (.env) -------------------------------------------------
 

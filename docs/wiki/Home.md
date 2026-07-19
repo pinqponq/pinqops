@@ -14,7 +14,6 @@ the server.
 | [Repository Wizard](Repository-Wizard) | GitHub sign-in, picking a repo, the step-by-step install wizard |
 | [Deploy History & Rollback](Deploy-History-and-Rollback) | SHA-tagged deploys, health checks, one-click rollback |
 | [Notifications](Notifications) | Deploy results via webhook / Slack / Telegram |
-| [Domains & SSL](Domains-and-SSL) | Caddy reverse proxy with automatic Let's Encrypt |
 | [App Catalog](App-Catalog) | ~50 one-click apps and how installs work |
 | [Runner Troubleshooting](Runner-Troubleshooting) | Why a runner shows offline / missing, and how pinqops fixes it |
 | [Security Model](Security-Model) | Trust boundaries and hardening checklist |

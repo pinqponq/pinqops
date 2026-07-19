@@ -32,9 +32,9 @@ services:
     # environment:
     #   - EXAMPLE=value
     #
-    # OPTIONAL — join the shared pinqops-apps network so the pinqops-managed
-    # Caddy reverse proxy (Domains & SSL in the dashboard) can reach this app
-    # by container DNS. Create the network once: docker network create pinqops-apps
+    # OPTIONAL — join the shared pinqops-apps network so this app can reach the
+    # catalog apps (Redis, PostgreSQL, …) by container DNS. Create the network
+    # once: docker network create pinqops-apps
     # networks: [default, pinqops-apps]
 
 # networks:

@@ -88,12 +88,6 @@ file path, so shared state derives from it:
   enabled channels (generic webhook, Slack-compatible webhook, Telegram bot),
   best-effort with a per-channel timeout; a notification failure never fails a
   deploy.
-- **Domains & SSL** — a managed `pinqops-caddy` container on the shared
-  `pinqops-apps` network publishes 80/443 and terminates TLS with automatic
-  Let's Encrypt certificates. Routes (`domain → container:port`) are stored in
-  `~/.config/pinqops/caddy/routes.json`, rendered into a Caddyfile from
-  validated fields only, and hot-reloaded. Certificates persist in named
-  volumes across container recreates.
 - **Catalog credentials** — catalog apps install with generated passwords
   (stored 0600 in `~/.config/pinqops/app-credentials.json`, retrievable from
   the dashboard); a reinstall reuses the stored password so data in surviving

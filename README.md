@@ -51,9 +51,8 @@ actually appeared. Deploys then happen the intended way: merge to `master`.
 There is also a curated catalog of ~50 one-click apps (Redis, PostgreSQL,
 Grafana, MinIO, …) — installed with generated passwords (retrievable in the
 dashboard, reused on reinstall), running in the background with live
-pulling → starting progress. A **Domains & SSL** view manages a Caddy reverse
-proxy with automatic Let's Encrypt certificates, and the Deployments view
-shows deploy history with one-click rollback plus a compose `.env` editor.
+pulling → starting progress. The Deployments view shows deploy history with
+one-click rollback plus a compose `.env` editor.
 You don't have to install the UI; everything also works from the CLI.
 
 ```bash
