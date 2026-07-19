@@ -57,13 +57,24 @@ public static class GitHubRepositoryParser
 
         var owner = segments[0];
         var name = StripGitSuffix(segments[1]);
-        if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(name))
+        if (!IsValidSegment(owner) || !IsValidSegment(name))
         {
             throw Invalid(original);
         }
 
         return (owner, name);
     }
+
+    /// <summary>
+    /// GitHub owners and repository names are limited to letters, digits, and
+    /// <c>._-</c>. Enforcing this keeps the parsed values (which flow into the
+    /// runner <c>--url</c> and systemd unit-name matching) free of characters
+    /// that could be reinterpreted downstream — notably a leading dash.
+    /// </summary>
+    private static bool IsValidSegment(string segment) =>
+        !string.IsNullOrWhiteSpace(segment)
+        && segment[0] is not '-'
+        && segment.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or '-');
 
     private static string StripGitSuffix(string name) =>
         name.EndsWith(GitSuffix, StringComparison.OrdinalIgnoreCase) ? name[..^GitSuffix.Length] : name;

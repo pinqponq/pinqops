@@ -65,16 +65,9 @@ public sealed class UiConfigStore
 
     private void Save(UiConfig config)
     {
-        var directory = Path.GetDirectoryName(_path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        File.WriteAllText(_path, JsonSerializer.Serialize(config, SerializerOptions));
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(_path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
+        // Atomic + owner-only: the file holds a broad-scope PAT, and a torn
+        // write would wipe the password hash and drop the dashboard back to the
+        // unauthenticated setup flow.
+        SecureFile.WriteAllText(_path, JsonSerializer.Serialize(config, SerializerOptions));
     }
 }

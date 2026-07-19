@@ -15,10 +15,11 @@ public static class PasswordGenerator
     public static string Generate()
     {
         var chars = new char[Length];
-        var bytes = RandomNumberGenerator.GetBytes(Length * 4);
         for (var i = 0; i < Length; i++)
         {
-            chars[i] = Alphabet[(int)(BitConverter.ToUInt32(bytes, i * 4) % (uint)Alphabet.Length)];
+            // GetInt32 is rejection-sampled, so every alphabet symbol is exactly
+            // equally likely (no modulo bias).
+            chars[i] = Alphabet[RandomNumberGenerator.GetInt32(Alphabet.Length)];
         }
 
         return new string(chars);

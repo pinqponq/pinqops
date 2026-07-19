@@ -16,12 +16,14 @@ public sealed class GitHubDashboardService : IDisposable
     private const string PublicHost = "github.com";
 
     private readonly HttpClient _httpClient;
+    private readonly bool _ownsClient;
     private readonly UiConfigStore _configStore;
 
     public GitHubDashboardService(UiConfigStore configStore, HttpClient? httpClient = null)
     {
         _configStore = configStore;
         _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(25) };
+        _ownsClient = httpClient is null;
     }
 
     public bool IsConfigured
@@ -448,7 +450,9 @@ public sealed class GitHubDashboardService : IDisposable
             : $"https://{repository.Host}/api/v3";
 
     private static string? GetString(JsonElement element, string property) =>
-        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(property, out var value)
+        && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
 

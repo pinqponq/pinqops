@@ -32,7 +32,7 @@ public sealed class DockerService
     public async Task<JsonElement> InspectNetworkAsync(string name)
     {
         ValidateResourceName(name);
-        var result = await RunAsync("network", "inspect", name).ConfigureAwait(false);
+        var result = await RunAsync("network", "inspect", "--", name).ConfigureAwait(false);
         return result.Succeeded ? ParseElement(result.StandardOutput) : throw Failed(result);
     }
 
@@ -57,6 +57,7 @@ public sealed class DockerService
             arguments.Add("--internal");
         }
 
+        arguments.Add("--");
         arguments.Add(name);
         var result = await RunAsync([.. arguments]).ConfigureAwait(false);
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
@@ -65,7 +66,7 @@ public sealed class DockerService
     public async Task<string> RemoveNetworkAsync(string name)
     {
         ValidateResourceName(name);
-        var result = await RunAsync("network", "rm", name).ConfigureAwait(false);
+        var result = await RunAsync("network", "rm", "--", name).ConfigureAwait(false);
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
@@ -73,7 +74,7 @@ public sealed class DockerService
     {
         ValidateResourceName(network);
         ValidateResourceName(container);
-        var result = await RunAsync("network", "connect", network, container).ConfigureAwait(false);
+        var result = await RunAsync("network", "connect", "--", network, container).ConfigureAwait(false);
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
@@ -81,7 +82,7 @@ public sealed class DockerService
     {
         ValidateResourceName(network);
         ValidateResourceName(container);
-        var result = await RunAsync("network", "disconnect", network, container).ConfigureAwait(false);
+        var result = await RunAsync("network", "disconnect", "--", network, container).ConfigureAwait(false);
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
@@ -103,7 +104,7 @@ public sealed class DockerService
     public async Task<string> ContainerLogsAsync(string containerId, int tail)
     {
         ValidateResourceName(containerId);
-        var result = await RunAsync("logs", "--tail", tail.ToString(), "--timestamps", containerId).ConfigureAwait(false);
+        var result = await RunAsync("logs", "--tail", tail.ToString(), "--timestamps", "--", containerId).ConfigureAwait(false);
         // Docker writes app output to both streams; show them together like the terminal does.
         return result.Succeeded || result.StandardError.Length > 0 || result.StandardOutput.Length > 0
             ? result.StandardOutput + result.StandardError
@@ -113,7 +114,7 @@ public sealed class DockerService
     public async Task<JsonElement> InspectContainerAsync(string containerId)
     {
         ValidateResourceName(containerId);
-        var result = await RunAsync("inspect", containerId).ConfigureAwait(false);
+        var result = await RunAsync("inspect", "--", containerId).ConfigureAwait(false);
         return result.Succeeded ? ParseElement(result.StandardOutput) : throw Failed(result);
     }
 
@@ -125,7 +126,7 @@ public sealed class DockerService
             throw new ArgumentException($"Unsupported container action '{action}'.");
         }
 
-        var result = await RunAsync(action, containerId).ConfigureAwait(false);
+        var result = await RunAsync(action, "--", containerId).ConfigureAwait(false);
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
@@ -223,7 +224,7 @@ public sealed class DockerService
     public async Task<string> UninstallAppAsync(string appId)
     {
         ValidateResourceName(appId);
-        var result = await RunAsync("rm", "-f", $"{AppCatalog.ContainerPrefix}{appId}").ConfigureAwait(false);
+        var result = await RunAsync("rm", "-f", "--", $"{AppCatalog.ContainerPrefix}{appId}").ConfigureAwait(false);
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
@@ -261,7 +262,11 @@ public sealed class DockerService
 
     private static void ValidateResourceName(string name)
     {
+        // A leading '-' would let the value be parsed as a docker flag rather
+        // than a positional container/network name (argument injection), so
+        // reject it explicitly; the docker calls also pass '--' before the name.
         if (string.IsNullOrWhiteSpace(name)
+            || name[0] is '-'
             || !name.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or '-'))
         {
             throw new ArgumentException($"'{name}' is not a valid container or network name.");

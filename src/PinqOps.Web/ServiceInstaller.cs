@@ -30,6 +30,30 @@ public sealed class ServiceInstaller
             return 1;
         }
 
+        // These values are interpolated into the systemd unit's ExecStart line;
+        // reject anything that could inject an extra directive (newline) or break
+        // out of a quoted argument (double quote).
+        if (!int.TryParse(port, out var portNumber) || portNumber is < 1 or > 65535)
+        {
+            _log("error: --port must be an integer between 1 and 65535.");
+            return 1;
+        }
+
+        foreach (var (option, value) in new[]
+                 {
+                     ("--host", host),
+                     ("--cert", certPath ?? string.Empty),
+                     ("--cert-password", certPassword ?? string.Empty),
+                     ("--user", user),
+                 })
+        {
+            if (value.AsSpan().IndexOfAny('\r', '\n', '"') >= 0)
+            {
+                _log($"error: {option} contains an invalid character (newline or double quote).");
+                return 1;
+            }
+        }
+
         var execStart = new StringBuilder($"\"{executable}\" --port {port} --host {host}");
         if (!string.IsNullOrWhiteSpace(certPath))
         {

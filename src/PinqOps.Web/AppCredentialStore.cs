@@ -110,16 +110,9 @@ public sealed class AppCredentialStore
 
     private void Save(Dictionary<string, AppCredentials> all)
     {
-        var directory = System.IO.Path.GetDirectoryName(_path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        File.WriteAllText(_path, JsonSerializer.Serialize(all, SerializerOptions));
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(_path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
+        // Atomic + owner-only from creation: this file holds plaintext app
+        // passwords, so the secret bytes must never land on a world-readable
+        // inode, even briefly.
+        SecureFile.WriteAllText(_path, JsonSerializer.Serialize(all, SerializerOptions));
     }
 }

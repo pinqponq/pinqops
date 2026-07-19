@@ -105,12 +105,9 @@ public static class EnvFileStore
 
     private static void WriteLines(string path, List<string> lines)
     {
-        var isNew = !File.Exists(path);
-        File.WriteAllText(path, string.Join('\n', lines) + "\n");
-        if (isNew && !OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
+        // Atomic + owner-only: env values are secrets by assumption, and a torn
+        // write would corrupt the compose project's .env.
+        SecureFile.WriteAllText(path, string.Join('\n', lines) + "\n");
     }
 
     private static bool TryParseAssignment(string line, out string key, out string value)

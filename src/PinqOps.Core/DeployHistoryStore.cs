@@ -87,20 +87,10 @@ public sealed class DeployHistoryStore
 
     private void Save(List<DeployRecord> records)
     {
-        var directory = System.IO.Path.GetDirectoryName(_path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        var isNew = !File.Exists(_path);
-        File.WriteAllText(
+        // Atomic write so a crash mid-save cannot truncate the history file.
+        SecureFile.WriteAllText(
             _path,
             JsonSerializer.Serialize(new HistoryDocument { Deployments = records }, SerializerOptions));
-        if (isNew && !OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(_path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
     }
 
     private sealed class HistoryDocument
