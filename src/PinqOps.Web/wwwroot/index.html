@@ -553,6 +553,7 @@ en:{
  "su.workflowDone":"Workflow committed to the repository","su.composeDone":"Compose file created",
  "su.runnerDone":"Runner installed and started","su.installing":"installing — this can take a few minutes…",
  "su.startBtn":"Start service","su.started":"Runner service started",
+ "su.autoStarting":"runner service stopped — starting it automatically…","su.runnerStartFailed":"Could not start the runner service automatically — see the logs on the Runner page.","su.runnerNotConnecting":"Service is running but GitHub sees it offline — check its logs on the Runner page (often a network/clock issue).","su.viewLogs":"View logs",
  "ap.search":"search apps…","ap.all":"all categories","ap.open":"Open","ap.install":"Install","ap.uninstall":"Remove",
  "ap.pulling":"pulling the image…","ap.starting":"starting the container…","ap.installing":"installing",
  "ap.hint":"Apps run as pinqops-<id> containers; data is kept in named volumes.",
@@ -668,6 +669,7 @@ tr:{
  "su.workflowDone":"Workflow repoya commit'lendi","su.composeDone":"Compose dosyası oluşturuldu",
  "su.runnerDone":"Runner kuruldu ve başlatıldı","su.installing":"kuruluyor — birkaç dakika sürebilir…",
  "su.startBtn":"Servisi başlat","su.started":"Runner servisi başlatıldı",
+ "su.autoStarting":"runner servisi durmuş — otomatik başlatılıyor…","su.runnerStartFailed":"Runner servisi otomatik başlatılamadı — Runner sayfasındaki loglara bak.","su.runnerNotConnecting":"Servis çalışıyor ama GitHub çevrimdışı görüyor — Runner sayfasındaki loglara bak (çoğunlukla ağ/saat sorunu).","su.viewLogs":"Logları gör",
  "ap.search":"uygulama ara…","ap.all":"tüm kategoriler","ap.open":"Aç","ap.install":"Kur","ap.uninstall":"Kaldır",
  "ap.pulling":"imaj çekiliyor…","ap.starting":"konteyner başlatılıyor…","ap.installing":"kuruluyor",
  "ap.hint":"Uygulamalar pinqops-<id> adlı konteynerler olarak çalışır; veriler adlandırılmış volume'larda tutulur.",
@@ -1075,6 +1077,7 @@ function sparkline(el,series){
 
 /* ================= overview ================= */
 let ghCache=null,ghCacheAt=0;
+let runnerAutoStartTried=false;
 async function githubOverview(force){
   if(!ghConfigured)return null;
   if(!force&&ghCache&&Date.now()-ghCacheAt<8000)return ghCache;
@@ -1759,23 +1762,46 @@ async function loadSetupStatus(){
     const s=await api("/api/setup/status");
     if(!s.configured){card.classList.add("hidden");return;}
     card.classList.remove("hidden");
+    // Auto-heal: a stopped-but-installed runner is started automatically, so the
+    // only thing a user ever runs is the GitHub wizard — never a "start" button.
+    if(s.runnerInstalled&&s.runnerServiceActive===false&&!runnerAutoStartTried){
+      runnerAutoStartTried=true;
+      const log=$("#setup-log");if(log){log.classList.remove("hidden");log.textContent=t("su.autoStarting");}
+      try{await api("/api/setup/start-runner",{method:"POST"});}catch{}
+      return loadSetupStatus();
+    }
+    if(s.runnerServiceActive===true)runnerAutoStartTried=false;
     const row=(ok,label,detail,btn)=>`<div style="display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line)">
       <span class="chip ${ok?"ok":"warn"}">${ok?"✓":"!"}</span>
       <div style="flex:1"><b style="font-size:13px">${label}</b><div class="muted" style="font-size:12px">${detail||""}</div></div>${btn||""}</div>`;
     // A token without Administration:read can't list runners — degrade the
     // runner row to "installed locally, online state unknown", never the card.
     const runnerOk=s.runnerInstalled&&(s.runnersOnline>0||!!s.runnersError);
-    const runnerDetail=!s.runnerInstalled
-      ?(s.runnerMismatch?t("su.runnerMismatch",{r:esc(s.runnerRegisteredTo||"?")}):t("su.runnerMiss"))
-      :s.runnersError?t("su.runnerUnknown")
-      :s.runnersOnline>0?t("su.runnerOnline",{n:s.runnersOnline}):t("su.runnerOffline");
+    // The runner action is a last-resort fallback: normally the service is
+    // auto-started (stopped case) or the row just points at logs (running but
+    // not reaching GitHub — a restart would not help).
+    let runnerDetail,runnerAction="";
+    if(!s.runnerInstalled){
+      runnerDetail=s.runnerMismatch?t("su.runnerMismatch",{r:esc(s.runnerRegisteredTo||"?")}):t("su.runnerMiss");
+      runnerAction=`<button class="small primary" id="btn-fix-runner">${t("su.installBtn")}</button>`;
+    }else if(s.runnersError){
+      runnerDetail=t("su.runnerUnknown");
+    }else if(s.runnersOnline>0){
+      runnerDetail=t("su.runnerOnline",{n:s.runnersOnline});
+    }else if(s.runnerServiceActive===false){
+      runnerDetail=t("su.runnerStartFailed");
+      runnerAction=`<button class="small primary" id="btn-start-runner">${t("su.startBtn")}</button>`;
+    }else if(s.runnerServiceActive===true){
+      runnerDetail=t("su.runnerNotConnecting");
+      runnerAction=`<button class="small" id="btn-runner-logs">${t("su.viewLogs")}</button>`;
+    }else{
+      runnerDetail=t("su.runnerOffline");
+    }
     $("#setup-list").innerHTML=[
       row(s.repo.hasDockerfile,t("su.dockerfile"),s.repo.hasDockerfile?"":t("su.dockerfileMiss")),
       row(s.repo.hasWorkflow,t("su.workflow"),s.repo.hasWorkflow?".github/workflows/deploy.yml":t("su.workflowMiss"),
         s.repo.hasWorkflow?"":`<button class="small primary" id="btn-fix-workflow">${t("su.createBtn")}</button>`),
-      row(runnerOk,t("su.runner"),runnerDetail,
-        !s.runnerInstalled?`<button class="small primary" id="btn-fix-runner">${t("su.installBtn")}</button>`
-        :(!s.runnersError&&s.runnersOnline===0)?`<button class="small primary" id="btn-start-runner">${t("su.startBtn")}</button>`:""),
+      row(runnerOk,t("su.runner"),runnerDetail,runnerAction),
       row(s.composeExists,t("su.compose"),s.composeExists?esc(s.composeFile):t("su.composeMiss",{p:esc(s.composeFile)}),
         s.composeExists?"":`<button class="small primary" id="btn-fix-compose">${t("su.createBtn")}</button>`),
     ].join("");
@@ -1804,6 +1830,7 @@ async function loadSetupStatus(){
         toast(r.succeeded?t("su.started"):t("c.failed"),r.succeeded?"ok":"err");
         loadSetupStatus();}
       catch(ex){log.textContent=ex.message;toast(ex.message,"err");sr.disabled=false;}};
+    const rl=$("#btn-runner-logs");if(rl)rl.onclick=()=>setView("runner");
   }catch(ex){card.classList.remove("hidden");$("#setup-summary").textContent=ex.message;$("#setup-list").innerHTML="";}
 }
 

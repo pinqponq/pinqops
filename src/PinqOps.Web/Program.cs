@@ -546,7 +546,7 @@ app.MapPost("/api/docker/prune", (DockerService docker) =>
 
 // ---- Setup (Portainer-style: pick a repo, the dashboard readies everything) ----
 
-app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService gitHub) =>
+app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService gitHub, LocalRunnerService runner) =>
     Safe(async () =>
     {
         var config = store.Current;
@@ -581,6 +581,13 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
         var runnerInstalled = runnerRegisteredTo is not null
             && LocalRunnerService.MatchesRepo(runnerRegisteredTo, config.RepoUrl);
 
+        // Whether the systemd service is up lets the dashboard auto-start a
+        // stopped runner (safe, idempotent) and avoid offering a useless "start"
+        // button when the service is running but just can't reach GitHub.
+        var runnerServiceActive = runnerInstalled
+            ? await runner.IsServiceActiveAsync(config.RunnerDirectory)
+            : null;
+
         return (object)new
         {
             configured = true,
@@ -589,6 +596,7 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
             runnersTotal = total,
             runnersError,
             runnerInstalled,
+            runnerServiceActive,
             runnerMismatch = !runnerInstalled && runnerRegisteredTo is not null,
             runnerRegisteredTo,
             composeFile = config.ComposeFile,

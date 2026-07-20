@@ -9,6 +9,13 @@ and this project adheres to a rolling release model (latest `master` only).
 
 ### Changed
 
+- **The dashboard auto-starts a stopped runner instead of asking for a click.**
+  The deployment-readiness card now reads the runner's systemd state: an
+  installed-but-stopped service is started automatically (idempotent), so the
+  only thing a user runs is the GitHub wizard. When the service is running but
+  GitHub still shows it offline — where a restart would not help — the row points
+  at the runner's logs (usually a network/clock issue) instead of offering a
+  "start" button that does nothing.
 - **Split the "Storage & Networks" dashboard view into separate "Storage" and
   "Networks" tabs.** Storage keeps volumes and Docker disk usage; Networks holds
   the network list (create/remove/connect) and the visual network map. Each

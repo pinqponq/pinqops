@@ -267,6 +267,37 @@ public sealed class LocalRunnerService
         }
     }
 
+    /// <summary>
+    /// Whether this runner's systemd service is currently active, or null when
+    /// the service (or systemd itself) can't be found. Lets the dashboard
+    /// auto-start a stopped runner instead of asking the user to press a button.
+    /// </summary>
+    public async Task<bool?> IsServiceActiveAsync(string runnerDirectory)
+    {
+        var unit = await FindUnitAsync(runnerDirectory, RunnerRegistration.ReadUrl(runnerDirectory)).ConfigureAwait(false);
+        if (unit is null)
+        {
+            return null;
+        }
+
+        var show = await RunAsync("systemctl", "show", unit, "--property=ActiveState").ConfigureAwait(false);
+        if (show is null || !show.Succeeded)
+        {
+            return null;
+        }
+
+        foreach (var line in show.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = line.IndexOf('=');
+            if (separator > 0 && line[..separator] == "ActiveState")
+            {
+                return line[(separator + 1)..].Trim() == "active";
+            }
+        }
+
+        return null;
+    }
+
     private async Task<object?> GetServiceStatusAsync(string runnerDirectory, string? registeredUrl)
     {
         var unit = await FindUnitAsync(runnerDirectory, registeredUrl).ConfigureAwait(false);
