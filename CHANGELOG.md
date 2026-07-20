@@ -9,6 +9,8 @@ and this project adheres to a rolling release model (latest `master` only).
 
 ### Changed
 
+- **`PINQOPS_IMAGE` is now rejected by the dashboard `.env` editor**, alongside
+  `PINQOPS_TAG`. Every deploy re-pins both, so a hand edit silently disappeared.
 - **The dashboard auto-starts a stopped runner instead of asking for a click.**
   The deployment-readiness card now reads the runner's systemd state: an
   installed-but-stopped service is started automatically (idempotent), so the
@@ -31,6 +33,19 @@ and this project adheres to a rolling release model (latest `master` only).
 
 ### Added
 
+- **The generated compose project now publishes a port, so a deployed app is
+  actually reachable.** Previously the template left `ports:` commented out: the
+  container came up but `docker ps` showed only `80/tcp` with nothing mapped. The
+  wizard now reads the container port from the repository's own Dockerfile
+  (`EXPOSE`, falling back to `80`) and writes
+  `ports: ["${PINQOPS_HOST_PORT:-8080}:${PINQOPS_CONTAINER_PORT}"]`, seeding both
+  values into the project `.env`. Changing the published port is a `.env` edit in
+  **Deployments → Environment** plus **Apply** — no YAML editing.
+- **Containers are named after the repository.** The compose project name was the
+  fixed string `pinqops`, so every deployment's container was `pinqops-app-1`
+  regardless of what was deployed — and indistinguishable from the catalog apps.
+  It is now the repository name (reduced to compose's grammar the same way
+  compose would), so the container reads `<repo>-app-1`, e.g. `peramice-app-1`.
 - **The deployed image now follows the repository automatically (no more stale
   compose after a rename).** The generated compose references
   `image: ${PINQOPS_IMAGE:-…}:${PINQOPS_TAG:-latest}`, and `pinqops deploy

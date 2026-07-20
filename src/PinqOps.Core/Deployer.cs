@@ -13,6 +13,14 @@ public sealed class Deployer
     public const string TagVariable = "PINQOPS_TAG";
     public const string ImageVariable = "PINQOPS_IMAGE";
 
+    /// <summary>
+    /// Whether a compose <c>.env</c> key is owned by deploy/rollback. Both are
+    /// re-pinned on every deploy, so editing one by hand silently disappears —
+    /// callers surface them as read-only rather than accept the edit.
+    /// </summary>
+    public static bool IsDeployManagedVariable(string key) =>
+        key == TagVariable || key == ImageVariable;
+
     private readonly IProcessRunner _processRunner;
     private readonly Action<string>? _log;
     private readonly DeployHistoryStore? _history;

@@ -200,13 +200,22 @@ Create the single, fixed application project (default path
 ```bash
 sudo mkdir -p /opt/pinqops
 sudo cp deploy/app.docker-compose.example.yml /opt/pinqops/docker-compose.yml
-sudo nano /opt/pinqops/docker-compose.yml   # set image: ghcr.io/<owner>/<repo>:${PINQOPS_TAG:-latest}
+sudo nano /opt/pinqops/docker-compose.yml   # set name: <repo>, and the container port
 ```
 
-The `${PINQOPS_TAG:-latest}` interpolation is what enables deploy history and
-`pinqops rollback` — the deploy pins each commit's `sha-<...>` tag in
-`/opt/pinqops/.env`. A plain `:latest` reference still works (moving-tag mode,
-no rollback). See [CONFIGURATION.md](CONFIGURATION.md) for the details.
+Two things in that file matter:
+
+- **`${PINQOPS_IMAGE}:${PINQOPS_TAG}`** — the deploy pins both in `/opt/pinqops/.env`
+  (from `--image` and `--tag`), so the image follows the repository even after a
+  rename, and each commit's `sha-<...>` tag enables deploy history and
+  `pinqops rollback`.
+- **`ports:`** — publishing is what makes the app reachable. Set the container
+  side to whatever your Dockerfile `EXPOSE`s; the host side defaults to `8080`
+  and is changeable later via `PINQOPS_HOST_PORT` in `.env`.
+
+The dashboard's GitHub wizard generates this file for you — including reading the
+container port out of your Dockerfile — so this manual step is only for a
+CLI-only setup. See [CONFIGURATION.md](CONFIGURATION.md) for the details.
 
 (If you use a different path, set the repository variable `APP_COMPOSE_PATH`
 accordingly — Settings → Secrets and variables → Actions → Variables.)

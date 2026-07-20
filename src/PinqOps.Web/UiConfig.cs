@@ -10,6 +10,12 @@ public sealed class UiConfig
     public const string DefaultComposeFile = "/opt/pinqops/docker-compose.yml";
     public const string DefaultRunnerDirectory = "/opt/actions-runner";
 
+    /// <summary>
+    /// Host port a newly generated compose project publishes the app on. Kept off
+    /// 80/443 so the first deploy cannot collide with something already bound.
+    /// </summary>
+    public const int DefaultHostPort = 8080;
+
     /// <summary>PBKDF2 hash of the dashboard password ("salt.hash" base64).</summary>
     public string? PasswordHash { get; set; }
 

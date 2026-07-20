@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using PinqOps;
 using PinqOps.Web;
+using static System.Globalization.CultureInfo;
 
 // pinqops-ui — the optional web dashboard for a pinqops server.
 // Binds 7467 by default ("PINQ" on a phone keypad) — an otherwise unassigned port.
@@ -610,7 +611,7 @@ app.MapPost("/api/setup/create-workflow", (GitHubDashboardService gitHub) =>
 app.MapPost("/api/setup/start-runner", (UiConfigStore store, LocalRunnerService runner) =>
     Safe(async () => await runner.StartServiceAsync(store.Current.RunnerDirectory)));
 
-app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService docker) =>
+app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService docker, GitHubDashboardService gitHub) =>
     Safe(async () =>
     {
         var config = store.Current;
@@ -635,8 +636,39 @@ app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService doc
             Directory.CreateDirectory(directory);
         }
 
-        await File.WriteAllTextAsync(config.ComposeFile, SetupTemplates.ComposeYaml(repository.Owner, repository.Name));
-        return new { ok = true, composeFile = config.ComposeFile };
+        // Publishing a port is what makes the deployed app actually reachable.
+        // The container side comes from the repo's own Dockerfile so the mapping
+        // is right without asking; the host side is a safe default the user can
+        // change later from the .env editor. Reading the Dockerfile is only a
+        // hint — a GitHub hiccup must not block creating the project.
+        int? exposedPort = null;
+        try
+        {
+            exposedPort = await gitHub.GetDockerfileExposedPortAsync();
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception, "Could not read the Dockerfile's EXPOSE; defaulting the container port");
+        }
+
+        var containerPort = exposedPort ?? DockerfileInspector.DefaultPort;
+        var hostPort = UiConfig.DefaultHostPort;
+
+        await File.WriteAllTextAsync(
+            config.ComposeFile,
+            SetupTemplates.ComposeYaml(repository.Owner, repository.Name, hostPort, containerPort));
+
+        // Seed the .env so both ports are discoverable (and editable) in the
+        // dashboard instead of being invisible defaults inside the YAML.
+        var envFile = PinqOpsStatePaths.EnvFile(config.ComposeFile);
+        EnvFileStore.SetValue(envFile, SetupTemplates.HostPortVariable, hostPort.ToString(InvariantCulture));
+        EnvFileStore.SetValue(envFile, SetupTemplates.ContainerPortVariable, containerPort.ToString(InvariantCulture));
+
+        logger.LogWarning(
+            "Compose project created at {File} publishing {HostPort}->{ContainerPort}",
+            config.ComposeFile, hostPort, containerPort);
+        return new { ok = true, composeFile = config.ComposeFile, hostPort, containerPort };
     }));
 
 // Full runner install driven from the dashboard: registration token via the
@@ -967,7 +999,7 @@ app.MapGet("/api/compose/env", (UiConfigStore store) =>
                 key = pair.Key,
                 // Values are secrets by assumption; the UI only ever sees a mask.
                 masked = pair.Value.Length > 4 ? $"••••{pair.Value[^4..]}" : "••••",
-                managed = pair.Key == Deployer.TagVariable,
+                managed = Deployer.IsDeployManagedVariable(pair.Key),
             }),
         };
     }));
@@ -979,23 +1011,25 @@ app.MapPost("/api/compose/env", (HttpContext context, UiConfigStore store) =>
             ?? throw new ArgumentException("Invalid request body.");
         var envFile = PinqOpsStatePaths.EnvFile(store.Current.ComposeFile);
 
+        // Same predicate the GET projection reports as `managed`, so the editor
+        // never offers an edit the write path will reject.
+        static void RejectIfDeployManaged(string key)
+        {
+            if (Deployer.IsDeployManagedVariable(key))
+            {
+                throw new ArgumentException($"{key} is managed by pinqops deploy/rollback.");
+            }
+        }
+
         foreach (var key in request.Remove ?? [])
         {
-            if (key == Deployer.TagVariable)
-            {
-                throw new ArgumentException($"{Deployer.TagVariable} is managed by pinqops deploy/rollback.");
-            }
-
+            RejectIfDeployManaged(key);
             EnvFileStore.RemoveValue(envFile, key);
         }
 
         foreach (var (key, value) in request.Set ?? new Dictionary<string, string>())
         {
-            if (key == Deployer.TagVariable)
-            {
-                throw new ArgumentException($"{Deployer.TagVariable} is managed by pinqops deploy/rollback.");
-            }
-
+            RejectIfDeployManaged(key);
             EnvFileStore.SetValue(envFile, key, value);
         }
 

@@ -8,27 +8,34 @@
 #   docker compose -f /opt/pinqops/docker-compose.yml up -d
 #
 # Copy this to the server, replace the image reference, and add whatever your
-# application itself needs (ports, networks, volumes, env). The application's
-# own networking is out of scope for the deploy system.
-name: pinqops
+# application itself needs (volumes, env). The dashboard generates this file for
+# you — this copy is for doing it by hand.
+#
+# The project name prefixes every container compose creates, so naming it after
+# your repository makes `docker ps` read <repo>-app-1 instead of something generic.
+# Quoted so an all-digit name (e.g. "2048") is not read as a YAML integer,
+# which compose rejects.
+name: "your-repo"
 
 services:
   app:
-    # PINQOPS_TAG is pinned in this directory's .env by `pinqops deploy --tag`
-    # (the CI workflow passes the commit's sha-<...> tag), so the exact deployed
-    # version is recorded in the deploy history and `pinqops rollback` can
-    # return to a previous one. Without a .env it falls back to :latest, which
-    # preserves the old moving-tag behavior.
-    image: ghcr.io/your-org/pinqops:${PINQOPS_TAG:-latest}
+    # PINQOPS_IMAGE and PINQOPS_TAG are pinned in this directory's .env by
+    # `pinqops deploy` (from --image and --tag; the CI workflow passes the repo's
+    # image and the commit's sha-<...> tag). The image therefore follows the
+    # repository even after a rename, the exact deployed version is recorded in
+    # the deploy history, and `pinqops rollback` can return to a previous one.
+    # The defaults below apply only before the first deploy.
+    image: ${PINQOPS_IMAGE:-ghcr.io/your-org/your-repo}:${PINQOPS_TAG:-latest}
     restart: unless-stopped
 
+    # <host>:<container>. Publishing is what makes the app reachable — without
+    # it `docker ps` shows only "80/tcp" and nothing is mapped. Set the container
+    # side to whatever your Dockerfile EXPOSEs; change the host side later by
+    # editing PINQOPS_HOST_PORT in this directory's .env and re-running up -d.
+    ports:
+      - "${PINQOPS_HOST_PORT:-8080}:${PINQOPS_CONTAINER_PORT:-80}"
+
     # --- Everything below is application-specific and only an illustration. ---
-    # Add whatever YOUR application needs here (ports, networks, volumes, env).
-    # The deploy system does not require or manage any of this — how your app
-    # serves traffic is entirely up to you.
-    #
-    # ports:
-    #   - "8080:8080"
     # environment:
     #   - EXAMPLE=value
     #

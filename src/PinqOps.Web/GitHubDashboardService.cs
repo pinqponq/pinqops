@@ -153,6 +153,50 @@ public sealed class GitHubDashboardService : IDisposable
         return (runners.Count(r => r.Status == "online"), runners.Count);
     }
 
+    /// <summary>
+    /// The port the connected repository's Dockerfile declares with
+    /// <c>EXPOSE</c>, or null when there is no Dockerfile and no usable EXPOSE.
+    /// </summary>
+    /// <remarks>
+    /// Only "there is no answer" outcomes are folded into null. Transport
+    /// failures propagate so the caller can log them and decide — this is a hint,
+    /// and callers fall back to a default rather than fail.
+    /// </remarks>
+    public async Task<int?> GetDockerfileExposedPortAsync()
+    {
+        var (repository, auth) = Context();
+
+        JsonElement payload;
+        try
+        {
+            payload = await GetAsync(
+                    repository, auth, $"/repos/{repository.Owner}/{repository.Name}/contents/Dockerfile")
+                .ConfigureAwait(false);
+        }
+        catch (GitHubApiException exception) when (exception.StatusCode == 404)
+        {
+            return null;
+        }
+
+        // The contents API returns base64 with embedded newlines; files over
+        // ~1 MB come back with an empty content field instead.
+        var encoded = GetString(payload, "content");
+        if (string.IsNullOrWhiteSpace(encoded))
+        {
+            return null;
+        }
+
+        try
+        {
+            var dockerfile = Encoding.UTF8.GetString(Convert.FromBase64String(encoded.Replace("\n", string.Empty)));
+            return DockerfileInspector.FindExposedPort(dockerfile);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
     private async Task<bool> ContentExistsAsync(GitHubRepository repository, AuthenticationHeaderValue auth, string filePath)
     {
         try

@@ -8,11 +8,33 @@ itself. This page lists the knobs that exist.
 
 | Path | Written by | Mode | Contents |
 |---|---|---|---|
-| `<compose-dir>/.env` | `pinqops deploy`/`rollback`, dashboard env editor | 0600 | `PINQOPS_TAG=<deployed tag>` + your app env |
+| `<compose-dir>/.env` | `pinqops deploy`/`rollback`, dashboard env editor | 0600 | `PINQOPS_IMAGE`, `PINQOPS_TAG`, `PINQOPS_HOST_PORT`, `PINQOPS_CONTAINER_PORT` + your app env |
 | `<compose-dir>/.pinqops/history.json` | deploy engine | 0600 | Deploy history (newest first, capped at 100) |
 | `<compose-dir>/.pinqops/notify.json` | dashboard (read by the CLI) | 0600 | Notification channels + event toggles |
 | `~/.config/pinqops/ui.json` | dashboard | 0600 | Dashboard password hash, GitHub connection (PAT) |
 | `~/.config/pinqops/app-credentials.json` | dashboard | 0600 | Generated catalog app credentials |
+
+## The compose project pinqops generates
+
+| | |
+|---|---|
+| Project name | Your repository name, so containers read `<repo>-app-1` |
+| Image | `${PINQOPS_IMAGE}:${PINQOPS_TAG}` — both pinned by `pinqops deploy`, so the image follows the repository even after a rename |
+| Published port | `${PINQOPS_HOST_PORT:-8080}:${PINQOPS_CONTAINER_PORT}` — the container side is read from your Dockerfile's `EXPOSE` |
+
+### Changing the port
+
+`PINQOPS_HOST_PORT` (and `PINQOPS_CONTAINER_PORT`) are ordinary `.env` values:
+edit them in the dashboard's **Deployments → Environment (.env)** editor and
+press **Apply** — no YAML editing, no redeploy. From a shell it is the same file:
+
+```bash
+sudo nano /opt/pinqops/.env                                    # PINQOPS_HOST_PORT=81
+docker compose -f /opt/pinqops/docker-compose.yml up -d
+```
+
+`PINQOPS_IMAGE` and `PINQOPS_TAG` are rejected by the editor — every deploy
+re-pins them, so a manual edit would silently disappear.
 
 ## Runner label
 
