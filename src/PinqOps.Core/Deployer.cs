@@ -202,10 +202,11 @@ public sealed class Deployer
     }
 
     /// <summary>
-    /// Verifies the compose project actually references <paramref name="expectedImage"/>.
-    /// Returns an actionable error message when it does not (the common cause is a
-    /// stale server compose file after a repository rename), or null when it matches
-    /// or the reference set could not be read (the pull would surface that anyway).
+    /// Verifies the compose project actually references <paramref name="expectedImage"/>
+    /// — it will unless the image line was hand-edited to hardcode a name instead of
+    /// using the pinned variable. Returns an actionable error message when it does not,
+    /// or null when it matches or the reference set could not be read (the pull would
+    /// surface that anyway).
     /// </summary>
     private async Task<string?> FindImageMismatchAsync(string expectedImage, string composeFilePath, CancellationToken cancellationToken)
     {
@@ -234,9 +235,9 @@ public sealed class Deployer
         _log?.Invoke(
             $"image mismatch: this deploy is for {expectedImage} but {composeFilePath} references {referenced}");
         return $"compose file targets the wrong image. Expected {expectedImage}, but {composeFilePath} "
-            + $"references {referenced}. Its image: line hardcodes a name (a stale one, e.g. after a repository "
-            + $"rename) instead of using the pinned variable. Regenerate the compose from the dashboard, or set the "
-            + $"image: line to ${{{ImageVariable}:-{expectedImage}}}:${{{TagVariable}:-latest}} and redeploy.";
+            + $"references {referenced} — its image: line hardcodes a name instead of using the pinned variable. "
+            + $"Set it to ${{{ImageVariable}:-{expectedImage}}}:${{{TagVariable}:-latest}} so the image follows the "
+            + $"repository, then redeploy.";
     }
 
     private static void RestoreEnvValue(string envFile, string key, string? previousValue)
