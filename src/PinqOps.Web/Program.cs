@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -653,7 +654,24 @@ app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService doc
         }
 
         var containerPort = exposedPort ?? DockerfileInspector.DefaultPort;
-        var hostPort = UiConfig.DefaultHostPort;
+
+        // Nothing owns the app's port yet, so this is the one moment a bind test
+        // is meaningful. Taking the next free port beats generating a project
+        // whose first deploy dies on "port is already allocated".
+        var freePort = HostPort.FindAvailable(UiConfig.DefaultHostPort);
+        if (freePort is null)
+        {
+            logger.LogWarning(
+                "No free host port in {Count} ports from {Start}; defaulting to {Port}",
+                HostPort.ScanLimit, UiConfig.DefaultHostPort, UiConfig.DefaultHostPort);
+        }
+        else if (freePort != UiConfig.DefaultHostPort)
+        {
+            logger.LogWarning(
+                "Host port {Default} is in use; publishing on {Port} instead", UiConfig.DefaultHostPort, freePort);
+        }
+
+        var hostPort = freePort ?? UiConfig.DefaultHostPort;
 
         await File.WriteAllTextAsync(
             config.ComposeFile,
@@ -1021,6 +1039,37 @@ app.MapPost("/api/compose/env", (HttpContext context, UiConfigStore store) =>
             }
         }
 
+        // A bad port here only surfaces as a failed `up -d` later — and because
+        // compose removes the old container before creating the new one, that
+        // takes the app down. Catch it while it is still just a form value.
+        static void ValidatePortChange(string envFile, string key, string value)
+        {
+            if (key != SetupTemplates.HostPortVariable && key != SetupTemplates.ContainerPortVariable)
+            {
+                return;
+            }
+
+            if (!int.TryParse(value.Trim(), NumberStyles.None, InvariantCulture, out var port) || !HostPort.IsValid(port))
+            {
+                throw new ArgumentException($"'{value}' is not a valid port for {key} (1-65535).");
+            }
+
+            // The container port is bound inside the container's namespace, and
+            // re-saving the current host port would flag the app's own container.
+            if (key != SetupTemplates.HostPortVariable
+                || EnvFileStore.GetValue(envFile, key) == port.ToString(InvariantCulture))
+            {
+                return;
+            }
+
+            if (!HostPort.IsAvailable(port))
+            {
+                throw new ArgumentException(
+                    $"Port {port} is already in use on this server. Pick a free one — "
+                    + "the deploy would fail on 'port is already allocated' and leave the app stopped.");
+            }
+        }
+
         foreach (var key in request.Remove ?? [])
         {
             RejectIfDeployManaged(key);
@@ -1030,6 +1079,7 @@ app.MapPost("/api/compose/env", (HttpContext context, UiConfigStore store) =>
         foreach (var (key, value) in request.Set ?? new Dictionary<string, string>())
         {
             RejectIfDeployManaged(key);
+            ValidatePortChange(envFile, key, value);
             EnvFileStore.SetValue(envFile, key, value);
         }
 

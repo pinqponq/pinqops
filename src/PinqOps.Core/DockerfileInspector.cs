@@ -91,5 +91,5 @@ public static class DockerfileInspector
         && char.IsWhiteSpace(line[keyword.Length]);
 
     /// <summary>True for a port number docker can actually publish.</summary>
-    public static bool IsValidPort(int port) => port is >= 1 and <= 65535;
+    public static bool IsValidPort(int port) => HostPort.IsValid(port);
 }

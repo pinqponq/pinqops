@@ -98,6 +98,62 @@ public class DeployerTests : IDisposable
     }
 
     [Fact]
+    public async Task DeployAsync_UpFails_RecordsDockersOwnReason()
+    {
+        // A port collision only ever announces itself through docker's stderr;
+        // a bare "compose up failed" in the notification hides why.
+        const string PortConflict = "Error response from daemon: driver failed programming external "
+            + "connectivity on endpoint app-1: Bind for 0.0.0.0:8080 failed: port is already allocated";
+        var runner = new FakeProcessRunner((_, arguments) =>
+        {
+            if (arguments.Contains("up"))
+            {
+                return new ProcessResult(1, string.Empty, PortConflict);
+            }
+
+            return arguments.Contains("ps")
+                ? new ProcessResult(0, HealthyPs, string.Empty)
+                : new ProcessResult(0, string.Empty, string.Empty);
+        });
+        var history = new DeployHistoryStore(_composePath);
+        var deployer = new Deployer(runner, history: history);
+
+        var result = await deployer.DeployAsync(Options(tag: "sha-abc123"));
+
+        Assert.False(result);
+        var record = Assert.Single(history.Load());
+        Assert.Equal(DeployRecordValues.ResultFailed, record.Result);
+        Assert.Contains("port is already allocated", record.Error);
+    }
+
+    [Fact]
+    public async Task DeployAsync_PullFails_RecordsDockersOwnReason()
+    {
+        var runner = new FakeProcessRunner((_, arguments) => arguments.Contains("pull")
+            ? new ProcessResult(1, string.Empty, "denied: permission_denied: The token provided is invalid")
+            : new ProcessResult(0, HealthyPs, string.Empty));
+        var history = new DeployHistoryStore(_composePath);
+        var deployer = new Deployer(runner, history: history);
+
+        var result = await deployer.DeployAsync(Options(tag: "sha-abc123"));
+
+        Assert.False(result);
+        Assert.Contains("permission_denied", Assert.Single(history.Load()).Error);
+    }
+
+    [Fact]
+    public async Task DeployAsync_StepFailsWithNoStderr_StillRecordsTheExitCode()
+    {
+        var runner = ScriptedRunner(upExit: 1);
+        var history = new DeployHistoryStore(_composePath);
+        var deployer = new Deployer(runner, history: history);
+
+        await deployer.DeployAsync(Options());
+
+        Assert.Contains("compose up failed", Assert.Single(history.Load()).Error);
+    }
+
+    [Fact]
     public async Task DeployAsync_PruneDisabled_DoesNotPrune()
     {
         var runner = ScriptedRunner();

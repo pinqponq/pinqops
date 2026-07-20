@@ -99,13 +99,15 @@ public sealed class Deployer
             }
         }
 
-        if (pullNeeded
-            && !await RunStepAsync(DockerComposeCommandBuilder.Pull(options.ComposeFilePath), token).ConfigureAwait(false))
+        var pullFailure = pullNeeded
+            ? await RunStepAsync(DockerComposeCommandBuilder.Pull(options.ComposeFilePath), token).ConfigureAwait(false)
+            : null;
+        if (pullFailure is not null)
         {
             var error = options.Trigger == DeployRecordValues.TriggerRollback
-                ? "image pull failed — the rollback target is no longer local and pulling from the registry "
-                  + "requires docker login (e.g. a token with read:packages)"
-                : "image pull failed";
+                ? $"image pull failed ({pullFailure}) — the rollback target is no longer local and pulling from the "
+                  + "registry requires docker login (e.g. a token with read:packages)"
+                : $"image pull failed: {pullFailure}";
 
             // Nothing was applied; restore the previously pinned tag so the
             // .env keeps describing what is actually running.
@@ -119,9 +121,11 @@ public sealed class Deployer
             return false;
         }
 
-        if (!await RunStepAsync(DockerComposeCommandBuilder.Up(options.ComposeFilePath), token).ConfigureAwait(false))
+        var upFailure = await RunStepAsync(DockerComposeCommandBuilder.Up(options.ComposeFilePath), token)
+            .ConfigureAwait(false);
+        if (upFailure is not null)
         {
-            await FinishAsync(options, startedAt, DeployRecordValues.ResultFailed, previousTag, healthState, "compose up failed", cancellationToken)
+            await FinishAsync(options, startedAt, DeployRecordValues.ResultFailed, previousTag, healthState, $"compose up failed: {upFailure}", cancellationToken)
                 .ConfigureAwait(false);
             return false;
         }
@@ -292,7 +296,13 @@ public sealed class Deployer
         return true;
     }
 
-    private async Task<bool> RunStepAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    /// <summary>
+    /// Runs a docker step. Returns null on success, otherwise docker's own
+    /// reason — which the caller puts in the deploy record and the notification,
+    /// so "port is already allocated" reaches Slack instead of a bare
+    /// "compose up failed".
+    /// </summary>
+    private async Task<string?> RunStepAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
         _log?.Invoke($"$ {DockerExecutable} {string.Join(' ', arguments)}");
 
@@ -305,12 +315,31 @@ public sealed class Deployer
             _log?.Invoke(result.StandardOutput.TrimEnd());
         }
 
-        if (!result.Succeeded)
+        if (result.Succeeded)
         {
-            _log?.Invoke($"command failed (exit {result.ExitCode}): {result.StandardError.TrimEnd()}");
-            return false;
+            return null;
         }
 
-        return true;
+        _log?.Invoke($"command failed (exit {result.ExitCode}): {result.StandardError.TrimEnd()}");
+        return Condense(result.StandardError) ?? $"exit {result.ExitCode}";
+    }
+
+    /// <summary>
+    /// The most specific line of a docker error, capped so it stays readable in
+    /// a chat notification. Docker prints the actual cause last.
+    /// </summary>
+    private static string? Condense(string standardError)
+    {
+        const int MaxLength = 300;
+
+        var lastLine = standardError
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .LastOrDefault();
+        if (lastLine is null)
+        {
+            return null;
+        }
+
+        return lastLine.Length <= MaxLength ? lastLine : lastLine[..MaxLength] + "…";
     }
 }

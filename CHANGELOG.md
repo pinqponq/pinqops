@@ -33,6 +33,20 @@ and this project adheres to a rolling release model (latest `master` only).
 
 ### Added
 
+- **Port collisions are caught before they can take the app down.** A published
+  port that is already bound only announced itself as a failed `docker compose
+  up -d` — and because compose removes the old container before creating the new
+  one, a collision left the app *stopped*, not merely un-updated. Now: the wizard
+  picks the first free host port from `8080` when generating the project, and the
+  `.env` editor rejects a `PINQOPS_HOST_PORT` that is out of range or already in
+  use, naming the consequence. Deploy-time probing is deliberately *not* done —
+  the app's own running container holds the port, so every normal redeploy would
+  look like a conflict.
+- **Deploy failures report docker's actual reason.** The deploy record and the
+  webhook/Slack/Telegram notification carried a bare `compose up failed` while
+  the real cause (`port is already allocated`, `denied: permission_denied`, …)
+  was only in the log. The most specific line of docker's stderr is now included,
+  capped so it stays readable in a chat message.
 - **The generated compose project now publishes a port, so a deployed app is
   actually reachable.** Previously the template left `ports:` commented out: the
   container came up but `docker ps` showed only `80/tcp` with nothing mapped. The

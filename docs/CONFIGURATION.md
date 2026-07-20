@@ -20,7 +20,7 @@ itself. This page lists the knobs that exist.
 |---|---|
 | Project name | Your repository name, so containers read `<repo>-app-1` |
 | Image | `${PINQOPS_IMAGE}:${PINQOPS_TAG}` — both pinned by `pinqops deploy`, so the image follows the repository even after a rename |
-| Published port | `${PINQOPS_HOST_PORT:-8080}:${PINQOPS_CONTAINER_PORT}` — the container side is read from your Dockerfile's `EXPOSE` |
+| Published port | `${PINQOPS_HOST_PORT:-8080}:${PINQOPS_CONTAINER_PORT}` — the container side is read from your Dockerfile's `EXPOSE`, the host side is the first free port from `8080` |
 
 ### Changing the port
 
@@ -35,6 +35,12 @@ docker compose -f /opt/pinqops/docker-compose.yml up -d
 
 `PINQOPS_IMAGE` and `PINQOPS_TAG` are rejected by the editor — every deploy
 re-pins them, so a manual edit would silently disappear.
+
+A host port that is out of range or **already bound on the server** is rejected
+too. That matters because `docker compose up -d` removes the old container
+before creating the new one: a port clash would fail the deploy *and* leave the
+app stopped. pinqops does not probe the port at deploy time — by then the app's
+own container holds it, so every redeploy would look like a conflict.
 
 ## Runner label
 
