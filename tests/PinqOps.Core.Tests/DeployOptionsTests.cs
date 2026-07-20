@@ -124,6 +124,30 @@ public class DeployOptionsTests
     }
 
     [Theory]
+    [InlineData("ghcr.io/Acme/app")]
+    [InlineData("ghcr.io/acme/App")]
+    [InlineData("GHCR.IO/acme/app")]
+    public void Create_RejectsAnUppercaseImageRepository(string image)
+    {
+        // A registry rejects these outright ("repository name must be
+        // lowercase"); pinning one would only surface later as a broken compose.
+        var exception = Assert.Throws<ArgumentException>(
+            () => DeployOptions.Create("/opt/pinqops/docker-compose.yml", expectedImage: image));
+
+        Assert.Contains("lowercase", exception.Message);
+    }
+
+    [Fact]
+    public void Create_AllowsUppercaseInTheTag_WhichIsStrippedAnyway()
+    {
+        // Only the repository must be lowercase; a tag may legally contain uppercase.
+        var options = DeployOptions.Create(
+            "/opt/pinqops/docker-compose.yml", expectedImage: "ghcr.io/acme/app:sha-ABC123");
+
+        Assert.Equal("ghcr.io/acme/app", options.ExpectedImage);
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void Create_BlankExpectedImageIsNull(string image)

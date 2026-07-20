@@ -92,9 +92,30 @@ records tag `latest` and rollback is refused with a clear error.
 ## GHCR package visibility
 
 The image is private. No token is stored on the server — the `deploy` job
-authenticates with the per-job `GITHUB_TOKEN` (granted `packages: read`). This
-works as long as the GHCR package is linked to the repository, which happens
-automatically after the first successful `build` job.
+authenticates with the per-job `GITHUB_TOKEN` (granted `packages: read`).
+
+A `GITHUB_TOKEN` has no intrinsic access to a package: it can read one only
+because the package is **connected to the repository**. The generated workflow
+establishes that connection with the `org.opencontainers.image.source` label on
+the built image. Do not rely on it happening implicitly — in particular,
+**renaming a repository does not rename its packages**. A push under the new name
+creates a *new* package whose connection is independent of the old one, which is
+the usual way a deploy ends up able to push but not pull.
+
+### `403 Forbidden` pulling your own image
+
+`docker login` printing `Login Succeeded` only proves the token is valid; GHCR
+checks package access later. `Login Succeeded` followed by `403` on a manifest
+request means **authenticated but not authorized** — the package is not readable
+by this repository. Check the connection:
+
+```bash
+gh api /user/packages/container/<package> --jq '{visibility, repo: .repository.full_name}'
+```
+
+If `repo` is `null` or an old name, open the package → **Package settings** →
+**Manage Actions access** → **Add repository** → pick the repository, role
+**Write** — then re-run the failed job. The image does not need rebuilding.
 
 ## `pinqops deploy` options
 

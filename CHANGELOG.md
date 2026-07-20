@@ -31,6 +31,30 @@ and this project adheres to a rolling release model (latest `master` only).
   than the tool needs. Publish app ports directly, or run your own proxy. The
   shared `pinqops-apps` network stays for catalog-app connectivity.
 
+### Fixed
+
+- **The built image is now explicitly connected to its repository.** The
+  generated workflow labels the image with
+  `org.opencontainers.image.source`, which is what grants the deploy job's
+  `GITHUB_TOKEN` read access to the package. Relying on the implicit link was the
+  cause of a deploy that could *push* an image and then get `403 Forbidden`
+  *pulling the same tag seconds later* — most easily reached by renaming a
+  repository, since packages are not renamed with it and the new name is a new
+  package with its own access. Docs no longer claim the link "happens
+  automatically" and now document the `403` recovery.
+- **The image name is lowercased.** `github.repository` preserves the
+  repository's real case while registries require a lowercase name, so any owner
+  or repo with a capital letter failed the build outright with `repository name
+  must be lowercase`. The workflow resolves the name once per job, and
+  `pinqops deploy --image` rejects an uppercase repository rather than pinning a
+  reference docker cannot resolve.
+- **A deploy can no longer be cancelled half-done.** `cancel-in-progress` was set
+  workflow-wide, so a second merge killed an in-flight deploy — potentially
+  between compose stopping the old container and starting the new one, leaving
+  the app down with no history record and no notification, and a `.env` pinned to
+  a tag that was never live. Builds stay cancellable (a superseded build is
+  waste); deploys now queue.
+
 ### Added
 
 - **Port collisions are caught before they can take the app down.** A published

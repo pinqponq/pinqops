@@ -29,21 +29,26 @@ public static class SetupTemplates
         permissions:
           contents: read
 
-        concurrency:
-          group: deploy-master
-          cancel-in-progress: true
-
         jobs:
           build:
             runs-on: ubuntu-latest
+            # A superseded build is pure waste, so cancel it. The deploy below is
+            # deliberately NOT cancellable — see its own concurrency block.
+            concurrency:
+              group: build-${{ github.ref }}
+              cancel-in-progress: true
             permissions:
               contents: read
               packages: write
-            env:
-              IMAGE: ghcr.io/${{ github.repository }}
             steps:
               - name: Checkout
                 uses: actions/checkout@v7
+
+              # GHCR repository names must be lowercase, but github.repository
+              # keeps the repository's real case — resolve it once here.
+              - name: Resolve image name
+                id: image
+                run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
               - name: Log in to GitHub Container Registry
                 uses: docker/login-action@v3
@@ -57,20 +62,33 @@ public static class SetupTemplates
 
               # Each build is pushed twice: :latest for convenience and an
               # immutable :sha-<commit> tag that deploy pins and rollback reuses.
+              #
+              # The image.source label is what connects the package to this
+              # repository. Without it the link is left to implicit behaviour
+              # that does NOT hold after a rename (a rename creates a new package
+              # name), and the deploy job's GITHUB_TOKEN then gets 403 on pull.
               - name: Build and push image
                 uses: docker/build-push-action@v6
                 with:
                   context: .
                   push: true
                   tags: |
-                    ${{ env.IMAGE }}:latest
-                    ${{ env.IMAGE }}:sha-${{ github.sha }}
+                    ${{ steps.image.outputs.name }}:latest
+                    ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
+                  labels: |
+                    org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
                   cache-from: type=gha
                   cache-to: type=gha,mode=max
 
           deploy:
             needs: build
             runs-on: [self-hosted, pinqops-prod]
+            # A deploy mutates the one fixed compose project on the server. Killing
+            # it mid-flight can stop the app between `down` and `up` with no record
+            # and no notification, so concurrent deploys queue instead.
+            concurrency:
+              group: deploy-${{ github.repository }}
+              cancel-in-progress: false
             permissions:
               contents: read
               packages: read
@@ -80,10 +98,11 @@ public static class SetupTemplates
               - name: Deploy with pinqops
                 run: |
                   set -euo pipefail
+                  IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
                   echo "${{ secrets.GITHUB_TOKEN }}" \
                     | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
                   pinqops deploy --compose-file "$APP_COMPOSE_PATH" --tag "sha-${{ github.sha }}" \
-                    --image "ghcr.io/${{ github.repository }}"
+                    --image "$IMAGE"
 
               - name: Log out of GHCR
                 if: always()

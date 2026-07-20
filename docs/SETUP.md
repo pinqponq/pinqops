@@ -247,9 +247,10 @@ git token?"* You don't — and here is why.
   workflow does `docker login ghcr.io` with the ephemeral, per-run token (scoped
   `packages: read`) and logs out afterwards — see
   [`../examples/workflows/deploy.yml`](../examples/workflows/deploy.yml). Nothing
-  long-lived is stored on the server. This works as long as the GHCR package is
-  linked to the repository, which happens automatically after the first
-  successful `build` job.
+  long-lived is stored on the server. It works because the package is **connected
+  to the repository** — the workflow's `org.opencontainers.image.source` label is
+  what establishes that. Note that renaming a repository does *not* rename its
+  packages: the new name is a new package with its own connection.
 - **The only token you handle on the server is the runner registration token.**
   It is short-lived, obtained from **repo → Settings → Actions → Runners → New
   self-hosted runner**, and passed once to `pinqops install-runner --token` (step
@@ -289,9 +290,15 @@ This is only a manual debugging aid — the automated deploy never needs it.
 - **`permission denied while trying to connect to the Docker daemon`** — the
   runner user isn't in the `docker` group. Run `sudo usermod -aG docker <user>`
   and restart the runner service (`sudo /opt/actions-runner/svc.sh stop && start`).
-- **Pull fails / old image keeps running** — the package isn't readable by
-  `GITHUB_TOKEN`. Ensure the GHCR package is linked to the repository (it is,
-  automatically, after the first successful `build`).
+- **Pull fails with `403 Forbidden` right after a successful build** — the
+  package is not readable by `GITHUB_TOKEN`. `Login Succeeded` followed by `403`
+  means authenticated but *not authorized*: the package is not connected to this
+  repository. Common after a repository rename, because packages are not renamed
+  with it. Check with
+  `gh api /user/packages/container/<package> --jq .repository.full_name`, then
+  package → **Package settings** → **Manage Actions access** → add the repository
+  with role **Write**, and re-run the failed job (no rebuild needed). See
+  [CONFIGURATION.md](CONFIGURATION.md).
 - **`install-runner` fails creating `/opt/actions-runner`** — pre-create it and
   `chown` it to your user (see step 5); `config.sh` must not run as root.
 - **Need to remove the runner** — `sudo /opt/actions-runner/svc.sh stop`, then

@@ -127,7 +127,20 @@ public sealed partial record DeployOptions
                 $"'{expectedImage}' is not a valid image reference.", nameof(expectedImage));
         }
 
-        return ImageReference.RepositoryOf(value);
+        var repository = ImageReference.RepositoryOf(value);
+
+        // A registry rejects an uppercase repository ("repository name must be
+        // lowercase"), and pinning one would only surface as a broken compose
+        // file later. The check is on the repository alone — a tag may legally
+        // contain uppercase, and the pattern above runs before the tag is cut.
+        if (repository.Any(char.IsAsciiLetterUpper))
+        {
+            throw new ArgumentException(
+                $"'{expectedImage}' is not a valid image reference: an image repository must be lowercase.",
+                nameof(expectedImage));
+        }
+
+        return repository;
     }
 
     [GeneratedRegex("^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$")]
