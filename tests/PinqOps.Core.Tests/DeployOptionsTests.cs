@@ -114,6 +114,9 @@ public class DeployOptionsTests
     [Theory]
     [InlineData("ghcr.io/${{ github.repository }}")]
     [InlineData("ghcr.io/acme/app image")]
+    [InlineData("ghcr.io/acme/app;rm -rf")]
+    [InlineData("ghcr.io/acme/app$(whoami)")]
+    [InlineData("-leading-dash")]
     public void Create_RejectsUnexpandedOrMalformedExpectedImage(string image)
     {
         Assert.Throws<ArgumentException>(

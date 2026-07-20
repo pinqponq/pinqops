@@ -255,6 +255,11 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
           <div id="dep-tagvar-hint" class="muted hidden" style="font-size:12px;margin-bottom:8px"></div>
           <div class="tablewrap"><table id="dep-history-table"></table></div>
         </div>
+        <div class="card" style="margin-bottom:16px">
+          <h3 data-i18n="ci.title">Compose image</h3>
+          <p class="muted" style="font-size:13px" data-i18n="ci.help">If a deploy pulls the wrong image after a repository rename, sync the compose image line so it follows the repository. Only the image line changes — ports and env are kept.</p>
+          <button class="small" id="ci-sync" data-i18n="ci.sync">Sync image to repository</button>
+        </div>
         <div class="section" style="margin-bottom:16px">
           <div class="section-head"><h2 data-i18n="ev.title">Environment (.env)</h2><div class="spacer"></div><span class="muted mono" id="env-file" style="font-size:12px"></span></div>
           <div class="tablewrap"><table id="env-table"></table></div>
@@ -280,6 +285,10 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
         <div class="section">
           <div class="section-head"><h2 data-i18n="rn.local">Local runner (this machine)</h2></div>
           <div class="card"><dl class="kv" id="runner-local"></dl></div>
+        </div>
+        <div class="section">
+          <div class="section-head"><h2 data-i18n="rn.units">Runner services</h2></div>
+          <div class="tablewrap"><table id="runner-units"></table></div>
         </div>
       </section>
 
@@ -584,6 +593,7 @@ en:{
  "dp.job":"job","dp.runner":"Runner","dp.started":"Started","dp.finished":"Finished","dp.link":"Link","dp.openJob":"open job on GitHub ↗",
  "dp.workflow":"Workflow","dp.noRuns":"No workflow runs yet.","dp.connectFirst":"Connect a repository via the GitHub menu first.",
  "rn.gh":"GitHub runners (repository)","rn.local":"Local runner (this machine)","rn.busy":"busy","rn.idle":"idle",
+ "rn.units":"Runner services","rn.logs":"logs","rn.noUnits":"No runner services found on this host.","rn.noLogs":"No log output.","rn.logsFor":"Last 100 log lines — {u}",
  "rn.installed":"Installed","rn.dirMissing":"no (directory {d} not found)","rn.dir":"Directory","rn.agent":"Agent name",
  "rn.regTo":"Registered to","rn.service":"Service","rn.svcMissing":"not found (systemd unavailable or service not installed)",
  "rn.lastExec":"Last job executed","rn.neverLogs":"never (no Worker logs)","rn.procLog":"Runner process log","rn.since":"since",
@@ -612,6 +622,7 @@ en:{
  "se.connected":"Connected to {r}","se.configFile":"Config file",
  "se.pwCard":"Dashboard password","se.pwCur":"Current password","se.pwNew":"New password (min 8)","se.pwChange":"Change password",
  "se.pwChanged":"Password changed — sign in again","se.tokenOk":"Token verified — now pick a repository",
+ "ci.title":"Compose image","ci.help":"If a deploy pulls the wrong image after a repository rename, sync the compose image line so it follows the repository. Only the image line changes — ports and env are kept.","ci.sync":"Sync image to repository","ci.synced":"Image line synced to {i}","ci.already":"Already up to date ({i})",
  "ev.title":"Environment (.env)","ev.set":"Set","ev.apply":"Apply (recreates containers)","ev.applied":"Environment applied — containers recreated",
  "ev.applyConfirm":"Run <code>docker compose up -d</code> so the new environment takes effect? Containers with changed env are recreated.",
  "ev.saved":"{k} saved","ev.removed":"{k} removed","ev.none":"No variables in the compose project's .env yet.","ev.managed":"managed",
@@ -697,6 +708,7 @@ tr:{
  "dp.job":"iş","dp.runner":"Runner","dp.started":"Başlangıç","dp.finished":"Bitiş","dp.link":"Bağlantı","dp.openJob":"işi GitHub'da aç ↗",
  "dp.workflow":"Workflow","dp.noRuns":"Henüz workflow çalıştırması yok.","dp.connectFirst":"Önce GitHub menüsünden bir depo bağla.",
  "rn.gh":"GitHub runner'ları (depo)","rn.local":"Yerel runner (bu makine)","rn.busy":"meşgul","rn.idle":"boşta",
+ "rn.units":"Runner servisleri","rn.logs":"loglar","rn.noUnits":"Bu makinede runner servisi bulunamadı.","rn.noLogs":"Log çıktısı yok.","rn.logsFor":"Son 100 log satırı — {u}",
  "rn.installed":"Kurulu","rn.dirMissing":"hayır ({d} dizini bulunamadı)","rn.dir":"Dizin","rn.agent":"Ajan adı",
  "rn.regTo":"Kayıtlı olduğu yer","rn.service":"Servis","rn.svcMissing":"bulunamadı (systemd yok veya servis kurulmamış)",
  "rn.lastExec":"Son çalıştırılan iş","rn.neverLogs":"hiç (Worker logu yok)","rn.procLog":"Runner süreç logu","rn.since":"başlangıç",
@@ -725,6 +737,7 @@ tr:{
  "se.connected":"{r} bağlandı","se.configFile":"Yapılandırma dosyası",
  "se.pwCard":"Panel şifresi","se.pwCur":"Mevcut şifre","se.pwNew":"Yeni şifre (en az 8)","se.pwChange":"Şifreyi değiştir",
  "se.pwChanged":"Şifre değişti — tekrar giriş yap","se.tokenOk":"Token doğrulandı — şimdi bir depo seç",
+ "ci.title":"Compose imajı","ci.help":"Depo yeniden adlandırıldıktan sonra deploy yanlış imaj çekiyorsa, compose imaj satırını depoyla eşleşecek şekilde senkronla. Yalnızca imaj satırı değişir — portlar ve env korunur.","ci.sync":"İmajı depoyla senkronla","ci.synced":"İmaj satırı {i} olarak güncellendi","ci.already":"Zaten güncel ({i})",
  "ev.title":"Ortam değişkenleri (.env)","ev.set":"Kaydet","ev.apply":"Uygula (konteynerleri yeniden oluşturur)","ev.applied":"Ortam uygulandı — konteynerler yeniden oluşturuldu",
  "ev.applyConfirm":"Yeni ortam değişkenlerinin etkinleşmesi için <code>docker compose up -d</code> çalıştırılsın mı? Değişen env'e sahip konteynerler yeniden oluşturulur.",
  "ev.saved":"{k} kaydedildi","ev.removed":"{k} silindi","ev.none":"Compose projesinin .env dosyasında henüz değişken yok.","ev.managed":"yönetilen",
@@ -1211,6 +1224,14 @@ $("#env-apply").addEventListener("click",()=>{
       catch(ex){toast(ex.message,"err");}
     }}]);
 });
+$("#ci-sync").addEventListener("click",async()=>{
+  $("#ci-sync").disabled=true;
+  try{
+    const r=await api("/api/compose/sync-image",{method:"POST"});
+    toast(r.changed?t("ci.synced",{i:r.image}):t("ci.already",{i:r.image}),"ok");
+  }catch(ex){toast(ex.message,"err");}
+  finally{$("#ci-sync").disabled=false;}
+});
 async function loadDeployments(){
   await loadDeployHistory();
   await loadComposeEnv();
@@ -1254,8 +1275,26 @@ async function loadRunner(){
       [t("rn.lastExec"),l.lastWorkerLogAt?`${timeAgo(l.lastWorkerLogAt)} <span class="muted">(${fullTime(l.lastWorkerLogAt)})</span>`:t("rn.neverLogs")],
       [t("rn.procLog"),l.lastRunnerLogAt?timeAgo(l.lastRunnerLogAt):"–"]];
     $("#runner-local").innerHTML=rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("");
+    table($("#runner-units"),[t("rn.units"),t("th.status"),t("th.actions")],
+      (l.units||[]).map(u=>[
+        {h:`<span class="mono">${esc(u.unit)}</span>`},
+        {h:`<span class="chip ${u.activeState==="active"?"ok":"err"}">${esc(u.activeState||"?")}/${esc(u.subState||"?")}</span>`},
+        {h:`<button class="small" data-runner-logs="${esc(u.unit)}">${t("rn.logs")}</button>`}]),
+      t("rn.noUnits"));
   }catch(ex){$("#runner-local").innerHTML=`<dt>!</dt><dd>${esc(ex.message)}</dd>`;}
 }
+$("#runner-units").addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-runner-logs]");if(!b)return;
+  const unit=b.dataset.runnerLogs;
+  b.disabled=true;
+  try{
+    const r=await api("/api/runner/logs?unit="+encodeURIComponent(unit));
+    openModal(t("rn.logsFor",{u:unit}),
+      `<pre style="max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:12px;margin:0">${esc(r.logs||t("rn.noLogs"))}</pre>`,
+      [{label:t("c.close")}]);
+  }catch(ex){toast(ex.message,"err");}
+  finally{b.disabled=false;}
+});
 
 /* ================= containers ================= */
 async function loadContainers(){

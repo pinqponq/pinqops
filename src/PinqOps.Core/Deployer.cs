@@ -11,6 +11,7 @@ public sealed class Deployer
 {
     private const string DockerExecutable = "docker";
     public const string TagVariable = "PINQOPS_TAG";
+    public const string ImageVariable = "PINQOPS_IMAGE";
 
     private readonly IProcessRunner _processRunner;
     private readonly Action<string>? _log;
@@ -51,14 +52,23 @@ public sealed class Deployer
         var startedAt = DateTimeOffset.UtcNow;
         var envFile = PinqOpsStatePaths.EnvFile(options.ComposeFilePath);
         var previousTag = EnvFileStore.GetValue(envFile, TagVariable);
+        var previousImage = EnvFileStore.GetValue(envFile, ImageVariable);
         var healthState = DeployRecordValues.HealthSkipped;
 
         if (options.ExpectedImage is not null)
         {
+            // Pin the image first so the compose resolves to what this deploy is
+            // for; a repository rename then flows straight through the workflow's
+            // --image with no stale compose file to fix by hand.
+            EnvFileStore.SetValue(envFile, ImageVariable, options.ExpectedImage);
+            _log?.Invoke($"pinned {ImageVariable}={options.ExpectedImage}");
+
             var mismatch = await FindImageMismatchAsync(options.ExpectedImage, options.ComposeFilePath, token)
                 .ConfigureAwait(false);
             if (mismatch is not null)
             {
+                // Nothing was applied; leave the .env describing what is running.
+                RestoreEnvValue(envFile, ImageVariable, previousImage);
                 await FinishAsync(options, startedAt, DeployRecordValues.ResultFailed, previousTag, healthState, mismatch, cancellationToken)
                     .ConfigureAwait(false);
                 return false;
@@ -224,8 +234,21 @@ public sealed class Deployer
         _log?.Invoke(
             $"image mismatch: this deploy is for {expectedImage} but {composeFilePath} references {referenced}");
         return $"compose file targets the wrong image. Expected {expectedImage}, but {composeFilePath} "
-            + $"references {referenced}. The server compose file is out of date (for example after a repository "
-            + $"rename); update its image: line to {expectedImage}:${{{TagVariable}:-latest}} and redeploy.";
+            + $"references {referenced}. Its image: line hardcodes a name (a stale one, e.g. after a repository "
+            + $"rename) instead of using the pinned variable. Regenerate the compose from the dashboard, or set the "
+            + $"image: line to ${{{ImageVariable}:-{expectedImage}}}:${{{TagVariable}:-latest}} and redeploy.";
+    }
+
+    private static void RestoreEnvValue(string envFile, string key, string? previousValue)
+    {
+        if (previousValue is null)
+        {
+            EnvFileStore.RemoveValue(envFile, key);
+        }
+        else
+        {
+            EnvFileStore.SetValue(envFile, key, previousValue);
+        }
     }
 
     /// <summary>True when every image the compose project references exists locally.</summary>

@@ -24,15 +24,25 @@ and this project adheres to a rolling release model (latest `master` only).
 
 ### Added
 
-- **`pinqops deploy --image <registry/path>` verifies the target before pulling.**
-  The generated deploy workflow now passes `--image ghcr.io/${{ github.repository }}`,
-  and pinqops checks that the server compose file actually references that image
-  (via `docker compose config --images`) before it pulls. A stale compose file —
-  the classic case being a repository rename that left `/opt/pinqops/docker-compose.yml`
-  pointing at the old image — now fails fast with a message naming both the
-  referenced and expected images and the exact fix, instead of an opaque registry
-  `403`/`denied` on pull. The flag is optional and compared only; it is never
-  passed to docker.
+- **The deployed image now follows the repository automatically (no more stale
+  compose after a rename).** The generated compose references
+  `image: ${PINQOPS_IMAGE:-…}:${PINQOPS_TAG:-latest}`, and `pinqops deploy
+  --image ghcr.io/${{ github.repository }}` (passed by the generated workflow)
+  pins `PINQOPS_IMAGE` in the project `.env` before pulling — just like the tag.
+  Rename the repository and the next deploy pulls the new image with zero manual
+  intervention. Before pulling, pinqops still verifies the compose resolves to
+  the expected image; a compose that hardcodes a stale name (the classic cause of
+  an opaque `403`/`denied` on pull) fails fast with a message and the exact fix.
+- **Dashboard: "Sync image to repository" (Deployments).** One click rewrites a
+  stale compose `image:` line to the env-driven form so an existing install can
+  recover from a rename without SSH. Only the image line changes — ports,
+  volumes, env, and other services are preserved.
+- **Dashboard: runner service logs and multi-runner visibility (Runner view).**
+  The Runner view now lists every `actions.runner.*` service on the host (a
+  server can carry more than one after re-registering to a new repository) with
+  its live state, and a **logs** button shows each service's last 100 journal
+  lines — enough to diagnose a runner that is registered but not picking up jobs
+  without opening an SSH session.
 
 ### Fixed
 

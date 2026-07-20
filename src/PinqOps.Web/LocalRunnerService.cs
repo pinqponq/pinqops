@@ -13,6 +13,9 @@ public sealed class LocalRunnerService
 
     public LocalRunnerService(IProcessRunner processRunner) => _processRunner = processRunner;
 
+    /// <summary>One <c>actions.runner.*</c> systemd service and its live state.</summary>
+    public sealed record RunnerUnit(string Unit, string ActiveState, string SubState);
+
     public static bool IsInstalled(string runnerDirectory) =>
         Directory.Exists(runnerDirectory) && File.Exists(Path.Combine(runnerDirectory, ".runner"));
 
@@ -86,7 +89,74 @@ public sealed class LocalRunnerService
             service = await GetServiceStatusAsync(runnerDirectory, gitHubUrl).ConfigureAwait(false),
             lastWorkerLogAt,
             lastRunnerLogAt,
+            // Every runner unit on the host, not just this directory's — a server
+            // can carry more than one (e.g. after re-registering to a new repo).
+            units = await ListUnitsAsync().ConfigureAwait(false),
         };
+    }
+
+    /// <summary>
+    /// Every <c>actions.runner.*</c> systemd service on the host with its state.
+    /// Returns an empty list when systemd is unavailable.
+    /// </summary>
+    public async Task<IReadOnlyList<RunnerUnit>> ListUnitsAsync()
+    {
+        var list = await RunAsync(
+                "systemctl", "list-units", "--all", "--type=service", "--plain", "--no-legend", "--no-pager",
+                "actions.runner.*")
+            .ConfigureAwait(false);
+        if (list is null || !list.Succeeded)
+        {
+            return Array.Empty<RunnerUnit>();
+        }
+
+        var units = new List<RunnerUnit>();
+        foreach (var line in list.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            // Columns: UNIT LOAD ACTIVE SUB DESCRIPTION…
+            var columns = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (columns.Length >= 4 && columns[0].StartsWith("actions.runner.", StringComparison.Ordinal))
+            {
+                units.Add(new RunnerUnit(columns[0], columns[2], columns[3]));
+            }
+        }
+
+        return units;
+    }
+
+    /// <summary>
+    /// The last <paramref name="lines"/> journal lines for a runner unit. The
+    /// unit is checked against the actual runner units on the host first, so an
+    /// arbitrary service's journal can never be read through this path.
+    /// </summary>
+    public async Task<string> GetLogsAsync(string unit, int lines)
+    {
+        if (!await IsKnownRunnerUnitAsync(unit).ConfigureAwait(false))
+        {
+            throw new ArgumentException($"'{unit}' is not a known runner service.", nameof(unit));
+        }
+
+        var clampedLines = Math.Clamp(lines, 1, 1000);
+        var logs = await RunAsync(
+                "journalctl", "-u", unit, "-n", clampedLines.ToString(), "--no-pager", "--no-hostname")
+            .ConfigureAwait(false);
+        if (logs is null)
+        {
+            return "journalctl is unavailable on this host.";
+        }
+
+        return logs.Succeeded ? logs.StandardOutput.TrimEnd() : logs.StandardError.Trim();
+    }
+
+    private async Task<bool> IsKnownRunnerUnitAsync(string unit)
+    {
+        if (string.IsNullOrWhiteSpace(unit) || !unit.StartsWith("actions.runner.", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var units = await ListUnitsAsync().ConfigureAwait(false);
+        return units.Any(runnerUnit => string.Equals(runnerUnit.Unit, unit, StringComparison.Ordinal));
     }
 
     /// <summary>

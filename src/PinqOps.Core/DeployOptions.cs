@@ -117,7 +117,11 @@ public sealed partial record DeployOptions
         }
 
         var value = expectedImage.Trim();
-        if (value.Contains("${", StringComparison.Ordinal) || value.Any(char.IsWhiteSpace))
+
+        // The value is pinned into the compose project's .env and interpolated
+        // into the image: field, so it must be a plain image reference and
+        // nothing that could smuggle another directive.
+        if (value.Contains("${", StringComparison.Ordinal) || !ImageRepositoryPattern().IsMatch(value))
         {
             throw new ArgumentException(
                 $"'{expectedImage}' is not a valid image reference.", nameof(expectedImage));
@@ -128,4 +132,7 @@ public sealed partial record DeployOptions
 
     [GeneratedRegex("^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$")]
     private static partial Regex ImageTagPattern();
+
+    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._/:-]{0,255}$")]
+    private static partial Regex ImageRepositoryPattern();
 }

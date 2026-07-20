@@ -995,6 +995,37 @@ app.MapPost("/api/compose/env", (HttpContext context, UiConfigStore store) =>
         return new { ok = true };
     }));
 
+// Converts a stale, hardcoded image: line to the env-driven form so the image
+// follows the repository (fixes a compose left pointing at a pre-rename name).
+// Only the image line is touched — ports, volumes, and env are preserved.
+app.MapPost("/api/compose/sync-image", (UiConfigStore store) =>
+    Safe(async () =>
+    {
+        var config = store.Current;
+        if (string.IsNullOrWhiteSpace(config.RepoUrl))
+        {
+            throw new InvalidOperationException("Connect a repository first.");
+        }
+
+        if (!File.Exists(config.ComposeFile))
+        {
+            throw new InvalidOperationException($"{config.ComposeFile} does not exist.");
+        }
+
+        var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
+        var defaultImage = $"ghcr.io/{repository.Owner.ToLowerInvariant()}/{repository.Name.ToLowerInvariant()}";
+        var original = await File.ReadAllTextAsync(config.ComposeFile);
+        var updated = ComposeImageRewriter.ToEnvDriven(original, defaultImage);
+        if (updated == original)
+        {
+            return new { ok = true, changed = false, image = defaultImage };
+        }
+
+        await File.WriteAllTextAsync(config.ComposeFile, updated);
+        logger.LogWarning("Compose image line synced to {Image} from the dashboard", defaultImage);
+        return new { ok = true, changed = true, image = defaultImage };
+    }));
+
 // New env only takes effect when the containers are recreated.
 app.MapPost("/api/compose/apply", (UiConfigStore store, IProcessRunner processRunner) =>
     Safe(async () =>
@@ -1127,6 +1158,18 @@ app.MapPost("/api/notifications/test", (HttpContext context, UiConfigStore store
 
 app.MapGet("/api/runner/local", (UiConfigStore store, LocalRunnerService runner) =>
     Safe(async () => await runner.GetStatusAsync(store.Current.RunnerDirectory)));
+
+app.MapGet("/api/runner/logs", (HttpContext context, LocalRunnerService runner) =>
+    Safe(async () =>
+    {
+        var unit = context.Request.Query["unit"].ToString();
+        if (string.IsNullOrWhiteSpace(unit))
+        {
+            throw new ArgumentException("A runner unit is required.");
+        }
+
+        return new { unit, logs = await runner.GetLogsAsync(unit, 100) };
+    }));
 
 app.MapGet("/api/system", (SystemInfoService system) => Results.Json(system.GetInfo()));
 

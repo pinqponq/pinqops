@@ -93,10 +93,12 @@ public static class SetupTemplates
 
         services:
           app:
-            # PINQOPS_TAG is pinned in this directory's .env by `pinqops deploy
-            # --tag`, so the exact deployed version is recorded and can be
-            # rolled back. Without a .env it falls back to :latest.
-            image: ghcr.io/{{owner.ToLowerInvariant()}}/{{repo.ToLowerInvariant()}}:${PINQOPS_TAG:-latest}
+            # Both variables are pinned in this directory's .env by `pinqops
+            # deploy` (PINQOPS_IMAGE from --image, PINQOPS_TAG from --tag), so the
+            # image always follows the repository — even after a rename — and the
+            # exact version is recorded and can be rolled back. The defaults below
+            # are used only before the first deploy (or a plain `docker compose up`).
+            image: ${PINQOPS_IMAGE:-ghcr.io/{{owner.ToLowerInvariant()}}/{{repo.ToLowerInvariant()}}}:${PINQOPS_TAG:-latest}
             restart: unless-stopped
             # pinqops-apps is the shared network the catalog apps live on — it
             # lets this app reach them (Redis, PostgreSQL, …) by container DNS.

@@ -299,6 +299,51 @@ public class DeployerTests : IDisposable
     }
 
     [Fact]
+    public async Task DeployAsync_ExpectedImage_PinsImageInEnvBeforePull()
+    {
+        var envFile = Path.Combine(_projectDirectory, ".env");
+        string? imageAtPullTime = null;
+        var runner = new FakeProcessRunner((_, arguments) =>
+        {
+            if (arguments.Contains("config"))
+            {
+                return new ProcessResult(0, "ghcr.io/acme/app:sha-abc123\n", string.Empty);
+            }
+
+            if (arguments.Contains("pull"))
+            {
+                imageAtPullTime = EnvFileStore.GetValue(envFile, Deployer.ImageVariable);
+            }
+
+            return arguments.Contains("ps")
+                ? new ProcessResult(0, HealthyPs, string.Empty)
+                : new ProcessResult(0, string.Empty, string.Empty);
+        });
+        var deployer = new Deployer(runner);
+
+        var result = await deployer.DeployAsync(Options(tag: "sha-abc123", expectedImage: "ghcr.io/acme/app"));
+
+        Assert.True(result);
+        Assert.Equal("ghcr.io/acme/app", imageAtPullTime);
+        Assert.Equal("ghcr.io/acme/app", EnvFileStore.GetValue(envFile, Deployer.ImageVariable));
+    }
+
+    [Fact]
+    public async Task DeployAsync_ExpectedImageMismatch_RestoresPreviousImage()
+    {
+        var envFile = Path.Combine(_projectDirectory, ".env");
+        EnvFileStore.SetValue(envFile, Deployer.ImageVariable, "ghcr.io/acme/old-name");
+        var runner = RunnerWithConfigImages("ghcr.io/acme/old-name:sha-abc123\n");
+        var deployer = new Deployer(runner);
+
+        var result = await deployer.DeployAsync(Options(tag: "sha-abc123", expectedImage: "ghcr.io/acme/new-name"));
+
+        Assert.False(result);
+        // The mismatch aborted before any change was applied; the pin is restored.
+        Assert.Equal("ghcr.io/acme/old-name", EnvFileStore.GetValue(envFile, Deployer.ImageVariable));
+    }
+
+    [Fact]
     public async Task DeployAsync_ExpectedImageMatches_CaseInsensitive_Proceeds()
     {
         var runner = RunnerWithConfigImages("ghcr.io/Acme/App:sha-abc123\n");
