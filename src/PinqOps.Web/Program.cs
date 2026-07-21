@@ -629,8 +629,25 @@ app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService doc
             throw new InvalidOperationException("Connect a repository first.");
         }
 
+        var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
+        var project = ComposeProjectName.FromRepository(repository.Name);
+
         if (File.Exists(config.ComposeFile))
         {
+            // One compose project per path. Silently sharing it between two
+            // repositories is the worst outcome: the second repository's deploy
+            // pins ITS tag onto the FIRST one's image and dies pulling a tag that
+            // only exists in the other package.
+            var owner = ComposeProjectName.ReadFrom(await File.ReadAllTextAsync(config.ComposeFile));
+            if (owner is not null && owner != project)
+            {
+                throw new InvalidOperationException(
+                    $"{config.ComposeFile} already belongs to '{owner}', not '{project}'. pinqops manages one "
+                    + $"application per compose file. Give this repository its own path (Settings → compose file, "
+                    + $"e.g. /opt/{project}/docker-compose.yml) and set the repository variable APP_COMPOSE_PATH "
+                    + $"to the same value so its deploy workflow uses it.");
+            }
+
             throw new InvalidOperationException($"{config.ComposeFile} already exists.");
         }
 
@@ -638,7 +655,6 @@ app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService doc
         // it must exist before the first compose up.
         await docker.EnsureSharedNetworkAsync();
 
-        var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
         var directory = Path.GetDirectoryName(config.ComposeFile);
         if (!string.IsNullOrEmpty(directory))
         {

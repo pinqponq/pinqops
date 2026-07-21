@@ -44,6 +44,34 @@ public class ComposeProjectNameTests
     }
 
     [Theory]
+    [InlineData("name: \"ikv-board\"\nservices:\n  app: {}\n", "ikv-board")]
+    [InlineData("name: peramice\n", "peramice")]
+    [InlineData("# a comment\nname:   'my-app'  \n", "my-app")]
+    public void ReadFrom_IdentifiesWhichRepositoryAProjectBelongsTo(string yaml, string expected)
+    {
+        Assert.Equal(expected, ComposeProjectName.ReadFrom(yaml));
+    }
+
+    [Theory]
+    [InlineData("services:\n  app: {}\n")]
+    [InlineData("# name: commented-out\n")]
+    [InlineData("")]
+    public void ReadFrom_ReturnsNullWhenNoProjectNameIsDeclared(string yaml)
+    {
+        Assert.Null(ComposeProjectName.ReadFrom(yaml));
+    }
+
+    [Fact]
+    public void ReadFrom_RoundTripsWhatFromRepositoryProduces()
+    {
+        // The guard that stops two repositories sharing one compose project
+        // compares these two, so they must agree.
+        var project = ComposeProjectName.FromRepository("IKV-Board");
+
+        Assert.Equal(project, ComposeProjectName.ReadFrom($"name: \"{project}\"\n"));
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData(null)]

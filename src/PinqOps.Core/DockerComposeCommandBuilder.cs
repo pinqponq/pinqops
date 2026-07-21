@@ -49,6 +49,13 @@ public static class DockerComposeCommandBuilder
         return new[] { "rmi", reference };
     }
 
+    /// <summary><c>docker image inspect &lt;ref&gt; --format {{json .Config.ExposedPorts}}</c></summary>
+    public static IReadOnlyList<string> InspectImageExposedPorts(string reference)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reference);
+        return new[] { "image", "inspect", reference, "--format", "{{json .Config.ExposedPorts}}" };
+    }
+
     /// <summary><c>docker image inspect &lt;reference&gt;</c></summary>
     public static IReadOnlyList<string> InspectImage(string reference)
     {

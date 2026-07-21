@@ -33,6 +33,19 @@ and this project adheres to a rolling release model (latest `master` only).
 
 ### Fixed
 
+- **Two repositories can no longer silently share one compose project.** Nothing
+  tied a compose file to a repository, so pointing a second repository at the
+  same path let its deploy pin *its* tag onto the *first* one's image — and die
+  pulling a tag that only exists in the other package (an opaque `403`). The
+  wizard now reads the project name out of an existing compose file and refuses
+  with the owning repository named, plus the path and `APP_COMPOSE_PATH` variable
+  to set for a second app.
+- **A deploy that publishes a port nothing listens on is no longer reported
+  green.** The container runs, so the health check passed and the deploy was
+  recorded successful while the site was unreachable. After a successful deploy,
+  pinqops compares the published container port against the image's exposed ports
+  and warns — naming `PINQOPS_CONTAINER_PORT` — when they disagree. Advisory
+  only: `EXPOSE` is documentation, so it never fails a deploy.
 - **The built image is now explicitly connected to its repository.** The
   generated workflow labels the image with
   `org.opencontainers.image.source`, which is what grants the deploy job's

@@ -33,4 +33,35 @@ public static class ComposeProjectName
         var name = new string(kept).TrimStart('_', '-');
         return name.Length > 0 ? name : Fallback;
     }
+
+    /// <summary>
+    /// The project name declared by an existing compose file, or null when it
+    /// declares none. Because the name is the repository's, this identifies
+    /// which repository a compose project on disk belongs to.
+    /// </summary>
+    public static string? ReadFrom(string composeYaml)
+    {
+        if (string.IsNullOrWhiteSpace(composeYaml))
+        {
+            return null;
+        }
+
+        foreach (var rawLine in composeYaml.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0 || line.StartsWith('#') || !line.StartsWith("name:", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // The generated file quotes the scalar; a hand-written one may not.
+            var value = line["name:".Length..].Trim().Trim('"', '\'');
+            if (value.Length > 0)
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
 }

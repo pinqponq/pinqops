@@ -153,6 +153,68 @@ public class DeployerTests : IDisposable
         Assert.Contains("compose up failed", Assert.Single(history.Load()).Error);
     }
 
+    // compose ps reporting a published mapping, plus an image that exposes a
+    // DIFFERENT port — the "deployed green but the site is dead" shape.
+    private static FakeProcessRunner RunnerWithPorts(string exposedPortsJson, int targetPort)
+    {
+        var ps = $$"""{"Name":"app-1","State":"running","Health":"","Publishers":[{"URL":"0.0.0.0","TargetPort":{{targetPort}},"PublishedPort":8080,"Protocol":"tcp"}]}""";
+        return new FakeProcessRunner((_, arguments) =>
+        {
+            if (arguments.Contains("ps"))
+            {
+                return new ProcessResult(0, ps, string.Empty);
+            }
+
+            if (arguments.Contains("config"))
+            {
+                return new ProcessResult(0, "ghcr.io/acme/app:latest\n", string.Empty);
+            }
+
+            if (arguments.Contains("inspect"))
+            {
+                return new ProcessResult(0, exposedPortsJson, string.Empty);
+            }
+
+            return new ProcessResult(0, string.Empty, string.Empty);
+        });
+    }
+
+    [Fact]
+    public async Task DeployAsync_PublishesAPortTheImageDoesNotExpose_WarnsButSucceeds()
+    {
+        var log = new List<string>();
+        var deployer = new Deployer(RunnerWithPorts("""{"8083/tcp":{}}""", targetPort: 80), log.Add);
+
+        var result = await deployer.DeployAsync(Options());
+
+        // Advisory only: EXPOSE is documentation, so this must never fail a deploy.
+        Assert.True(result);
+        var warning = Assert.Single(log, line => line.StartsWith("warning: publishing to container port"));
+        Assert.Contains("8083", warning);
+        Assert.Contains(Deployer.ContainerPortVariable, warning);
+    }
+
+    [Fact]
+    public async Task DeployAsync_PublishedPortIsExposed_DoesNotWarn()
+    {
+        var log = new List<string>();
+        var deployer = new Deployer(RunnerWithPorts("""{"8083/tcp":{}}""", targetPort: 8083), log.Add);
+
+        Assert.True(await deployer.DeployAsync(Options()));
+        Assert.DoesNotContain(log, line => line.StartsWith("warning: publishing to container port"));
+    }
+
+    [Fact]
+    public async Task DeployAsync_ImageExposesNothing_DoesNotWarn()
+    {
+        // No EXPOSE at all is no basis for an opinion.
+        var log = new List<string>();
+        var deployer = new Deployer(RunnerWithPorts("null", targetPort: 80), log.Add);
+
+        Assert.True(await deployer.DeployAsync(Options()));
+        Assert.DoesNotContain(log, line => line.StartsWith("warning: publishing to container port"));
+    }
+
     [Fact]
     public async Task DeployAsync_PruneDisabled_DoesNotPrune()
     {

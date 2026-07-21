@@ -8,10 +8,10 @@ namespace PinqOps.Web;
 public static class SetupTemplates
 {
     /// <summary>Host port the compose project publishes on; editable in the dashboard's .env editor.</summary>
-    public const string HostPortVariable = "PINQOPS_HOST_PORT";
+    public const string HostPortVariable = Deployer.HostPortVariable;
 
     /// <summary>Port inside the container the app listens on (seeded from the Dockerfile's EXPOSE).</summary>
-    public const string ContainerPortVariable = "PINQOPS_CONTAINER_PORT";
+    public const string ContainerPortVariable = Deployer.ContainerPortVariable;
 
     /// <summary>Mirror of examples/workflows/deploy.yml, ready to commit.</summary>
     /// <summary>

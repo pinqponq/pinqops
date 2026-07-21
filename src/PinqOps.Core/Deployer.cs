@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace PinqOps;
 
 /// <summary>
@@ -12,6 +14,12 @@ public sealed class Deployer
     private const string DockerExecutable = "docker";
     public const string TagVariable = "PINQOPS_TAG";
     public const string ImageVariable = "PINQOPS_IMAGE";
+
+    /// <summary>Host port the compose project publishes on (user-editable).</summary>
+    public const string HostPortVariable = "PINQOPS_HOST_PORT";
+
+    /// <summary>Port inside the container the app listens on (user-editable).</summary>
+    public const string ContainerPortVariable = "PINQOPS_CONTAINER_PORT";
 
     /// <summary>
     /// Whether a compose <c>.env</c> key is owned by deploy/rollback. Both are
@@ -146,6 +154,8 @@ public sealed class Deployer
             healthState = DeployRecordValues.HealthPassed;
         }
 
+        await WarnOnUnservedPortAsync(options.ComposeFilePath, token).ConfigureAwait(false);
+
         if (options.PruneImages)
         {
             // Cleanup is a nicety; its failure must not fail the deploy.
@@ -262,6 +272,124 @@ public sealed class Deployer
         {
             EnvFileStore.SetValue(envFile, key, previousValue);
         }
+    }
+
+    /// <summary>
+    /// Warns when the project publishes a container port the image does not
+    /// expose. The container still runs and the health check still passes, so
+    /// without this the deploy is reported green while nothing answers on the
+    /// published port — the classic "it deployed but the site is dead".
+    /// </summary>
+    /// <remarks>
+    /// Advisory only. <c>EXPOSE</c> is documentation: an app may legitimately
+    /// listen on a port its image never declared, so this must never fail a
+    /// deploy — it only says what looks wrong.
+    /// </remarks>
+    private async Task WarnOnUnservedPortAsync(string composeFilePath, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var images = await RunCapturedAsync(DockerComposeCommandBuilder.ConfigImages(composeFilePath), cancellationToken)
+                .ConfigureAwait(false);
+            var image = images?
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .FirstOrDefault();
+            if (image is null)
+            {
+                return;
+            }
+
+            var exposedJson = await RunCapturedAsync(DockerComposeCommandBuilder.InspectImageExposedPorts(image), cancellationToken)
+                .ConfigureAwait(false);
+            var exposed = ParseExposedPorts(exposedJson);
+            if (exposed.Count == 0)
+            {
+                // Nothing declared — no basis for an opinion.
+                return;
+            }
+
+            var psOutput = await RunCapturedAsync(DockerComposeCommandBuilder.Ps(composeFilePath), cancellationToken)
+                .ConfigureAwait(false);
+            if (psOutput is null)
+            {
+                return;
+            }
+
+            foreach (var service in JsonLines.Parse(psOutput))
+            {
+                if (!service.TryGetProperty("Publishers", out var publishers)
+                    || publishers.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (var publisher in publishers.EnumerateArray())
+                {
+                    if (!publisher.TryGetProperty("TargetPort", out var targetPort)
+                        || !targetPort.TryGetInt32(out var target)
+                        || target == 0
+                        || exposed.Contains(target))
+                    {
+                        continue;
+                    }
+
+                    _log?.Invoke(
+                        $"warning: publishing to container port {target}, but the image only exposes "
+                        + $"{string.Join(", ", exposed)}. If nothing is listening on {target} the app will be "
+                        + $"unreachable — set {ContainerPortVariable} in the project's .env to the port your app "
+                        + $"listens on, then re-apply.");
+                }
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // A diagnostic must never break a deploy that already succeeded.
+            _log?.Invoke($"could not check the published port: {exception.Message}");
+        }
+    }
+
+    /// <summary>Port numbers from a docker <c>ExposedPorts</c> map (<c>{"8083/tcp":{}}</c>).</summary>
+    private static HashSet<int> ParseExposedPorts(string? exposedPortsJson)
+    {
+        var ports = new HashSet<int>();
+        if (string.IsNullOrWhiteSpace(exposedPortsJson))
+        {
+            return ports;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(exposedPortsJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return ports;
+            }
+
+            foreach (var entry in document.RootElement.EnumerateObject())
+            {
+                var slash = entry.Name.IndexOf('/');
+                var portText = slash >= 0 ? entry.Name[..slash] : entry.Name;
+                if (int.TryParse(portText, out var port))
+                {
+                    ports.Add(port);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // "null" or an unexpected shape — treat as "nothing declared".
+        }
+
+        return ports;
+    }
+
+    /// <summary>Standard output of a docker command, or null when it failed.</summary>
+    private async Task<string?> RunCapturedAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    {
+        var result = await _processRunner
+            .RunAsync(DockerExecutable, arguments, workingDirectory: null, cancellationToken)
+            .ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput : null;
     }
 
     /// <summary>True when every image the compose project references exists locally.</summary>
