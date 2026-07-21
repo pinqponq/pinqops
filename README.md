@@ -40,13 +40,19 @@ A minimal dashboard for the server — containers (with inline logs), images,
 volumes, network management with a visual map, workflow runs, runner status
 (down to when it last ran a job), and system health. English + Turkish.
 
-The **GitHub** menu is the whole onboarding: sign in with GitHub (OAuth
-device flow) or paste a token, search and pick your repository from the
-list — no URLs — and hit **Install**. A step-by-step wizard commits the
-deploy workflow, generates the compose file, **registers the self-hosted
-runner** (replacing a leftover runner from another repository if it finds
-one), streams the install log live, and verifies on GitHub that the runner
-actually appeared. Deploys then happen the intended way: merge to your default branch.
+The **GitHub** menu is the whole onboarding, as a three-step wizard:
+**1 Connect** (OAuth device flow or paste a token) → **2 Choose repository**
+(search and pick from the list — no URLs) → **3 Publish**. The publish step
+shows the ports up front — the container side read from your Dockerfile's
+`EXPOSE` (with a clear warning and an editable field when there is none), the
+host side pre-filled with a free port and validated live as you type — then
+commits the deploy workflow, generates the compose file, **registers the
+self-hosted runner** (replacing a leftover runner from another repository if
+it finds one), streams the install log live, verifies on GitHub that the
+runner actually appeared, and kicks off the first build & deploy via
+`workflow_dispatch`. Once the container is up, the wizard shows a live
+"your app is running" card that opens the app. Subsequent deploys happen the
+intended way: merge to your default branch.
 
 There is also a curated catalog of ~50 one-click apps (Redis, PostgreSQL,
 Grafana, MinIO, …) — installed with generated passwords (retrievable in the
@@ -72,7 +78,7 @@ sudo journalctl -u pinqops-ui | grep "setup code"   # then open http://<server>:
 On first visit, enter the **setup code** (from the journalctl line above, or
 the console when running in the foreground) and create a dashboard password.
 Then open the **GitHub** menu (it carries a lock icon until connected), sign
-in, pick your repository, and run the install wizard. Use `--port <n>` /
+in, pick your repository, and hit Publish. Use `--port <n>` /
 `--host <addr>` to change where it listens, and `--cert <pfx>` to serve
 HTTPS.
 

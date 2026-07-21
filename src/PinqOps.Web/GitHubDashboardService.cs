@@ -161,6 +161,19 @@ public sealed class GitHubDashboardService : IDisposable
         return new { ok = true, commitUrl };
     }
 
+    /// <summary>
+    /// Kicks off the deploy workflow via workflow_dispatch on
+    /// <paramref name="branch"/> — how the wizard starts the first deploy
+    /// without waiting for a push.
+    /// </summary>
+    public async Task TriggerDeployWorkflowAsync(string branch)
+    {
+        var (repository, auth) = Context();
+        var path = $"/repos/{repository.Owner}/{repository.Name}/actions/workflows/deploy.yml/dispatches";
+        var body = JsonSerializer.Serialize(new { @ref = branch });
+        await SendAsync(repository, auth, HttpMethod.Post, path, body).ConfigureAwait(false);
+    }
+
     /// <summary>Just the repository's self-hosted runners (for the setup check).</summary>
     public async Task<(int Online, int Total)> GetRunnersSummaryAsync()
     {
@@ -501,6 +514,12 @@ public sealed class GitHubDashboardService : IDisposable
                 (int)response.StatusCode,
                 $"GitHub API request failed ({(int)response.StatusCode}) for {path}"
                 + (string.IsNullOrWhiteSpace(message) ? "." : $": {message}"));
+        }
+
+        // Some write endpoints (workflow_dispatch) answer 204 with no body.
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return default;
         }
 
         using var document = JsonDocument.Parse(body);

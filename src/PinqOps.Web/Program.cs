@@ -620,9 +620,19 @@ app.MapPost("/api/setup/create-workflow", (GitHubDashboardService gitHub) =>
 app.MapPost("/api/setup/start-runner", (UiConfigStore store, LocalRunnerService runner) =>
     Safe(async () => await runner.StartServiceAsync(store.Current.RunnerDirectory)));
 
-app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService docker, GitHubDashboardService gitHub) =>
+app.MapPost("/api/setup/create-compose", (HttpContext context, UiConfigStore store, DockerService docker, GitHubDashboardService gitHub) =>
     Safe(async () =>
     {
+        // The wizard sends its port choices; older callers send no body at all.
+        ComposeCreateRequest? request = null;
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync<ComposeCreateRequest>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+        }
+
         var config = store.Current;
         if (string.IsNullOrWhiteSpace(config.RepoUrl))
         {
@@ -677,25 +687,18 @@ app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService doc
                 exception, "Could not read the Dockerfile's EXPOSE; defaulting the container port");
         }
 
-        var containerPort = exposedPort ?? DockerfileInspector.DefaultPort;
+        var containerPort = SetupPorts.ResolveContainer(request?.ContainerPort, exposedPort);
 
         // Nothing owns the app's port yet, so this is the one moment a bind test
         // is meaningful. Taking the next free port beats generating a project
         // whose first deploy dies on "port is already allocated".
-        var freePort = HostPort.FindAvailable(UiConfig.DefaultHostPort);
-        if (freePort is null)
+        var hostPort = SetupPorts.ResolveHost(
+            request?.HostPort, UiConfig.DefaultHostPort, HostPort.IsAvailable, HostPort.FindAvailable);
+        if (request?.HostPort is null && hostPort != UiConfig.DefaultHostPort)
         {
             logger.LogWarning(
-                "No free host port in {Count} ports from {Start}; defaulting to {Port}",
-                HostPort.ScanLimit, UiConfig.DefaultHostPort, UiConfig.DefaultHostPort);
+                "Host port {Default} is in use; publishing on {Port} instead", UiConfig.DefaultHostPort, hostPort);
         }
-        else if (freePort != UiConfig.DefaultHostPort)
-        {
-            logger.LogWarning(
-                "Host port {Default} is in use; publishing on {Port} instead", UiConfig.DefaultHostPort, freePort);
-        }
-
-        var hostPort = freePort ?? UiConfig.DefaultHostPort;
 
         await File.WriteAllTextAsync(
             config.ComposeFile,
@@ -711,6 +714,135 @@ app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService doc
             "Compose project created at {File} publishing {HostPort}->{ContainerPort}",
             config.ComposeFile, hostPort, containerPort);
         return new { ok = true, composeFile = config.ComposeFile, hostPort, containerPort };
+    }));
+
+// Pre-publish data for the wizard's port form: the detected container port and
+// a suggested free host port, plus the current .env values once the compose
+// project exists. The generic .env endpoint masks every value, so the wizard
+// needs this dedicated, ports-only view.
+app.MapGet("/api/setup/publish-info", (UiConfigStore store, GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        var config = store.Current;
+
+        // The Dockerfile read is a hint — a GitHub hiccup must degrade to
+        // "nothing detected", not break the form.
+        int? detectedContainerPort = null;
+        try
+        {
+            detectedContainerPort = await gitHub.GetDockerfileExposedPortAsync();
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not read the Dockerfile's EXPOSE for the publish form");
+        }
+
+        var composeExists = File.Exists(config.ComposeFile);
+        var envFile = PinqOpsStatePaths.EnvFile(config.ComposeFile);
+        var currentHostPort = composeExists
+            ? TryParsePort(EnvFileStore.GetValue(envFile, SetupTemplates.HostPortVariable))
+            : null;
+        var currentContainerPort = composeExists
+            ? TryParsePort(EnvFileStore.GetValue(envFile, SetupTemplates.ContainerPortVariable))
+            : null;
+
+        return new
+        {
+            composeExists,
+            detectedContainerPort,
+            fallbackContainerPort = DockerfileInspector.DefaultPort,
+            suggestedHostPort = currentHostPort
+                ?? HostPort.FindAvailable(UiConfig.DefaultHostPort)
+                ?? UiConfig.DefaultHostPort,
+            currentHostPort,
+            currentContainerPort,
+        };
+    }));
+
+// Live validation while the user types a host port in the wizard.
+app.MapGet("/api/setup/port-check", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        var raw = context.Request.Query["port"].ToString().Trim();
+        if (!int.TryParse(raw, NumberStyles.None, InvariantCulture, out var port) || !HostPort.IsValid(port))
+        {
+            return (object)new { port = raw, valid = false, available = false };
+        }
+
+        // The app's own container legitimately owns its current host port — a
+        // bind probe would flag it as busy, so treat "unchanged" as free.
+        var envFile = PinqOpsStatePaths.EnvFile(store.Current.ComposeFile);
+        var currentHostPort = File.Exists(store.Current.ComposeFile)
+            ? EnvFileStore.GetValue(envFile, SetupTemplates.HostPortVariable)
+            : null;
+        var available = currentHostPort == port.ToString(InvariantCulture) || HostPort.IsAvailable(port);
+        return (object)new { port, valid = true, available };
+    }));
+
+// Live state of the deployed app for the wizard's "your app is live" card:
+// whether the compose container runs and on which host port it is reachable.
+app.MapGet("/api/setup/app-status", (UiConfigStore store, DockerService docker) =>
+    Safe(async () =>
+    {
+        var config = store.Current;
+        var composeExists = File.Exists(config.ComposeFile);
+        var envFile = PinqOpsStatePaths.EnvFile(config.ComposeFile);
+
+        string? state = null;
+        int? publishedPort = null;
+        var dockerOk = true;
+        if (composeExists)
+        {
+            try
+            {
+                (state, publishedPort) = ComposeAppStatus.FromServices(
+                    await docker.ComposeServicesAsync(config.ComposeFile));
+            }
+            catch (InvalidOperationException)
+            {
+                dockerOk = false;
+            }
+        }
+
+        return new
+        {
+            composeExists,
+            dockerOk,
+            state,
+            running = string.Equals(state, "running", StringComparison.OrdinalIgnoreCase),
+            // Prefer the port docker actually bound; before the first deploy
+            // fall back to what the .env says will be published.
+            hostPort = publishedPort ?? TryParsePort(EnvFileStore.GetValue(envFile, SetupTemplates.HostPortVariable)),
+            currentTag = EnvFileStore.GetValue(envFile, Deployer.TagVariable),
+            currentDeployedAt = new DeployHistoryStore(config.ComposeFile).LastSuccessful()?.StartedAt,
+        };
+    }));
+
+// Starts the first deploy right from the wizard instead of waiting for a push:
+// dispatches the generated workflow on the repository's default branch.
+app.MapPost("/api/setup/trigger-deploy", (GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        var branch = await gitHub.GetDefaultBranchAsync();
+
+        // A workflow the wizard committed seconds ago may not be indexed by
+        // the Actions API yet — 404s briefly even though the file is there.
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await gitHub.TriggerDeployWorkflowAsync(branch);
+                break;
+            }
+            catch (GitHubApiException exception) when (exception.StatusCode == 404 && attempt < 5)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+        }
+
+        logger.LogWarning("First deploy triggered via workflow_dispatch on {Branch}", branch);
+        return new { ok = true, branch };
     }));
 
 // Full runner install driven from the dashboard: registration token via the
@@ -1312,6 +1444,12 @@ static int? ParseFirstHostPort(string portsColumn)
     var match = System.Text.RegularExpressions.Regex.Match(portsColumn ?? "", @":(\d+)->");
     return match.Success && int.TryParse(match.Groups[1].Value, out var port) ? port : null;
 }
+
+/// <summary>A stored .env port value as an int, or null when absent/garbage.</summary>
+static int? TryParsePort(string? value) =>
+    int.TryParse(value?.Trim(), NumberStyles.None, InvariantCulture, out var port) && HostPort.IsValid(port)
+        ? port
+        : null;
 
 static string? ReadBearerToken(HttpContext context)
 {

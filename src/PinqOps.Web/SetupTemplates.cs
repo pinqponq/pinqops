@@ -37,6 +37,9 @@ public static class SetupTemplates
           push:
             branches:
               - {{{defaultBranch}}}
+          # Lets the dashboard (or you, from the Actions tab) start a deploy
+          # without pushing — the wizard uses this to kick off the first one.
+          workflow_dispatch:
 
         permissions:
           contents: read

@@ -21,6 +21,16 @@ public class SetupTemplatesTests
     }
 
     [Fact]
+    public void DeployWorkflowYaml_IsManuallyDispatchable()
+    {
+        // The wizard starts the first deploy via workflow_dispatch instead of
+        // making the user push a commit.
+        var yaml = SetupTemplates.DeployWorkflowYaml("main");
+
+        Assert.Contains("workflow_dispatch:", yaml);
+    }
+
+    [Fact]
     public void DeployWorkflowYaml_KeepsGitHubExpressionsIntact()
     {
         // The template is an interpolated raw literal; too few '$' would swallow

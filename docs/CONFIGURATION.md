@@ -20,7 +20,7 @@ itself. This page lists the knobs that exist.
 |---|---|
 | Project name | Your repository name, so containers read `<repo>-app-1` |
 | Image | `${PINQOPS_IMAGE}:${PINQOPS_TAG}` — both pinned by `pinqops deploy`, so the image follows the repository even after a rename |
-| Published port | `${PINQOPS_HOST_PORT:-8080}:${PINQOPS_CONTAINER_PORT}` — the container side is read from your Dockerfile's `EXPOSE`, the host side is the first free port from `8080` |
+| Published port | `${PINQOPS_HOST_PORT:-8080}:${PINQOPS_CONTAINER_PORT}` — the container side is read from your Dockerfile's `EXPOSE` (`80` when there is none), the host side is the first free port from `8080`. The dashboard's publish wizard shows both up front and lets you override them before (or after) going live |
 
 ### Changing the port
 

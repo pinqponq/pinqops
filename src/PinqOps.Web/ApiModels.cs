@@ -51,3 +51,5 @@ public sealed record NotificationTelegramRequest(bool? Enabled, string? BotToken
 public sealed record NotificationTestRequest(string? Channel);
 
 public sealed record ComposeEnvRequest(Dictionary<string, string>? Set, string[]? Remove);
+
+public sealed record ComposeCreateRequest(int? HostPort, int? ContainerPort);

@@ -169,6 +169,34 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
 .progress-ind{height:7px;border-radius:6px;background:#111112;border:1px solid var(--line);overflow:hidden;position:relative}
 .progress-ind i{position:absolute;inset:0;width:35%;border-radius:6px;background:var(--primary);animation:slide 1.2s ease-in-out infinite}
 @keyframes slide{0%{left:-35%}100%{left:100%}}
+/* 3-step publish stepper */
+.stepper{display:flex;list-style:none;margin-bottom:16px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px}
+.stepper .st{flex:1;display:flex;align-items:center;gap:10px;cursor:default;color:var(--muted);font-size:13px;font-weight:600;min-width:0}
+.stepper .st+.st::before{content:"";flex:1;height:1px;background:var(--line2);margin:0 12px}
+.st-n{width:26px;height:26px;border-radius:50%;border:1px solid var(--line2);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;background:var(--panel2)}
+.st-l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stepper .st.active{color:var(--text)}
+.stepper .st.active .st-n{background:var(--primary);border-color:transparent;color:var(--bg)}
+.stepper .st.done{color:var(--ok);cursor:pointer}
+.stepper .st.done .st-n{background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.3);color:var(--ok)}
+.stepper .st.locked{opacity:.4}
+.wstep{animation:pop .18s ease-out}
+.wstep-foot{display:flex;gap:10px;align-items:center;margin-top:16px}
+.wstep-foot .spacer{flex:1}
+.port-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;margin:4px 0 6px}
+.port-hint{font-size:12px;margin-top:5px;min-height:16px}
+.port-hint.ok{color:var(--ok)}
+.port-hint.err{color:var(--err)}
+.live-card{display:flex;align-items:center;gap:14px;margin-top:16px;padding:16px 18px;border:1px solid rgba(52,211,153,.35);background:rgba(52,211,153,.06);border-radius:var(--radius);color:var(--text)}
+a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
+.live-card .lc-dot{width:10px;height:10px;border-radius:50%;background:var(--ok);flex:none;box-shadow:0 0 0 4px rgba(52,211,153,.15)}
+.live-card .lc-body{flex:1;min-width:0}
+.live-card .lc-title{font-weight:700;font-size:14px}
+.live-card .lc-url{font-family:var(--mono);font-size:12.5px;color:var(--ok);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.live-card .lc-open{flex:none;font-size:13px;font-weight:600;color:var(--ok)}
+.wait-card{display:flex;align-items:flex-start;gap:12px;margin-top:16px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);border-radius:var(--radius);font-size:13px}
+.wait-card.warn{border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.06)}
+@media(max-width:640px){.port-grid{grid-template-columns:1fr}.stepper{padding:10px 12px}.stepper .st .st-l{display:none}.stepper .st.active .st-l{display:inline}.stepper .st+.st::before{margin:0 8px}}
 .identity{display:flex;align-items:center;gap:12px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-top:8px}
 .identity img{width:34px;height:34px;border-radius:50%;border:1px solid var(--line2)}
 .identity .who b{font-size:13.5px}
@@ -402,9 +430,16 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
           <div class="card"><dl class="kv" id="sys-docker"></dl></div></div>
       </section>
 
-      <!-- github: connect + pick a repo + the install wizard -->
+      <!-- github: the 3-step publish wizard (connect → choose repo → publish) -->
       <section id="view-github" class="view hidden">
-        <div class="card">
+        <ol class="stepper" id="wiz-stepper">
+          <li class="st" data-step="1"><span class="st-n">1</span><span class="st-l" data-i18n="wz.s1">Connect GitHub</span></li>
+          <li class="st" data-step="2"><span class="st-n">2</span><span class="st-l" data-i18n="wz.s2">Choose repository</span></li>
+          <li class="st" data-step="3"><span class="st-n">3</span><span class="st-l" data-i18n="wz.s3">Publish</span></li>
+        </ol>
+
+        <!-- step 1: connect -->
+        <div class="card wstep hidden" id="wstep-1">
           <h3 data-i18n="se.gh">GitHub connection</h3>
 
           <!-- account -->
@@ -432,28 +467,63 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
             </div>
             <div style="margin-top:14px"><a href="#" id="link-no-gh" class="muted" style="font-size:12.5px" data-i18n="se.noGhLink">Continue without signing in with GitHub?</a></div>
           </div>
+          <div class="wstep-foot"><span class="spacer"></span>
+            <button class="primary hidden" id="btn-step1-next" data-i18n="wz.continue">Continue →</button></div>
         </div>
 
-        <!-- repo wizard: search, pick, install — like installing an app -->
-        <div class="card hidden" id="repo-card" style="margin-top:16px">
+        <!-- step 2: pick a repository -->
+        <div class="card wstep hidden" id="wstep-2">
           <h3 data-i18n="gh.pickTitle">Set up a repository</h3>
-          <p class="muted" style="font-size:13px;margin-bottom:10px" data-i18n="gh.pickHelp">Search your repositories, pick one, and Install — the wizard commits the deploy workflow, creates the compose project, and registers the runner automatically.</p>
-          <div class="inline-form">
-            <input id="repo-search" style="min-width:220px;flex:1" data-i18n-ph="se.repoSearch">
-            <button class="primary" id="btn-repo-install" disabled data-i18n="gh.installBtn">Install</button>
-          </div>
+          <p class="muted" style="font-size:13px;margin-bottom:10px" data-i18n="gh.pickHelp">Search your repositories and pick the one to publish — the next step readies everything (workflow, compose project, runner) automatically.</p>
+          <input id="repo-search" data-i18n-ph="se.repoSearch">
           <div id="repo-list" class="repolist"></div>
+          <div class="wstep-foot">
+            <button class="ghost" id="btn-step2-back" data-i18n="wz.back">← Back</button>
+            <span class="spacer"></span>
+            <button class="primary" id="btn-repo-install" disabled data-i18n="wz.continue">Continue →</button>
+          </div>
         </div>
 
-        <!-- readiness of the connected repo -->
-        <div class="card hidden" id="setup-card" style="margin-top:16px">
-          <h3 style="display:flex;align-items:center;gap:10px"><span data-i18n="su.title">Deployment readiness</span>
+        <!-- step 3: publish (ports + sub-step progress + live status) -->
+        <div class="card wstep hidden" id="wstep-3">
+          <h3 style="display:flex;align-items:center;gap:10px"><span data-i18n="wz.s3">Publish</span>
             <span style="flex:1"></span>
-            <span class="muted" style="font-weight:500;text-transform:none;letter-spacing:0" id="setup-repo-name"></span>
-            <button class="small" id="btn-wiz-rerun" data-i18n="gh.reinstall">Re-run the wizard</button></h3>
-          <div id="setup-summary" style="font-size:13px;margin-bottom:6px"></div>
-          <div id="setup-list"></div>
-          <div class="logbox hidden" id="setup-log" style="margin-top:12px;max-height:280px"></div>
+            <span class="muted" style="font-weight:500;text-transform:none;letter-spacing:0;font-family:var(--mono);font-size:12px" id="pub-repo-name"></span>
+            <a href="#" id="lnk-change-repo" style="font-size:12px;text-transform:none;letter-spacing:0;font-weight:500" data-i18n="wz.changeRepo">change repository</a></h3>
+
+          <div id="pub-ports">
+            <div class="port-grid">
+              <div><label for="pub-hostport" data-i18n="wz.hostPort">Host port (public, on this server)</label>
+                <input id="pub-hostport" type="number" min="1" max="65535" inputmode="numeric">
+                <div class="port-hint" id="pub-hostport-hint"></div></div>
+              <div><label for="pub-ctrport" data-i18n="wz.ctrPort">Container port (your app listens on)</label>
+                <input id="pub-ctrport" type="number" min="1" max="65535" inputmode="numeric">
+                <div class="port-hint" id="pub-ctrport-src"></div></div>
+            </div>
+            <div class="banner hidden" id="pub-ctr-fallback" style="margin-bottom:12px"></div>
+          </div>
+
+          <div id="pub-progress" class="hidden" style="margin-top:6px">
+            <div class="bar wiz-bar"><i id="wiz-bar" style="width:0%"></i></div>
+            <div class="wiz-step" id="wiz-connect"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.connect">Connecting the repository</b><div class="ws-detail" id="wiz-connect-d"></div></div></div>
+            <div class="wiz-step" id="wiz-dockerfile"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.dockerfile">Dockerfile</b><div class="ws-detail" id="wiz-dockerfile-d"></div></div></div>
+            <div class="wiz-step" id="wiz-workflow"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.workflow">Deploy workflow</b><div class="ws-detail" id="wiz-workflow-d"></div></div></div>
+            <div class="wiz-step" id="wiz-compose"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.compose">Compose project</b><div class="ws-detail" id="wiz-compose-d"></div></div></div>
+            <div class="wiz-step" id="wiz-runner"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.runner">Self-hosted runner</b><div class="ws-detail" id="wiz-runner-d"></div></div></div>
+            <div class="wiz-step" id="wiz-verify"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.verify">Verification</b><div class="ws-detail" id="wiz-verify-d"></div></div></div>
+            <div class="wiz-step" id="wiz-deploy"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.deploy">First deploy</b><div class="ws-detail" id="wiz-deploy-d"></div></div></div>
+            <div id="wiz-summary" style="margin-top:12px;font-size:13px"></div>
+            <details style="margin-top:8px"><summary class="muted" style="cursor:pointer;font-size:12.5px" data-i18n="wiz.showLog">show log</summary>
+              <div class="logbox" id="wiz-log" style="margin-top:8px;max-height:220px"></div></details>
+          </div>
+
+          <div id="pub-live"></div>
+
+          <div class="wstep-foot">
+            <button class="ghost" id="btn-step3-back" data-i18n="wz.back">← Back</button>
+            <span class="spacer"></span>
+            <button class="primary" id="btn-publish" data-i18n="wz.publish">Publish</button>
+          </div>
         </div>
 
         <!-- manual fallback for repos outside the list + server paths -->
@@ -558,16 +628,32 @@ en:{
  "nav.images":"Images","nav.storage":"Storage","nav.networks":"Networks","nav.system":"System","nav.settings":"Settings",
  "nav.apps":"Apps","nav.github":"GitHub",
  "gh.locked":"Not connected — click to sign in","gh.pickTitle":"Set up a repository",
- "gh.pickHelp":"Search your repositories, pick one, and Install — the wizard commits the deploy workflow, creates the compose project, and registers the runner automatically.",
- "gh.installBtn":"Install","gh.moreRepos":"{n} more — keep typing to narrow down","gh.noRepos":"No repository matches.",
- "gh.reinstall":"Re-run the wizard","gh.connectedAs":"connected",
- "wiz.title":"Repository setup wizard","wiz.connect":"Connecting the repository","wiz.check":"Checking repo & server",
+ "gh.pickHelp":"Search your repositories and pick the one to publish — the next step readies everything (workflow, compose project, runner) automatically.",
+ "gh.moreRepos":"{n} more — keep typing to narrow down","gh.noRepos":"No repository matches.",
+ "gh.connectedAs":"connected",
+ "wz.s1":"Connect GitHub","wz.s2":"Choose repository","wz.s3":"Publish",
+ "wz.continue":"Continue →","wz.back":"← Back","wz.changeRepo":"change repository",
+ "wz.hostPort":"Host port (public, on this server)","wz.ctrPort":"Container port (your app listens on)",
+ "wz.ctrDetected":"detected from the Dockerfile's EXPOSE ({p})",
+ "wz.ctrFallback":"No EXPOSE found in the Dockerfile (or no Dockerfile yet) — assuming port {p}. Enter the port your app actually listens on.",
+ "wz.portFree":"port {p} is free","wz.portBusy":"port {p} is in use — pick another","wz.portInvalid":"enter a port between 1 and 65535",
+ "wz.publish":"Publish","wz.republish":"Publish again",
+ "wz.portsApplied":"Ports updated — publishing on {h} → {c}",
+ "wz.published":"Everything is ready — the deploy has been started.",
+ "wz.firstDeployStarted":"build & deploy started on {b}",
+ "wz.liveTitle":"Your app is live","wz.liveOpen":"Open ↗",
+ "wz.waitingDeploy":"Waiting for the deploy — GitHub Actions builds the image and the runner publishes it. This can take a few minutes.",
+ "wz.openActions":"open GitHub Actions ↗",
+ "wz.stopped":"The app container is not running ({s}).",
+ "wz.dockerDown":"Docker is unreachable — live status unknown.",
+ "wiz.deploy":"Deploy",
+ "wiz.connect":"Connecting the repository","wiz.check":"Checking repo & server",
  "wiz.dockerfile":"Dockerfile","wiz.workflow":"Deploy workflow","wiz.compose":"Compose project","wiz.runner":"Self-hosted runner","wiz.verify":"Verification",
  "wiz.ready":"already in place","wiz.done":"Everything is ready — merge to master and it deploys itself.",
  "wiz.failed":"Setup failed at: {x}","wiz.replacingRunner":"a runner registered to {r} will be replaced",
  "wiz.runnerVerified":"{n} runner(s) registered on GitHub","wiz.verifyUnknown":"runner installed; online state could not be checked (token lacks Administration: read)",
  "wiz.verifyFail":"the runner does not appear on GitHub — check the log below",
- "wiz.showLog":"show log","wiz.cancel":"Run in background",
+ "wiz.showLog":"show log",
  "su.title":"Deployment readiness","su.dockerfile":"Dockerfile","su.workflow":"Deploy workflow","su.runner":"Self-hosted runner","su.compose":"Compose project",
  "su.dockerfileMiss":"Missing — add a Dockerfile to the repo root. It's the only thing the pipeline expects from your code.",
  "su.workflowMiss":"Missing — can be created automatically (commits .github/workflows/deploy.yml to the repo).",
@@ -686,16 +772,32 @@ tr:{
  "nav.images":"İmajlar","nav.storage":"Depolama","nav.networks":"Ağlar","nav.system":"Sistem","nav.settings":"Ayarlar",
  "nav.apps":"Uygulamalar","nav.github":"GitHub",
  "gh.locked":"Bağlı değil — giriş için tıkla","gh.pickTitle":"Depo kur",
- "gh.pickHelp":"Depolarında ara, birini seç ve Kur'a bas — sihirbaz deploy workflow'unu commit'ler, compose projesini oluşturur ve runner'ı otomatik kaydeder.",
- "gh.installBtn":"Kur","gh.moreRepos":"{n} depo daha — daraltmak için yazmaya devam et","gh.noRepos":"Eşleşen depo yok.",
- "gh.reinstall":"Sihirbazı yeniden çalıştır","gh.connectedAs":"bağlı",
- "wiz.title":"Depo kurulum sihirbazı","wiz.connect":"Depo bağlanıyor","wiz.check":"Depo ve sunucu kontrol ediliyor",
+ "gh.pickHelp":"Depolarında ara ve yayınlayacağını seç — sonraki adım her şeyi (workflow, compose projesi, runner) otomatik hazırlar.",
+ "gh.moreRepos":"{n} depo daha — daraltmak için yazmaya devam et","gh.noRepos":"Eşleşen depo yok.",
+ "gh.connectedAs":"bağlı",
+ "wz.s1":"GitHub'a bağlan","wz.s2":"Depo seç","wz.s3":"Yayına al",
+ "wz.continue":"Devam →","wz.back":"← Geri","wz.changeRepo":"depoyu değiştir",
+ "wz.hostPort":"Host portu (bu sunucuda, dışarı açık)","wz.ctrPort":"Konteyner portu (uygulamanın dinlediği)",
+ "wz.ctrDetected":"Dockerfile'daki EXPOSE'dan algılandı ({p})",
+ "wz.ctrFallback":"Dockerfile'da EXPOSE bulunamadı (ya da Dockerfile yok) — {p} varsayıldı. Uygulamanın gerçekten dinlediği portu gir.",
+ "wz.portFree":"{p} portu boş","wz.portBusy":"{p} portu kullanımda — başka bir port seç","wz.portInvalid":"1-65535 arası bir port gir",
+ "wz.publish":"Yayına al","wz.republish":"Yeniden yayına al",
+ "wz.portsApplied":"Portlar güncellendi — {h} → {c} üzerinden yayınlanıyor",
+ "wz.published":"Her şey hazır — dağıtım başlatıldı.",
+ "wz.firstDeployStarted":"{b} dalında build & deploy başladı",
+ "wz.liveTitle":"Uygulaman yayında","wz.liveOpen":"Aç ↗",
+ "wz.waitingDeploy":"Dağıtım bekleniyor — GitHub Actions imajı derliyor, runner yayına alıyor. Birkaç dakika sürebilir.",
+ "wz.openActions":"GitHub Actions'ı aç ↗",
+ "wz.stopped":"Uygulama konteyneri çalışmıyor ({s}).",
+ "wz.dockerDown":"Docker'a ulaşılamıyor — canlı durum bilinmiyor.",
+ "wiz.deploy":"Dağıtım",
+ "wiz.connect":"Depo bağlanıyor","wiz.check":"Depo ve sunucu kontrol ediliyor",
  "wiz.dockerfile":"Dockerfile","wiz.workflow":"Deploy workflow","wiz.compose":"Compose projesi","wiz.runner":"Self-hosted runner","wiz.verify":"Doğrulama",
  "wiz.ready":"zaten hazır","wiz.done":"Her şey hazır — master'a merge et, gerisi otomatik.",
  "wiz.failed":"Kurulum şu adımda başarısız oldu: {x}","wiz.replacingRunner":"{r} deposuna kayıtlı runner değiştirilecek",
  "wiz.runnerVerified":"GitHub'da {n} runner kayıtlı","wiz.verifyUnknown":"runner kuruldu; çevrimiçi durumu doğrulanamadı (token'da Administration: read yok)",
  "wiz.verifyFail":"runner GitHub'da görünmüyor — aşağıdaki loga bak",
- "wiz.showLog":"logu göster","wiz.cancel":"Arka planda sürdür",
+ "wiz.showLog":"logu göster",
  "su.title":"Dağıtım hazırlığı","su.dockerfile":"Dockerfile","su.workflow":"Deploy workflow","su.runner":"Self-hosted runner","su.compose":"Compose projesi",
  "su.dockerfileMiss":"Eksik — repo köküne bir Dockerfile ekle. Pipeline'ın kodundan beklediği tek şey bu.",
  "su.workflowMiss":"Eksik — otomatik oluşturulabilir (repoya .github/workflows/deploy.yml commit'lenir).",
@@ -831,6 +933,9 @@ const API_TR=[
  [/^A runner install is already in progress\.$/,"Zaten bir runner kurulumu sürüyor."],
  [/^Unknown app '(.*)'\.$/,(m)=>`Bilinmeyen uygulama: '${m[1]}'.`],
  [/^Host port must be between 1 and 65535\.$/,"Host portu 1-65535 arasında olmalı."],
+ [/^'(.+)' is not a valid host port \(1-65535\)\.$/,(m)=>`'${m[1]}' geçerli bir host portu değil (1-65535).`],
+ [/^'(.+)' is not a valid container port \(1-65535\)\.$/,(m)=>`'${m[1]}' geçerli bir konteyner portu değil (1-65535).`],
+ [/^Port (\d+) is already in use on this server\..*$/,(m)=>`${m[1]} portu bu sunucuda zaten kullanımda. Boş bir port seç — aksi halde dağıtım 'port is already allocated' hatasıyla düşer ve uygulama kapalı kalır.`],
  [/^An install for this app is already in progress\.$/,"Bu uygulama için zaten bir kurulum sürüyor."],
  [/^Unknown install job\.$/,"Bilinmeyen kurulum işi."],
  [/^Invalid request body\.$/,"Geçersiz istek gövdesi."],
@@ -1035,6 +1140,7 @@ function setView(v){
   // (the timer was cleared on the way out, but the panel and target survive).
   if(v==="containers"&&logTarget&&!$("#ct-logpanel").classList.contains("hidden")){fetchLogs();armLogTimer();}
   if(v!=="github"&&deviceTimer)stopDeviceFlow(); // don't keep polling GitHub after leaving the view
+  if(v!=="github")stopPubPoll(); // the app-status poll only runs while step 3 is on screen
   refresh();
 }
 /* mobile drawer: hamburger opens it, the scrim or picking a view closes it */
@@ -1811,94 +1917,11 @@ async function loadGithubView(){
     $("#settings-meta").textContent=`${t("se.configFile")}: ${s.configPath}`;
     ghConfigured=!!(s.repoUrl&&s.patMasked);
     updateGhUi();
-    // The repo picker needs a token (the repo list comes from the account);
-    // the readiness card needs a connected repo.
-    $("#repo-card").classList.toggle("hidden",!s.patMasked);
+    // The repo picker needs a token (the repo list comes from the account).
     if(s.patMasked)loadIdentityAndRepos();
     else{$("#gh-identity").classList.add("hidden");renderRepoList([]);}
-    if(ghConfigured)loadSetupStatus();else $("#setup-card").classList.add("hidden");
+    syncWizard();
   }catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
-}
-
-/* --- deployment readiness: check the repo + server, fix what we can --- */
-async function loadSetupStatus(){
-  const card=$("#setup-card");
-  // The server parses the URL (works for GHES hosts too) — no client regex.
-  $("#setup-repo-name").textContent=(settingsCache&&(settingsCache.fullName||settingsCache.repoUrl))||"";
-  try{
-    const s=await api("/api/setup/status");
-    if(!s.configured){card.classList.add("hidden");return;}
-    card.classList.remove("hidden");
-    // Auto-heal: a stopped-but-installed runner is started automatically, so the
-    // only thing a user ever runs is the GitHub wizard — never a "start" button.
-    if(s.runnerInstalled&&s.runnerServiceActive===false&&!runnerAutoStartTried){
-      runnerAutoStartTried=true;
-      const log=$("#setup-log");if(log){log.classList.remove("hidden");log.textContent=t("su.autoStarting");}
-      try{await api("/api/setup/start-runner",{method:"POST"});}catch{}
-      return loadSetupStatus();
-    }
-    if(s.runnerServiceActive===true)runnerAutoStartTried=false;
-    const row=(ok,label,detail,btn)=>`<div style="display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line)">
-      <span class="chip ${ok?"ok":"warn"}">${ok?"✓":"!"}</span>
-      <div style="flex:1"><b style="font-size:13px">${label}</b><div class="muted" style="font-size:12px">${detail||""}</div></div>${btn||""}</div>`;
-    // A token without Administration:read can't list runners — degrade the
-    // runner row to "installed locally, online state unknown", never the card.
-    const runnerOk=s.runnerInstalled&&(s.runnersOnline>0||!!s.runnersError);
-    // The runner action is a last-resort fallback: normally the service is
-    // auto-started (stopped case) or the row just points at logs (running but
-    // not reaching GitHub — a restart would not help).
-    let runnerDetail,runnerAction="";
-    if(!s.runnerInstalled){
-      runnerDetail=s.runnerMismatch?t("su.runnerMismatch",{r:esc(s.runnerRegisteredTo||"?")}):t("su.runnerMiss");
-      runnerAction=`<button class="small primary" id="btn-fix-runner">${t("su.installBtn")}</button>`;
-    }else if(s.runnersError){
-      runnerDetail=t("su.runnerUnknown");
-    }else if(s.runnersOnline>0){
-      runnerDetail=t("su.runnerOnline",{n:s.runnersOnline});
-    }else if(s.runnerServiceActive===false){
-      runnerDetail=t("su.runnerStartFailed");
-      runnerAction=`<button class="small primary" id="btn-start-runner">${t("su.startBtn")}</button>`;
-    }else if(s.runnerServiceActive===true){
-      runnerDetail=t("su.runnerNotConnecting");
-      runnerAction=`<button class="small" id="btn-runner-logs">${t("su.viewLogs")}</button>`;
-    }else{
-      runnerDetail=t("su.runnerOffline");
-    }
-    $("#setup-list").innerHTML=[
-      row(s.repo.hasDockerfile,t("su.dockerfile"),s.repo.hasDockerfile?"":t("su.dockerfileMiss")),
-      row(s.repo.hasWorkflow,t("su.workflow"),s.repo.hasWorkflow?".github/workflows/deploy.yml":t("su.workflowMiss"),
-        s.repo.hasWorkflow?"":`<button class="small primary" id="btn-fix-workflow">${t("su.createBtn")}</button>`),
-      row(runnerOk,t("su.runner"),runnerDetail,runnerAction),
-      row(s.composeExists,t("su.compose"),s.composeExists?esc(s.composeFile):t("su.composeMiss",{p:esc(s.composeFile)}),
-        s.composeExists?"":`<button class="small primary" id="btn-fix-compose">${t("su.createBtn")}</button>`),
-    ].join("");
-    const missing=[!s.repo.hasDockerfile&&t("su.dockerfile"),!s.repo.hasWorkflow&&t("su.workflow"),
-      !runnerOk&&t("su.runner"),!s.composeExists&&t("su.compose")].filter(Boolean);
-    $("#setup-summary").innerHTML=missing.length===0
-      ?`<span class="chip ok">✓</span> <span style="color:var(--ok)">${t("su.allReady")}</span>`
-      :`<span class="chip warn">!</span> <span style="color:var(--warn)">${missing.length===1?t("su.onlyMissing",{x:missing[0]}):t("su.missingList",{x:missing.join(", ")})}</span>`;
-    const fw=$("#btn-fix-workflow");if(fw)fw.onclick=async()=>{fw.disabled=true;
-      try{await api("/api/setup/create-workflow",{method:"POST"});toast(t("su.workflowDone"),"ok");ghCache=null;loadSetupStatus();}
-      catch(ex){toast(ex.message,"err");fw.disabled=false;}};
-    const fc=$("#btn-fix-compose");if(fc)fc.onclick=async()=>{fc.disabled=true;
-      try{await api("/api/setup/create-compose",{method:"POST"});toast(t("su.composeDone"),"ok");loadSetupStatus();}
-      catch(ex){toast(ex.message,"err");fc.disabled=false;}};
-    const fr=$("#btn-fix-runner");if(fr)fr.onclick=async()=>{fr.disabled=true;
-      const log=$("#setup-log");log.classList.remove("hidden");log.textContent=t("su.installing");
-      try{const r=await api("/api/setup/install-runner",{method:"POST"});
-        log.textContent=r.log||"";
-        toast(r.succeeded?t("su.runnerDone"):t("c.failed"),r.succeeded?"ok":"err");
-        if(r.succeeded)loadSetupStatus();else fr.disabled=false;}
-      catch(ex){log.textContent=ex.message;toast(ex.message,"err");fr.disabled=false;}};
-    const sr=$("#btn-start-runner");if(sr)sr.onclick=async()=>{sr.disabled=true;
-      const log=$("#setup-log");log.classList.remove("hidden");
-      try{const r=await api("/api/setup/start-runner",{method:"POST"});
-        log.textContent=r.log||"";
-        toast(r.succeeded?t("su.started"):t("c.failed"),r.succeeded?"ok":"err");
-        loadSetupStatus();}
-      catch(ex){log.textContent=ex.message;toast(ex.message,"err");sr.disabled=false;}};
-    const rl=$("#btn-runner-logs");if(rl)rl.onclick=()=>setView("runner");
-  }catch(ex){card.classList.remove("hidden");$("#setup-summary").textContent=ex.message;$("#setup-list").innerHTML="";}
 }
 
 async function loadIdentityAndRepos(){
@@ -1943,12 +1966,204 @@ $("#repo-list").addEventListener("click",e=>{
   renderRepoList(repoList,$("#repo-search").value);
 });
 $("#repo-search").addEventListener("input",e=>renderRepoList(repoList,e.target.value));
-$("#btn-repo-install").onclick=()=>{if(selectedRepoUrl)runInstallWizard(selectedRepoUrl);};
-$("#btn-wiz-rerun").onclick=()=>{if(settingsCache&&settingsCache.repoUrl)runInstallWizard(settingsCache.repoUrl);};
 
-/* --- repo install wizard: connect → check → fix each piece → verify.
-       The modal is sticky (no accidental backdrop close); "run in background"
-       just hides it — the steps keep running server-side. --- */
+/* ================= 3-step publish wizard =================
+   1 Connect → 2 Choose repository → 3 Publish. Step 3 owns the port form,
+   the sub-step progress (formerly a modal) and the live "your app is
+   running" card. The server state decides the landing step on reload. */
+let wizStep=1,pendingRepoUrl=null,pubTimer=null,pubBusy=false;
+let pubInfoCache=null,pubPortsSeededFor=null,portCheckTimer=null,hostPortOk=true;
+
+function stopPubPoll(){if(pubTimer){clearInterval(pubTimer);pubTimer=null;}}
+function gotoStep(n){
+  wizStep=n;
+  if(n!==3)stopPubPoll();
+  for(const i of[1,2,3])$("#wstep-"+i).classList.toggle("hidden",i!==n);
+  document.querySelectorAll("#wiz-stepper .st").forEach(el=>{
+    const s=+el.dataset.step;
+    el.className="st "+(s<n?"done":s===n?"active":"locked");
+    el.querySelector(".st-n").textContent=s<n?"✓":s;
+  });
+  if(n===3)initPublishPanel();
+}
+// completed steps are clickable to go back; future steps stay locked
+$("#wiz-stepper").addEventListener("click",e=>{
+  const el=e.target.closest(".st.done");
+  if(el&&!pubBusy)gotoStep(+el.dataset.step);
+});
+function syncWizard(){
+  const connected=!!(settingsCache&&settingsCache.patMasked);
+  $("#btn-step1-next").classList.toggle("hidden",!connected);
+  const hasRepo=!!(pendingRepoUrl||(settingsCache&&settingsCache.repoUrl));
+  // Never park the user on a step that lost its prerequisite; only
+  // auto-advance out of step 1 (sign-in just completed), so a refresh never
+  // yanks someone away from the repo list they are browsing.
+  if(!connected)gotoStep(1);
+  else if(wizStep===1)gotoStep(hasRepo?3:2);
+  else if(wizStep===3&&!hasRepo)gotoStep(2);
+  else gotoStep(wizStep);
+}
+$("#btn-step1-next").onclick=()=>gotoStep((pendingRepoUrl||(settingsCache&&settingsCache.repoUrl))?3:2);
+$("#btn-step2-back").onclick=()=>gotoStep(1);
+$("#btn-step3-back").onclick=()=>{if(!pubBusy)gotoStep(2);};
+$("#lnk-change-repo").addEventListener("click",e=>{e.preventDefault();if(!pubBusy)gotoStep(2);});
+$("#btn-repo-install").onclick=()=>{if(selectedRepoUrl){pendingRepoUrl=selectedRepoUrl;gotoStep(3);}};
+$("#btn-publish").onclick=()=>runPublish();
+
+/* --- step 3: sub-step plumbing (shared by pre-seed and the publish run) --- */
+const WIZ_KEYS=["connect","dockerfile","workflow","compose","runner","verify","deploy"];
+const wizSay=m=>{const log=$("#wiz-log");if(log){log.textContent+=m+"\n";log.scrollTop=log.scrollHeight;}};
+// The bar is derived from the step states, so no counter can drift from
+// what the list shows.
+const wizMark=(k,state,detail,spin)=>{
+  const el=$("#wiz-"+k);if(!el)return;
+  el.className="wiz-step "+(state||"");
+  const ic=el.querySelector(".ws-ic");
+  if(ic)ic.innerHTML=spin?`<span class="spin"></span>`:state==="ok"?"✓":state==="err"?"✕":state==="warn"?"!":"•";
+  const d=$("#wiz-"+k+"-d");if(d&&detail!==undefined)d.innerHTML=detail;
+  const bar=$("#wiz-bar");
+  if(bar){const fin=document.querySelectorAll("#pub-progress .wiz-step.ok,#pub-progress .wiz-step.warn").length;
+    bar.style.width=Math.round(fin/WIZ_KEYS.length*100)+"%";}
+};
+
+/* --- step 3: pre-publish panel — ports form + readiness pre-seed --- */
+async function initPublishPanel(){
+  if(pubBusy)return;
+  const repoUrl=pendingRepoUrl||(settingsCache&&settingsCache.repoUrl);
+  if(!repoUrl)return gotoStep(2);
+  $("#pub-repo-name").textContent=repoUrl.replace(/^https?:\/\/[^/]+\//,"");
+  $("#pub-live").innerHTML="";
+  // A repo picked in step 2 must be connected before publish-info and
+  // setup-status can describe it (both read the stored connection).
+  if(!settingsCache||settingsCache.repoUrl!==repoUrl){
+    try{
+      const r=await api("/api/settings",{method:"POST",body:JSON.stringify({repoUrl})});
+      ghCache=null;
+      settingsCache={...(settingsCache||{}),repoUrl,fullName:r.fullName};
+      $("#set-repo").value=repoUrl;
+      ghConfigured=true;updateGhUi();
+      renderRepoList(repoList,$("#repo-search").value);
+    }catch(ex){toast(ex.message,"err");return gotoStep(2);}
+  }
+  let info=null,s=null;
+  try{[info,s]=await Promise.all([api("/api/setup/publish-info"),api("/api/setup/status")]);}
+  catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
+  if(info){
+    pubInfoCache=info;
+    if(pubPortsSeededFor!==repoUrl){ // don't clobber values the user typed
+      pubPortsSeededFor=repoUrl;
+      $("#pub-hostport").value=info.currentHostPort??info.suggestedHostPort;
+      $("#pub-ctrport").value=info.currentContainerPort??info.detectedContainerPort??info.fallbackContainerPort;
+    }
+    const src=$("#pub-ctrport-src"),fb=$("#pub-ctr-fallback");
+    if(info.detectedContainerPort!=null){
+      src.textContent="✓ "+t("wz.ctrDetected",{p:info.detectedContainerPort});src.className="port-hint ok";
+      fb.classList.add("hidden");
+    }else if(info.currentContainerPort==null){
+      // nothing detected and nothing stored yet — the user must tell us
+      src.textContent="";src.className="port-hint";
+      fb.textContent=t("wz.ctrFallback",{p:info.fallbackContainerPort});
+      fb.classList.remove("hidden");
+    }else{
+      src.textContent="";src.className="port-hint";
+      fb.classList.add("hidden");
+    }
+    checkHostPort();
+  }
+  if(s&&s.configured){
+    // Auto-heal: a stopped-but-installed runner is started automatically, so
+    // the only thing a user ever runs is Publish — never a "start" button.
+    if(s.runnerInstalled&&s.runnerServiceActive===false&&!runnerAutoStartTried){
+      runnerAutoStartTried=true;
+      try{await api("/api/setup/start-runner",{method:"POST"});}catch{}
+    }
+    if(s.runnerServiceActive===true)runnerAutoStartTried=false;
+    // A token without Administration:read can't list runners — degrade the
+    // runner row to "installed locally, online state unknown".
+    const runnerOk=s.runnerInstalled&&(s.runnersOnline>0||!!s.runnersError);
+    $("#pub-progress").classList.remove("hidden");
+    wizMark("connect","ok",esc((s.repo&&s.repo.fullName)||""));
+    wizMark("dockerfile",s.repo.hasDockerfile?"ok":"warn",s.repo.hasDockerfile?t("wiz.ready"):t("su.dockerfileMiss"));
+    wizMark("workflow",s.repo.hasWorkflow?"ok":"",s.repo.hasWorkflow?t("wiz.ready"):t("su.workflowMiss"));
+    wizMark("compose",s.composeExists?"ok":"",s.composeExists?esc(s.composeFile):t("su.composeMiss",{p:esc(s.composeFile)}));
+    wizMark("runner",runnerOk?"ok":"",runnerOk?t("wiz.ready"):"");
+    wizMark("verify","","");wizMark("deploy","","");
+    const ready=s.repo.hasWorkflow&&s.composeExists&&runnerOk;
+    $("#btn-publish").textContent=ready?t("wz.republish"):t("wz.publish");
+    if(ready)startPubPoll();
+  }else{
+    $("#pub-progress").classList.add("hidden");
+    $("#btn-publish").textContent=t("wz.publish");
+  }
+}
+
+/* --- host-port availability, checked live while typing (debounced) --- */
+function checkHostPort(){
+  const hint=$("#pub-hostport-hint");
+  const v=+$("#pub-hostport").value;
+  if(!Number.isInteger(v)||v<1||v>65535){
+    hint.textContent=t("wz.portInvalid");hint.className="port-hint err";
+    hostPortOk=false;$("#btn-publish").disabled=true;return;
+  }
+  hint.textContent="…";hint.className="port-hint";
+  clearTimeout(portCheckTimer);
+  portCheckTimer=setTimeout(async()=>{
+    try{
+      const r=await api("/api/setup/port-check?port="+v);
+      if(+$("#pub-hostport").value!==v)return; // the user typed on — stale answer
+      hostPortOk=!!(r.valid&&r.available);
+      hint.textContent=hostPortOk?"✓ "+t("wz.portFree",{p:v}):t("wz.portBusy",{p:v});
+      hint.className="port-hint "+(hostPortOk?"ok":"err");
+      $("#btn-publish").disabled=!hostPortOk||!ctrPortValid();
+    }catch{hint.textContent="";hostPortOk=true;}
+  },400);
+}
+const ctrPortValid=()=>{const v=+$("#pub-ctrport").value;return Number.isInteger(v)&&v>=1&&v<=65535;};
+$("#pub-hostport").addEventListener("input",checkHostPort);
+$("#pub-ctrport").addEventListener("input",()=>{
+  const ok=ctrPortValid();
+  const src=$("#pub-ctrport-src");
+  if(!ok){src.textContent=t("wz.portInvalid");src.className="port-hint err";}
+  else if(src.className.includes("err")){src.textContent="";src.className="port-hint";}
+  $("#btn-publish").disabled=!ok||!hostPortOk;
+});
+
+/* --- live status: poll the app container while step 3 is on screen --- */
+function startPubPoll(){
+  stopPubPoll();
+  const tick=async()=>{
+    if(view!=="github"||wizStep!==3||pubBusy)return;
+    try{renderLive(await api("/api/setup/app-status"));}catch{}
+  };
+  tick();
+  pubTimer=setInterval(tick,5000);
+}
+function renderLive(st){
+  const el=$("#pub-live");
+  if(!st||!st.composeExists){el.innerHTML="";return;}
+  if(st.dockerOk===false){
+    el.innerHTML=`<div class="wait-card"><span class="chip mut">?</span><div>${esc(t("wz.dockerDown"))}</div></div>`;return;
+  }
+  if(st.running&&st.hostPort){
+    const url=`http://${location.hostname}:${st.hostPort}`;
+    el.innerHTML=`<a class="live-card" href="${esc(url)}" target="_blank" rel="noopener">
+      <span class="lc-dot"></span>
+      <div class="lc-body"><div class="lc-title">${esc(t("wz.liveTitle"))}</div>
+        <div class="lc-url">${esc(url)}${st.currentTag?` · ${esc(st.currentTag)}`:""}</div></div>
+      <span class="lc-open">${esc(t("wz.liveOpen"))}</span></a>`;
+    return;
+  }
+  if(st.state&&!st.running){
+    el.innerHTML=`<div class="wait-card warn"><span class="chip warn">!</span>
+      <div>${esc(t("wz.stopped",{s:st.state}))} <a href="#" data-goto="containers">${esc(t("nav.containers"))} →</a></div></div>`;
+    return;
+  }
+  const repo=(settingsCache&&settingsCache.repoUrl||"").replace(/\/$/,"");
+  el.innerHTML=`<div class="wait-card"><span class="spin" style="margin-top:3px"></span>
+    <div>${esc(t("wz.waitingDeploy"))}${repo?` <a href="${esc(repo)}/actions" target="_blank" rel="noopener">${esc(t("wz.openActions"))}</a>`:""}</div></div>`;
+}
+
+/* --- runner install progress (unchanged mechanics, shared log buffer) --- */
 async function installRunnerWithProgress(say){
   // The buffer is shared across installs; remember the previous run's
   // generation so a stale (or concurrent) run's result is never adopted as
@@ -1986,84 +2201,89 @@ async function installRunnerWithProgress(say){
     throw ex;
   }finally{clearInterval(timer);}
 }
-async function runInstallWizard(repoUrl){
-  const steps=[["connect",t("wiz.connect")],["dockerfile",t("wiz.dockerfile")],["workflow",t("wiz.workflow")],
-               ["compose",t("wiz.compose")],["runner",t("wiz.runner")],["verify",t("wiz.verify")]];
-  openModal(t("wiz.title"),
-    `<div class="muted" style="font-family:var(--mono);font-size:12px;margin-bottom:10px">${esc(repoUrl)}</div>
-     <div class="bar wiz-bar"><i id="wiz-bar" style="width:0%"></i></div>
-     ${steps.map(([k,label])=>`<div class="wiz-step" id="wiz-${k}"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b>${esc(label)}</b><div class="ws-detail" id="wiz-${k}-d"></div></div></div>`).join("")}
-     <div id="wiz-summary" style="margin-top:12px;font-size:13px"></div>
-     <details style="margin-top:8px"><summary class="muted" style="cursor:pointer;font-size:12.5px">${t("wiz.showLog")}</summary>
-       <div class="logbox" id="wiz-log" style="margin-top:8px;max-height:220px"></div></details>`,
-    [{label:t("wiz.cancel"),onClick:()=>closeModal()}],
-    {sticky:true});
-  const say=m=>{const log=$("#wiz-log");if(log){log.textContent+=m+"\n";log.scrollTop=log.scrollHeight;}};
-  // The bar is derived from the step states, so no counter can drift from
-  // what the list shows.
-  const mark=(k,state,detail,spin)=>{
-    const el=$("#wiz-"+k);if(!el)return;
-    el.className="wiz-step "+(state||"");
-    const ic=el.querySelector(".ws-ic");
-    if(ic)ic.innerHTML=spin?`<span class="spin"></span>`:state==="ok"?"✓":state==="err"?"✕":state==="warn"?"!":"•";
-    const d=$("#wiz-"+k+"-d");if(d&&detail!==undefined)d.innerHTML=detail;
-    const bar=$("#wiz-bar");
-    if(bar){const fin=document.querySelectorAll("#modal-body .wiz-step.ok,#modal-body .wiz-step.warn").length;
-      bar.style.width=Math.round(fin/steps.length*100)+"%";}
-  };
+/* --- the publish run: connect → check → fix each piece → verify → deploy.
+       Runs inline in step 3 (no modal); the chosen ports ride along. --- */
+async function runPublish(){
+  if(pubBusy)return;
+  const repoUrl=pendingRepoUrl||(settingsCache&&settingsCache.repoUrl);
+  if(!repoUrl)return gotoStep(2);
+  const hostPort=+$("#pub-hostport").value,ctrPort=+$("#pub-ctrport").value;
+  pubBusy=true;stopPubPoll();
+  $("#btn-publish").disabled=true;
+  $("#pub-live").innerHTML="";
+  $("#pub-progress").classList.remove("hidden");
+  $("#wiz-log").textContent="";$("#wiz-summary").innerHTML="";
+  WIZ_KEYS.forEach(k=>wizMark(k,"",""));
   const step=async(k,fn)=>{
-    mark(k,"run",undefined,true);
-    try{const detail=await fn();mark(k,"ok",detail);return true;}
-    catch(ex){mark(k,"err",esc(ex.message));say("✗ "+ex.message);return false;}
+    wizMark(k,"run",undefined,true);
+    try{const detail=await fn();wizMark(k,"ok",detail);return true;}
+    catch(ex){wizMark(k,"err",esc(ex.message));wizSay("✗ "+ex.message);return false;}
   };
 
   let failedAt=null;
   if(!await step("connect",async()=>{
     const r=await api("/api/settings",{method:"POST",body:JSON.stringify({repoUrl})});
-    // The connected repository just changed. Everything derived from the old
-    // one — the readiness card's title, the ✓ marker in the repo list, and the
-    // "Re-run the wizard" button — reads settingsCache, so leaving it stale
-    // makes the UI keep pointing at the previous repo (and re-run against it).
+    // The connected repository may have just changed. Everything derived from
+    // the old one — the header, the ✓ marker in the repo list — reads
+    // settingsCache, so leaving it stale keeps the UI on the previous repo.
     ghCache=null;
     settingsCache={...(settingsCache||{}),repoUrl,fullName:r.fullName};
     selectedRepoUrl=repoUrl;
     $("#set-repo").value=repoUrl;
+    ghConfigured=true;updateGhUi();
     renderRepoList(repoList,$("#repo-search").value);
-    say("✓ "+t("se.connected",{r:r.fullName}));
+    wizSay("✓ "+t("se.connected",{r:r.fullName}));
     return esc(r.fullName)+(r.isPrivate?" 🔒":"");
   }))failedAt=t("wiz.connect");
 
   let s=null;
   if(!failedAt){
     try{s=await api("/api/setup/status");}
-    catch(ex){mark("dockerfile","err",esc(ex.message));say("✗ "+ex.message);failedAt=t("wiz.check");}
+    catch(ex){wizMark("dockerfile","err",esc(ex.message));wizSay("✗ "+ex.message);failedAt=t("wiz.check");}
   }
   if(s){
-    if(s.repo.hasDockerfile)mark("dockerfile","ok",t("wiz.ready"));
-    else mark("dockerfile","warn",t("su.dockerfileMiss")); // warn only — the wizard can't write app code
+    if(s.repo.hasDockerfile)wizMark("dockerfile","ok",t("wiz.ready"));
+    else wizMark("dockerfile","warn",t("su.dockerfileMiss")); // warn only — the wizard can't write app code
 
-    if(s.repo.hasWorkflow)mark("workflow","ok",t("wiz.ready"));
+    if(s.repo.hasWorkflow)wizMark("workflow","ok",t("wiz.ready"));
     else if(!await step("workflow",async()=>{
       await api("/api/setup/create-workflow",{method:"POST"});ghCache=null;
-      say("✓ "+t("su.workflowDone"));return t("su.workflowDone");
+      wizSay("✓ "+t("su.workflowDone"));return t("su.workflowDone");
     }))failedAt=failedAt||t("wiz.workflow");
 
-    if(s.composeExists)mark("compose","ok",t("wiz.ready"));
-    else if(!await step("compose",async()=>{
-      await api("/api/setup/create-compose",{method:"POST"});
-      say("✓ "+t("su.composeDone"));return t("su.composeDone");
-    }))failedAt=failedAt||t("wiz.compose");
+    if(!s.composeExists){
+      if(!await step("compose",async()=>{
+        const r=await api("/api/setup/create-compose",{method:"POST",
+          body:JSON.stringify({hostPort,containerPort:ctrPort})});
+        wizSay("✓ "+t("su.composeDone"));
+        return t("su.composeDone")+` — ${r.hostPort} → ${r.containerPort}`;
+      }))failedAt=failedAt||t("wiz.compose");
+    }else if(pubInfoCache&&(pubInfoCache.currentHostPort!==hostPort||pubInfoCache.currentContainerPort!==ctrPort)){
+      // The project exists but the user changed a port: write the .env (the
+      // server re-validates) and recreate the container if one is running.
+      if(!await step("compose",async()=>{
+        await api("/api/compose/env",{method:"POST",body:JSON.stringify({
+          set:{PINQOPS_HOST_PORT:String(hostPort),PINQOPS_CONTAINER_PORT:String(ctrPort)}})});
+        wizSay(`✓ .env → ${hostPort}:${ctrPort}`);
+        try{
+          const st=await api("/api/setup/app-status");
+          if(st.state){await api("/api/compose/apply",{method:"POST"});wizSay("✓ "+t("ev.applied"));}
+        }catch(ex){wizSay("! "+ex.message);}
+        pubInfoCache={...pubInfoCache,currentHostPort:hostPort,currentContainerPort:ctrPort};
+        return t("wz.portsApplied",{h:hostPort,c:ctrPort});
+      }))failedAt=failedAt||t("wiz.compose");
+    }else wizMark("compose","ok",t("wiz.ready"));
 
-    if(s.runnerInstalled&&(s.runnersError||s.runnersOnline>0))mark("runner","ok",t("wiz.ready"));
+    if(s.runnerInstalled&&(s.runnersError||s.runnersOnline>0))wizMark("runner","ok",t("wiz.ready"));
     else if(!await step("runner",async()=>{
       if(!s.runnerInstalled){
-        if(s.runnerMismatch)say("! "+t("wiz.replacingRunner",{r:s.runnerRegisteredTo||"?"}));
-        const r=await installRunnerWithProgress(say);
+        if(s.runnerMismatch)wizSay("! "+t("wiz.replacingRunner",{r:s.runnerRegisteredTo||"?"}));
+        const r=await installRunnerWithProgress(wizSay);
         if(!r.succeeded)throw new Error(t("su.installBtn")+": "+t("c.failed"));
         return t("su.runnerDone");
       }
       const r=await api("/api/setup/start-runner",{method:"POST"});
-      if(r.log)say(r.log);
+      if(r.log)wizSay(r.log);
       if(!r.succeeded)throw new Error(t("su.startBtn")+": "+t("c.failed"));
       return t("su.started");
     }))failedAt=failedAt||t("wiz.runner");
@@ -2076,29 +2296,31 @@ async function runInstallWizard(repoUrl){
         if(v.runnersTotal>0)return t("wiz.runnerVerified",{n:v.runnersTotal});
         throw new Error(t("wiz.verifyFail"));
       }))failedAt=t("wiz.verify");
-    }else mark("verify","warn");
+    }else wizMark("verify","warn");
+
+    // Kick off the deploy via workflow_dispatch. A failure here is a warning,
+    // not a dead end — a push to the default branch deploys just the same.
+    if(!failedAt){
+      wizMark("deploy","run",undefined,true);
+      try{
+        const r=await api("/api/setup/trigger-deploy",{method:"POST"});
+        wizMark("deploy","ok",t("wz.firstDeployStarted",{b:esc(r.branch)}));
+        wizSay("✓ workflow_dispatch @ "+r.branch);
+      }catch(ex){
+        wizMark("deploy","warn",esc(ex.message));
+        wizSay("! "+ex.message);
+      }
+    }else wizMark("deploy","warn");
   }
 
-  // Finish up — but only touch the modal if its body is still the wizard's
-  // and it is still visible: the user may have hidden it ("run in background")
-  // or opened a different dialog meanwhile, and that dialog's buttons must
-  // not be clobbered.
-  const owns=!!$("#wiz-bar");
-  const visible=!$("#modal").classList.contains("hidden");
-  if(owns){
-    const sum=$("#wiz-summary");
-    if(sum)sum.innerHTML=failedAt
-      ?`<span class="chip err">✕</span> <span style="color:var(--err)">${esc(t("wiz.failed",{x:failedAt}))}</span>`
-      :`<span class="chip ok">✓</span> <span style="color:var(--ok)">${esc(t("wiz.done"))}</span>`;
-  }
-  if(owns&&visible){
-    modalSticky=false;
-    setModalButtons([{label:t("c.close"),primary:!failedAt}]);
-  }else{
-    toast(failedAt?t("wiz.failed",{x:failedAt}):t("wiz.done"),failedAt?"err":"ok");
-  }
+  $("#wiz-summary").innerHTML=failedAt
+    ?`<span class="chip err">✕</span> <span style="color:var(--err)">${esc(t("wiz.failed",{x:failedAt}))}</span>`
+    :`<span class="chip ok">✓</span> <span style="color:var(--ok)">${esc(t("wz.published"))}</span>`;
   ghCache=null;
-  await loadGithubView();
+  pubBusy=false;
+  $("#btn-publish").disabled=false;
+  $("#btn-publish").textContent=failedAt?t("wz.publish"):t("wz.republish");
+  if(!failedAt)startPubPoll();
 }
 
 /* --- "continue without GitHub sign-in" popup: token (PAT) entry lives here --- */
