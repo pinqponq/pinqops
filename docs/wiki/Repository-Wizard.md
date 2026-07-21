@@ -8,8 +8,15 @@ with a lock icon until connected; clicking it lands on the sign-in flow.
 - **Sign in with GitHub** — OAuth device flow: the UI shows a short code, you
   confirm it on github.com. Requires an OAuth App client id (asked once, then
   saved; or set `PINQOPS_GITHUB_CLIENT_ID`).
-- **Continue without GitHub** — paste a PAT instead (fine-grained: Actions
-  read + Administration read/write; classic: `repo` scope). See
+- **Continue without GitHub** — paste a PAT instead. It must cover everything the
+  wizard does, including **committing the deploy workflow**:
+  - classic: `repo` **+ `workflow`** (+ `read:packages`)
+  - fine-grained: Contents read/write, **Workflows write**, Actions read,
+    Administration read
+
+  `workflow` / Workflows: write is not optional — GitHub refuses to create or
+  update a file under `.github/workflows/` without it, so the wizard's workflow
+  step fails with 403. See
   [TOKENS](https://github.com/pinqponq/pinqops/blob/master/docs/TOKENS.md).
 
 ## 2. Pick a repository
@@ -36,5 +43,5 @@ four pieces afterwards and has a **Re-run the wizard** button.
 
 ## After the wizard
 
-Merge a PR into `master`. The workflow builds the image in the cloud and the
+Merge a PR into your default branch. The workflow builds the image in the cloud and the
 runner deploys it on your server. Nothing else to click.

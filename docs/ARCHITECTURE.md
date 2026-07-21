@@ -142,9 +142,13 @@ host — the same practical trust level Watchtower/Portainer require. Mitigation
 
 - `pinqops deploy` never checks out or executes repository content on the server;
   it runs only the fixed compose commands.
-- Only `push: master` can trigger the workflow, so untrusted pull-request code
-  never reaches the self-hosted runner.
 - Keep the repository private.
+
+The generated workflow's trigger is **not** one of the mitigations: the runner is
+registered to the repository and executes any job from any ref whose `runs-on`
+matches its labels, so a branch carrying its own workflow reaches it without
+touching the default branch. Gate fork PRs under **Settings → Actions → General**
+and treat push access to the repository as shell access to the server.
 
 See [`../SECURITY.md`](../SECURITY.md) for the full threat model.
 

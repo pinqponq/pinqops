@@ -44,18 +44,25 @@ read it to understand what `pinqops setup` automates (sections 5–6).
 
 ## 1. Branch protection
 
-The deploy workflow triggers on `push` to `master`. Make merge the only way to
-reach `master`:
+The deploy workflow triggers on `push` to your **default branch** (`main` for
+repositories created since 2020; the dashboard wizard reads the real name and
+fills it in — if you copy the example workflow by hand, change it yourself).
+Make merge the only way to reach it:
 
 1. GitHub → **Settings → Branches → Add branch ruleset** (or "Add rule").
-2. Target branch: `master`.
+2. Target branch: your default branch.
 3. Enable **Require a pull request before merging**.
 4. Enable **Block force pushes**.
 5. (Recommended) Require at least one approval and require the **CI** check.
 
-With this in place, direct pushes to `master` are rejected, so `on: push`
-effectively means "a PR was merged". Pull requests never run on the self-hosted
-runner because the workflow triggers only on push to `master`.
+With this in place, direct pushes are rejected, so `on: push` effectively means
+"a PR was merged".
+
+> This is a change-management control, **not** a security boundary. A self-hosted
+> runner is registered to the whole repository and runs any job from any ref
+> whose `runs-on` matches its labels, so a branch carrying its own workflow file
+> reaches the runner without touching the default branch. See
+> [SECURITY.md](../SECURITY.md) for what actually gates that.
 
 ## 2. Application Dockerfile
 
@@ -222,7 +229,7 @@ accordingly — Settings → Secrets and variables → Actions → Variables.)
 
 ## 7. Verify end-to-end
 
-1. Open a pull request, get it approved, and **merge into `master`**.
+1. Open a pull request, get it approved, and **merge into your default branch**.
 2. Watch **Actions** → the `Build and Deploy` run:
    - `build` (GitHub-hosted) builds and pushes `:latest` + `sha-<commit>`;
    - `deploy` (your self-hosted runner) runs `pinqops deploy --tag sha-<commit>`,

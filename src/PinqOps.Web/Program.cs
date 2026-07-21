@@ -606,8 +606,16 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
         };
     }));
 
+// The workflow is committed to the repository's default branch, so that is the
+// branch it must trigger on — a hardcoded one would simply never fire.
 app.MapPost("/api/setup/create-workflow", (GitHubDashboardService gitHub) =>
-    Safe(async () => await gitHub.CreateWorkflowFileAsync(SetupTemplates.DeployWorkflowYaml)));
+    Safe(async () =>
+    {
+        var defaultBranch = await gitHub.GetDefaultBranchAsync();
+        var result = await gitHub.CreateWorkflowFileAsync(SetupTemplates.DeployWorkflowYaml(defaultBranch));
+        logger.LogWarning("Deploy workflow committed, triggering on {Branch}", defaultBranch);
+        return result;
+    }));
 
 app.MapPost("/api/setup/start-runner", (UiConfigStore store, LocalRunnerService runner) =>
     Safe(async () => await runner.StartServiceAsync(store.Current.RunnerDirectory)));

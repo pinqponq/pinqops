@@ -1,6 +1,6 @@
 # pinqops
 
-**Merge to `master` → your closed server updates itself.** GitHub builds the
+**Merge to your default branch → your closed server updates itself.** GitHub builds the
 Docker image; a small self-hosted runner on your server pulls it and restarts
 one compose project. Outbound-only — no open ports, no SSH, no git token on
 the server.

@@ -37,7 +37,7 @@ offline runner; GitHub purges runners that stay offline.
 
 - The deploy workflow must target your runner's labels:
   `runs-on: [self-hosted, pinqops-prod]`.
-- The workflow only triggers on push to `master` — merge a PR to test.
+- The workflow only triggers on push to your default branch — merge a PR to test.
 
 ## Token errors while listing runners
 

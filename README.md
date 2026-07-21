@@ -1,6 +1,6 @@
 # pinqops
 
-**Merge to `master` → your closed server updates itself.** GitHub builds the
+**Merge to your default branch → your closed server updates itself.** GitHub builds the
 Docker image; a small self-hosted runner on your server pulls it and restarts
 one compose project. Outbound-only — no open ports, no SSH, no git token on
 the server.
@@ -26,7 +26,7 @@ sudo chmod +x /usr/local/bin/pinqops
 pinqops setup --repo-url https://github.com/<owner>/<repo>
 ```
 
-**Deploy:** merge a PR into `master`. That's it. Full walkthrough:
+**Deploy:** merge a PR into your default branch. That's it. Full walkthrough:
 [docs/SETUP.md](docs/SETUP.md).
 
 Every deploy is pinned to the commit's `sha-<...>` image tag, health-checked
@@ -46,7 +46,7 @@ list — no URLs — and hit **Install**. A step-by-step wizard commits the
 deploy workflow, generates the compose file, **registers the self-hosted
 runner** (replacing a leftover runner from another repository if it finds
 one), streams the install log live, and verifies on GitHub that the runner
-actually appeared. Deploys then happen the intended way: merge to `master`.
+actually appeared. Deploys then happen the intended way: merge to your default branch.
 
 There is also a curated catalog of ~50 one-click apps (Redis, PostgreSQL,
 Grafana, MinIO, …) — installed with generated passwords (retrievable in the

@@ -45,7 +45,7 @@ the wizard — see [Repository Wizard](Repository-Wizard).
 
 ## 3. Deploy
 
-Merge a PR into `master`. GitHub builds and pushes the image to GHCR; the
+Merge a PR into your default branch. GitHub builds and pushes the image to GHCR; the
 runner on your server pulls it and restarts the compose project. That's it.
 
 Full manual walkthrough:

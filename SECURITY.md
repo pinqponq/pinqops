@@ -31,7 +31,7 @@ registration token is short-lived, and registry auth uses the per-job
 | Threat | Control |
 |---|---|
 | Inbound network attack | The server listens on nothing; only outbound connections exist |
-| Deploying from an untrusted event | The workflow triggers only on `push: master`; pull requests never run on the self-hosted runner |
+| Deploying from an untrusted event | The generated workflow triggers only on a push to the default branch — but this is **not** a boundary: a repo-scoped runner runs any matching job from any ref. Gate fork PRs in Settings → Actions, and treat push access as server access |
 | Untrusted code executing on the runner | `pinqops deploy` does not check out or run repository content; it runs only the fixed compose commands |
 | Command injection | Command arguments are built as discrete list items (never a shell string); the compose path is fixed server-side |
 | Direct push to `master` | Branch protection requires a reviewed pull request |
@@ -43,11 +43,22 @@ registration token is short-lived, and registry auth uses the per-job
 The runner user is in the `docker` group, which is **root-equivalent** on the
 host. This is inherent to running Docker deploys. It is bounded by:
 
-- **Only `push: master` triggers the workflow.** Fork/PR code never reaches the
-  runner, which is the primary risk with self-hosted runners.
 - **No repo checkout on deploy.** `pinqops deploy` runs only the fixed commands.
 - **Keep the repository private.** Public repositories increase the risk of
   someone crafting a workflow/event that targets your runner.
+
+> **The deploy workflow's trigger is not a security control.** pinqops generates
+> it with `on: push` to your default branch, but the runner is registered to the
+> whole *repository*: it will execute **any** job, from **any** ref, whose
+> `runs-on` matches its labels. A branch carrying its own workflow file reaches
+> the runner without ever touching the default branch, so branch protection does
+> not gate it either.
+>
+> The controls that do apply are GitHub's, and you must set them yourself:
+> **Settings → Actions → General** → require approval for **all** outside
+> collaborators' fork PRs, and treat anyone with push access to the repository as
+> having code execution on the server. Do not give push access more widely than
+> you would give a shell account.
 
 If you need stronger isolation, run the runner in an ephemeral/container mode or
 restrict the host Docker API with a socket proxy. These are out of scope for the

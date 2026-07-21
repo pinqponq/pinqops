@@ -126,6 +126,25 @@ public sealed class GitHubDashboardService : IDisposable
         };
     }
 
+    /// <summary>
+    /// The connected repository's default branch — the branch
+    /// <see cref="CreateWorkflowFileAsync"/> commits to, and therefore the only
+    /// branch a generated workflow may be triggered on.
+    /// </summary>
+    public async Task<string> GetDefaultBranchAsync()
+    {
+        var (repository, auth) = Context();
+        var repo = await GetAsync(repository, auth, $"/repos/{repository.Owner}/{repository.Name}")
+            .ConfigureAwait(false);
+        var branch = GetString(repo, "default_branch");
+        if (string.IsNullOrWhiteSpace(branch))
+        {
+            throw new InvalidOperationException("GitHub did not report a default branch for this repository.");
+        }
+
+        return branch;
+    }
+
     /// <summary>Commits the deploy workflow into the connected repository.</summary>
     public async Task<object> CreateWorkflowFileAsync(string yamlContent)
     {

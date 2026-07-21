@@ -15,10 +15,14 @@
 
 name: Build and Deploy
 
-# Deployment runs ONLY when a commit lands on master. Because the repository
-# uses branch protection, the only way a commit reaches master is by merging a
-# reviewed pull request. Opening a PR or pushing to any other branch does NOT
-# trigger this workflow.
+# !! CHANGE THIS to your repository's default branch. GitHub creates new
+# repositories with `main`; a branch filter that matches nothing never fires and
+# GitHub does not warn about it, so the pipeline would silently never deploy.
+# (The dashboard wizard fills this in for you — this file is the manual path.)
+#
+# Note this trigger is a convenience, not a security boundary: a self-hosted
+# runner is registered to the whole repository and will run any job from any ref
+# whose `runs-on` matches. See SECURITY.md.
 on:
   push:
     branches:
