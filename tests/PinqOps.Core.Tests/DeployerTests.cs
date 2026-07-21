@@ -216,6 +216,59 @@ public class DeployerTests : IDisposable
     }
 
     [Fact]
+    public async Task DeployAsync_ComposeProjectBelongsToAnotherApp_FailsBeforeTouchingAnything()
+    {
+        // Exactly the real failure: a second repository pointed at the first
+        // one's compose file. Without this guard its image and tag get pinned
+        // over the other application's and the wrong image runs.
+        File.WriteAllText(_composePath, "name: \"ikv-board\"\nservices:\n  app: {}\n");
+        var envFile = Path.Combine(_projectDirectory, ".env");
+        EnvFileStore.SetValue(envFile, Deployer.ImageVariable, "ghcr.io/acme/ikv-board");
+        EnvFileStore.SetValue(envFile, Deployer.TagVariable, "sha-original");
+
+        var runner = ScriptedRunner();
+        var history = new DeployHistoryStore(_composePath);
+        var deployer = new Deployer(runner, history: history);
+
+        var result = await deployer.DeployAsync(
+            Options(tag: "sha-intruder", expectedImage: "ghcr.io/acme/peramice"));
+
+        Assert.False(result);
+        Assert.Empty(runner.Invocations);
+        // The other application's pins must be untouched.
+        Assert.Equal("ghcr.io/acme/ikv-board", EnvFileStore.GetValue(envFile, Deployer.ImageVariable));
+        Assert.Equal("sha-original", EnvFileStore.GetValue(envFile, Deployer.TagVariable));
+
+        var error = Assert.Single(history.Load()).Error;
+        Assert.Contains("ikv-board", error);
+        Assert.Contains("peramice", error);
+        Assert.Contains("APP_COMPOSE_PATH", error);
+    }
+
+    [Fact]
+    public async Task DeployAsync_ComposeProjectIsOurs_Proceeds()
+    {
+        File.WriteAllText(_composePath, "name: \"peramice\"\nservices:\n  app: {}\n");
+        var runner = RunnerWithConfigImages("ghcr.io/acme/peramice:sha-abc123\n");
+
+        var result = await new Deployer(runner).DeployAsync(
+            Options(tag: "sha-abc123", expectedImage: "ghcr.io/acme/peramice"));
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public async Task DeployAsync_ComposeDeclaresNoProjectName_SkipsTheOwnerCheck()
+    {
+        // A hand-written compose file gives no ownership signal; do not invent one.
+        File.WriteAllText(_composePath, "services:\n  app: {}\n");
+        var runner = RunnerWithConfigImages("ghcr.io/acme/peramice:sha-abc123\n");
+
+        Assert.True(await new Deployer(runner).DeployAsync(
+            Options(tag: "sha-abc123", expectedImage: "ghcr.io/acme/peramice")));
+    }
+
+    [Fact]
     public async Task DeployAsync_PruneDisabled_DoesNotPrune()
     {
         var runner = ScriptedRunner();

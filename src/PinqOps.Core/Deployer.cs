@@ -73,8 +73,20 @@ public sealed class Deployer
 
         if (options.ExpectedImage is not null)
         {
-            // Pin the image first so the compose resolves to what this deploy is
-            // for; a repository rename then flows straight through the workflow's
+            // BEFORE touching the .env: does this project even belong to us? The
+            // project name is the owning repository's, and it is the only durable
+            // marker — pinning the image first would make every later check pass
+            // while quietly hijacking another application's project.
+            var wrongProject = FindProjectOwnerMismatch(options.ExpectedImage, options.ComposeFilePath);
+            if (wrongProject is not null)
+            {
+                await FinishAsync(options, startedAt, DeployRecordValues.ResultFailed, previousTag, healthState, wrongProject, cancellationToken)
+                    .ConfigureAwait(false);
+                return false;
+            }
+
+            // Pin the image so the compose resolves to what this deploy is for; a
+            // repository rename then flows straight through the workflow's
             // --image with no stale compose file to fix by hand.
             EnvFileStore.SetValue(envFile, ImageVariable, options.ExpectedImage);
             _log?.Invoke($"pinned {ImageVariable}={options.ExpectedImage}");
@@ -272,6 +284,61 @@ public sealed class Deployer
         {
             EnvFileStore.SetValue(envFile, key, previousValue);
         }
+    }
+
+    /// <summary>
+    /// Returns an error when the compose project belongs to a different
+    /// application than the one being deployed, or null when it matches (or the
+    /// file declares no project name, e.g. a hand-written one).
+    /// </summary>
+    /// <remarks>
+    /// pinqops manages one application per compose file. Pointing a second
+    /// repository at the same path is silently destructive: its deploy pins its
+    /// own image and tag over the first application's, so the wrong image runs
+    /// under the wrong project — or the pull dies on a tag that only exists in
+    /// the other package. The project name is the repository's, so comparing it
+    /// against the image being deployed catches this before anything is written.
+    /// </remarks>
+    private static string? FindProjectOwnerMismatch(string expectedImage, string composeFilePath)
+    {
+        if (!File.Exists(composeFilePath))
+        {
+            return null;
+        }
+
+        string? declaredProject;
+        try
+        {
+            declaredProject = ComposeProjectName.ReadFrom(File.ReadAllText(composeFilePath));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        if (declaredProject is null)
+        {
+            return null;
+        }
+
+        // ghcr.io/<owner>/<repo> — the last segment is the repository, which is
+        // what the project name is derived from.
+        var repositorySegment = expectedImage[(expectedImage.LastIndexOf('/') + 1)..];
+        if (repositorySegment.Length == 0)
+        {
+            return null;
+        }
+
+        var expectedProject = ComposeProjectName.FromRepository(repositorySegment);
+        if (string.Equals(declaredProject, expectedProject, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return $"{composeFilePath} is the compose project of '{declaredProject}', but this deploy is for "
+            + $"'{expectedProject}'. pinqops manages one application per compose file — give this one its own "
+            + $"path (e.g. /opt/{expectedProject}/docker-compose.yml) and set the repository variable "
+            + $"APP_COMPOSE_PATH to it, or the two will overwrite each other.";
     }
 
     /// <summary>

@@ -33,6 +33,21 @@ and this project adheres to a rolling release model (latest `master` only).
 
 ### Fixed
 
+- **A deploy refuses to run against another application's compose project.** The
+  wizard's guard only covered *creating* a compose file; once one existed, a
+  second repository's deploy pinned its own image and tag straight over the
+  first application's, so the wrong image ran under the wrong project name (or
+  the pull died on a tag that only exists in the other package). `pinqops deploy
+  --image` now compares the compose file's project name — which is the owning
+  repository's — against the image being deployed, and fails **before writing
+  anything**, naming both applications and the `APP_COMPOSE_PATH` variable to
+  set. The previous image/tag check could not catch this: it ran *after* pinning,
+  so it always compared the value with itself.
+- **Connecting a repository no longer leaves the UI pointing at the previous
+  one.** The wizard's connect step refreshed the GitHub cache but not the
+  settings cache, so after switching repositories the readiness card kept the old
+  name, the repo list kept its ✓ on the old entry, and **"Re-run the wizard" ran
+  against the old repository**.
 - **Two repositories can no longer silently share one compose project.** Nothing
   tied a compose file to a repository, so pointing a second repository at the
   same path let its deploy pin *its* tag onto the *first* one's image — and die

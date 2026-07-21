@@ -2020,7 +2020,16 @@ async function runInstallWizard(repoUrl){
   let failedAt=null;
   if(!await step("connect",async()=>{
     const r=await api("/api/settings",{method:"POST",body:JSON.stringify({repoUrl})});
-    ghCache=null;say("✓ "+t("se.connected",{r:r.fullName}));
+    // The connected repository just changed. Everything derived from the old
+    // one — the readiness card's title, the ✓ marker in the repo list, and the
+    // "Re-run the wizard" button — reads settingsCache, so leaving it stale
+    // makes the UI keep pointing at the previous repo (and re-run against it).
+    ghCache=null;
+    settingsCache={...(settingsCache||{}),repoUrl,fullName:r.fullName};
+    selectedRepoUrl=repoUrl;
+    $("#set-repo").value=repoUrl;
+    renderRepoList(repoList,$("#repo-search").value);
+    say("✓ "+t("se.connected",{r:r.fullName}));
     return esc(r.fullName)+(r.isPrivate?" 🔒":"");
   }))failedAt=t("wiz.connect");
 
