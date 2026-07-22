@@ -159,6 +159,16 @@ pinqops version
 > and step 6 for you, including obtaining the token. The manual steps below are
 > the equivalent.
 
+> **Multiple apps on one server:** the dashboard installs one runner per
+> connected repository (under `/opt/pinqops/runners/<app>`, each with its own
+> systemd unit) because GitHub registration tokens are repo-scoped. If your
+> repositories live in one organization, an **org-level runner** labelled
+> `pinqops-prod` serves all of them from a single install — register it from
+> the org's Settings → Actions → Runners; the per-repo `APP_COMPOSE_PATH`
+> variable still routes each deploy to the right compose project. The
+> dashboard's runner status card can't verify org runners (it checks the repo),
+> so expect it to show "unknown" in that setup.
+
 Get a registration token from **repo → Settings → Actions → Runners → New
 self-hosted runner** (the token is short-lived — use it right away), then let
 pinqops install and register the runner as a systemd service:

@@ -1,14 +1,22 @@
+using System.Text.Json.Serialization;
+
 namespace PinqOps.Web;
 
 /// <summary>
 /// Persisted state of the web UI: the dashboard password hash, the GitHub
-/// connection, and the paths the dashboard inspects. Stored as JSON with 0600
-/// permissions (it contains the PAT).
+/// account connection, and the connected app repositories. Stored as JSON with
+/// 0600 permissions (it contains the PAT).
 /// </summary>
 public sealed class UiConfig
 {
     public const string DefaultComposeFile = "/opt/pinqops/docker-compose.yml";
     public const string DefaultRunnerDirectory = "/opt/actions-runner";
+
+    /// <summary>Where apps added after the multi-app upgrade keep their compose projects.</summary>
+    public const string DefaultAppsRoot = "/opt/pinqops/apps";
+
+    /// <summary>Where apps added after the multi-app upgrade keep their runners.</summary>
+    public const string DefaultRunnersRoot = "/opt/pinqops/runners";
 
     /// <summary>
     /// Host port a newly generated compose project publishes the app on. Kept off
@@ -19,9 +27,6 @@ public sealed class UiConfig
     /// <summary>PBKDF2 hash of the dashboard password ("salt.hash" base64).</summary>
     public string? PasswordHash { get; set; }
 
-    /// <summary>The GitHub repository URL the dashboard is connected to.</summary>
-    public string? RepoUrl { get; set; }
-
     /// <summary>Optional GitHub username; when set the PAT is sent as Basic auth.</summary>
     public string? Username { get; set; }
 
@@ -31,7 +36,54 @@ public sealed class UiConfig
     /// <summary>Optional OAuth App client id enabling "Sign in with GitHub" (device flow).</summary>
     public string? GithubClientId { get; set; }
 
-    public string ComposeFile { get; set; } = DefaultComposeFile;
+    /// <summary>The app repositories this server manages.</summary>
+    public List<AppConnection> Apps { get; set; } = [];
 
-    public string RunnerDirectory { get; set; } = DefaultRunnerDirectory;
+    // ---- Legacy single-app fields ------------------------------------------------
+    // Read for migration only (UiConfigStore wraps them into Apps[0]) and nulled
+    // afterwards, so a saved config carries nothing but `apps`.
+
+    /// <summary>Legacy: the single connected repository URL.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RepoUrl { get; set; }
+
+    /// <summary>Legacy: the single compose file path.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ComposeFile { get; set; }
+
+    /// <summary>Legacy: the single runner install directory.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RunnerDirectory { get; set; }
+}
+
+/// <summary>
+/// One connected app repository: where its compose project and runner live.
+/// Account-scoped state (PAT, OAuth client id) stays on <see cref="UiConfig"/> —
+/// the token belongs to the account, not to any one repository.
+/// </summary>
+public sealed class AppConnection
+{
+    public required string Id { get; set; }
+
+    public required string RepoUrl { get; set; }
+
+    public required string ComposeFile { get; set; }
+
+    public required string RunnerDirectory { get; set; }
+
+    /// <summary>
+    /// The app id for a repository: <c>&lt;owner&gt;-&lt;repo&gt;</c> reduced by the
+    /// compose-name rules. Including the owner keeps two same-named repos from
+    /// different owners apart; the id also seeds the default paths.
+    /// </summary>
+    public static string SlugFor(GitHubRepository repository) =>
+        ComposeProjectName.FromRepository($"{repository.Owner}-{repository.Name}");
+
+    /// <summary>Default compose path for a new app.</summary>
+    public static string DefaultComposeFileFor(string id) =>
+        $"{UiConfig.DefaultAppsRoot}/{id}/docker-compose.yml";
+
+    /// <summary>Default runner directory for a new app.</summary>
+    public static string DefaultRunnerDirectoryFor(string id) =>
+        $"{UiConfig.DefaultRunnersRoot}/{id}";
 }

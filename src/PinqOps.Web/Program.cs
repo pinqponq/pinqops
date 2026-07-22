@@ -297,32 +297,36 @@ app.MapGet("/api/settings", (UiConfigStore store) =>
 
     // The canonical owner/repo display name comes from the server-side parser
     // (works for GHES hosts too) so the UI never re-parses the URL itself.
-    string? fullName = null;
-    if (!string.IsNullOrWhiteSpace(config.RepoUrl))
+    static string? FullName(string repoUrl)
     {
         try
         {
-            var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
-            fullName = $"{repository.Owner}/{repository.Name}";
+            var repository = GitHubRepositoryParser.Parse(repoUrl);
+            return $"{repository.Owner}/{repository.Name}";
         }
         catch (ArgumentException)
         {
             // A hand-edited invalid URL just means no pretty name.
+            return null;
         }
     }
 
     return Results.Json(new
     {
-        repoUrl = config.RepoUrl,
-        fullName,
         username = config.Username,
         patMasked = config.Pat is { Length: > 4 } pat ? $"••••••••{pat[^4..]}" : null,
-        composeFile = config.ComposeFile,
-        runnerDirectory = config.RunnerDirectory,
         configPath = store.Path_,
         version = PinqOpsVersion.Current,
         githubClientId = config.GithubClientId
             ?? Environment.GetEnvironmentVariable("PINQOPS_GITHUB_CLIENT_ID"),
+        apps = config.Apps.Select(a => new
+        {
+            id = a.Id,
+            repoUrl = a.RepoUrl,
+            fullName = FullName(a.RepoUrl),
+            composeFile = a.ComposeFile,
+            runnerDirectory = a.RunnerDirectory,
+        }),
     });
 });
 
@@ -349,56 +353,82 @@ app.MapPost("/api/settings", (HttpContext context, UiConfigStore store, GitHubDa
         // Validate the connection before saving anything.
         var repo = await gitHub.TestConnectionAsync(request.RepoUrl, username, pat);
 
+        AppConnection? connection = null;
         store.Update(config =>
         {
-            config.RepoUrl = repository.ToUrl();
             if (request.Username is not null)
             {
                 config.Username = string.IsNullOrWhiteSpace(request.Username) ? null : request.Username.Trim();
             }
 
             config.Pat = pat;
-            if (!string.IsNullOrWhiteSpace(request.ComposeFile))
-            {
-                config.ComposeFile = request.ComposeFile.Trim();
-            }
-
-            if (!string.IsNullOrWhiteSpace(request.RunnerDirectory))
-            {
-                config.RunnerDirectory = request.RunnerDirectory.Trim();
-            }
-
             if (request.GithubClientId is not null)
             {
                 config.GithubClientId = string.IsNullOrWhiteSpace(request.GithubClientId)
                     ? null
                     : request.GithubClientId.Trim();
             }
+
+            // One repo = one app: same URL returns the existing connection,
+            // an explicit AppId edits that app, anything else creates one.
+            connection = AppUpsert.Apply(
+                config, request.AppId, repository, request.ComposeFile, request.RunnerDirectory);
         });
 
+        logger.LogWarning("App '{AppId}' connected to {Repo}", connection!.Id, connection.RepoUrl);
         return new
         {
             ok = true,
+            appId = connection.Id,
             fullName = repo.TryGetProperty("full_name", out var name) ? name.GetString() : repository.ToUrl(),
             isPrivate = repo.TryGetProperty("private", out var isPrivate) && isPrivate.GetBoolean(),
         };
     }));
 
+// Signing out of GitHub drops the token but keeps the app connections — they
+// are unusable until re-auth, and nothing on disk is touched.
 app.MapPost("/api/settings/disconnect", (UiConfigStore store) =>
 {
     store.Update(config =>
     {
-        config.RepoUrl = null;
         config.Username = null;
         config.Pat = null;
     });
     return Results.Json(new { ok = true });
 });
 
+// Removes an app from the dashboard ONLY. The compose project (with .pinqops
+// state and volumes) and the runner stay on disk — deleting live infrastructure
+// has too many failure modes; re-adding the repo re-attaches to the same paths.
+app.MapPost("/api/settings/apps/remove", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<AppRemoveRequest>();
+        if (request?.Id is not { Length: > 0 } id)
+        {
+            throw new ArgumentException("An app id is required.");
+        }
+
+        AppConnection? removed = null;
+        store.Update(config =>
+        {
+            removed = config.Apps.FirstOrDefault(a => string.Equals(a.Id, id.Trim(), StringComparison.OrdinalIgnoreCase))
+                ?? throw new ArgumentException($"Unknown app '{id.Trim()}'.");
+            config.Apps.Remove(removed);
+        });
+
+        logger.LogWarning("App '{AppId}' removed from the dashboard (files kept)", removed!.Id);
+        return new
+        {
+            ok = true,
+            kept = new[] { Path.GetDirectoryName(removed.ComposeFile), removed.RunnerDirectory },
+        };
+    }));
+
 // ---- GitHub (repo, runners, workflow runs) ----------------------------------
 
-app.MapGet("/api/github/overview", (GitHubDashboardService gitHub) =>
-    Safe(async () => await gitHub.GetOverviewAsync()));
+app.MapGet("/api/github/overview", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
+    Safe(async () => await gitHub.GetOverviewAsync(ResolveApp(store, context))));
 
 app.MapGet("/api/github/user", (GitHubDashboardService gitHub) =>
     Safe(async () => await gitHub.GetUserAsync()));
@@ -548,17 +578,22 @@ app.MapPost("/api/docker/prune", (DockerService docker) =>
 
 // ---- Setup (Portainer-style: pick a repo, the dashboard readies everything) ----
 
-app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService gitHub, LocalRunnerService runner) =>
+app.MapGet("/api/setup/status", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub, LocalRunnerService runner) =>
     Safe(async () =>
     {
-        var config = store.Current;
-        if (!gitHub.IsConfigured)
+        if (store.Current.Apps.Count == 0 || !gitHub.HasToken)
         {
             return new { configured = false };
         }
 
-        var repoTask = gitHub.CheckRepoSetupAsync();
-        var runnersTask = gitHub.GetRunnersSummaryAsync();
+        var app = ResolveApp(store, context);
+        if (!gitHub.IsConfiguredFor(app))
+        {
+            return new { configured = false };
+        }
+
+        var repoTask = gitHub.CheckRepoSetupAsync(app);
+        var runnersTask = gitHub.GetRunnersSummaryAsync(app);
         var repo = await repoTask;
 
         // Listing runners needs repo-admin (Administration: read). A token
@@ -579,20 +614,21 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
         // from an earlier repository would otherwise short-circuit the setup
         // flow into starting the wrong repo's runner service. One .runner read
         // answers installed/mismatch/registered-to alike.
-        var runnerRegisteredTo = LocalRunnerService.GetRegisteredUrl(config.RunnerDirectory);
+        var runnerRegisteredTo = LocalRunnerService.GetRegisteredUrl(app.RunnerDirectory);
         var runnerInstalled = runnerRegisteredTo is not null
-            && LocalRunnerService.MatchesRepo(runnerRegisteredTo, config.RepoUrl);
+            && LocalRunnerService.MatchesRepo(runnerRegisteredTo, app.RepoUrl);
 
         // Whether the systemd service is up lets the dashboard auto-start a
         // stopped runner (safe, idempotent) and avoid offering a useless "start"
         // button when the service is running but just can't reach GitHub.
         var runnerServiceActive = runnerInstalled
-            ? await runner.IsServiceActiveAsync(config.RunnerDirectory)
+            ? await runner.IsServiceActiveAsync(app.RunnerDirectory)
             : null;
 
         return (object)new
         {
             configured = true,
+            appId = app.Id,
             repo,
             runnersOnline = online,
             runnersTotal = total,
@@ -601,24 +637,37 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
             runnerServiceActive,
             runnerMismatch = !runnerInstalled && runnerRegisteredTo is not null,
             runnerRegisteredTo,
-            composeFile = config.ComposeFile,
-            composeExists = File.Exists(config.ComposeFile),
+            composeFile = app.ComposeFile,
+            composeExists = File.Exists(app.ComposeFile),
         };
     }));
 
 // The workflow is committed to the repository's default branch, so that is the
 // branch it must trigger on — a hardcoded one would simply never fire.
-app.MapPost("/api/setup/create-workflow", (GitHubDashboardService gitHub) =>
+app.MapPost("/api/setup/create-workflow", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
     Safe(async () =>
     {
-        var defaultBranch = await gitHub.GetDefaultBranchAsync();
-        var result = await gitHub.CreateWorkflowFileAsync(SetupTemplates.DeployWorkflowYaml(defaultBranch));
+        var app = ResolveApp(store, context);
+        var defaultBranch = await gitHub.GetDefaultBranchAsync(app);
+        var result = await gitHub.CreateWorkflowFileAsync(app, SetupTemplates.DeployWorkflowYaml(defaultBranch));
         logger.LogWarning("Deploy workflow committed, triggering on {Branch}", defaultBranch);
         return result;
     }));
 
-app.MapPost("/api/setup/start-runner", (UiConfigStore store, LocalRunnerService runner) =>
-    Safe(async () => await runner.StartServiceAsync(store.Current.RunnerDirectory)));
+// Pins the repository variable the generated workflow reads its compose path
+// from. A standalone, idempotent step (create-compose is skipped once the file
+// exists, so it could never repair a missing/stale variable on a republish).
+app.MapPost("/api/setup/app-var", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        var app = ResolveApp(store, context);
+        await gitHub.SetRepositoryVariableAsync(app, "APP_COMPOSE_PATH", app.ComposeFile);
+        logger.LogWarning("APP_COMPOSE_PATH set to {Path} for {Repo}", app.ComposeFile, app.RepoUrl);
+        return new { ok = true, name = "APP_COMPOSE_PATH", value = app.ComposeFile };
+    }));
+
+app.MapPost("/api/setup/start-runner", (HttpContext context, UiConfigStore store, LocalRunnerService runner) =>
+    Safe(async () => await runner.StartServiceAsync(ResolveApp(store, context).RunnerDirectory)));
 
 app.MapPost("/api/setup/create-compose", (HttpContext context, UiConfigStore store, DockerService docker, GitHubDashboardService gitHub) =>
     Safe(async () =>
@@ -633,39 +682,34 @@ app.MapPost("/api/setup/create-compose", (HttpContext context, UiConfigStore sto
         {
         }
 
-        var config = store.Current;
-        if (string.IsNullOrWhiteSpace(config.RepoUrl))
-        {
-            throw new InvalidOperationException("Connect a repository first.");
-        }
-
-        var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
+        var appConnection = ResolveApp(store, context);
+        var repository = GitHubRepositoryParser.Parse(appConnection.RepoUrl);
         var project = ComposeProjectName.FromRepository(repository.Name);
 
-        if (File.Exists(config.ComposeFile))
+        if (File.Exists(appConnection.ComposeFile))
         {
             // One compose project per path. Silently sharing it between two
             // repositories is the worst outcome: the second repository's deploy
             // pins ITS tag onto the FIRST one's image and dies pulling a tag that
             // only exists in the other package.
-            var owner = ComposeProjectName.ReadFrom(await File.ReadAllTextAsync(config.ComposeFile));
+            var owner = ComposeProjectName.ReadFrom(await File.ReadAllTextAsync(appConnection.ComposeFile));
             if (owner is not null && owner != project)
             {
                 throw new InvalidOperationException(
-                    $"{config.ComposeFile} already belongs to '{owner}', not '{project}'. pinqops manages one "
-                    + $"application per compose file. Give this repository its own path (Settings → compose file, "
-                    + $"e.g. /opt/{project}/docker-compose.yml) and set the repository variable APP_COMPOSE_PATH "
-                    + $"to the same value so its deploy workflow uses it.");
+                    $"{appConnection.ComposeFile} already belongs to '{owner}', not '{project}'. pinqops manages "
+                    + $"one application per compose file. Give this app its own path (Advanced → compose file, "
+                    + $"e.g. /opt/pinqops/apps/{project}/docker-compose.yml) — the publish step keeps the "
+                    + $"APP_COMPOSE_PATH repository variable in sync automatically.");
             }
 
-            throw new InvalidOperationException($"{config.ComposeFile} already exists.");
+            throw new InvalidOperationException($"{appConnection.ComposeFile} already exists.");
         }
 
         // The template references the shared pinqops-apps network as external;
         // it must exist before the first compose up.
         await docker.EnsureSharedNetworkAsync();
 
-        var directory = Path.GetDirectoryName(config.ComposeFile);
+        var directory = Path.GetDirectoryName(appConnection.ComposeFile);
         if (!string.IsNullOrEmpty(directory))
         {
             Directory.CreateDirectory(directory);
@@ -679,7 +723,7 @@ app.MapPost("/api/setup/create-compose", (HttpContext context, UiConfigStore sto
         int? exposedPort = null;
         try
         {
-            exposedPort = await gitHub.GetDockerfileExposedPortAsync();
+            exposedPort = await gitHub.GetDockerfileExposedPortAsync(appConnection);
         }
         catch (Exception exception)
         {
@@ -701,44 +745,44 @@ app.MapPost("/api/setup/create-compose", (HttpContext context, UiConfigStore sto
         }
 
         await File.WriteAllTextAsync(
-            config.ComposeFile,
+            appConnection.ComposeFile,
             SetupTemplates.ComposeYaml(repository.Owner, repository.Name, hostPort, containerPort));
 
         // Seed the .env so both ports are discoverable (and editable) in the
         // dashboard instead of being invisible defaults inside the YAML.
-        var envFile = PinqOpsStatePaths.EnvFile(config.ComposeFile);
+        var envFile = PinqOpsStatePaths.EnvFile(appConnection.ComposeFile);
         EnvFileStore.SetValue(envFile, SetupTemplates.HostPortVariable, hostPort.ToString(InvariantCulture));
         EnvFileStore.SetValue(envFile, SetupTemplates.ContainerPortVariable, containerPort.ToString(InvariantCulture));
 
         logger.LogWarning(
             "Compose project created at {File} publishing {HostPort}->{ContainerPort}",
-            config.ComposeFile, hostPort, containerPort);
-        return new { ok = true, composeFile = config.ComposeFile, hostPort, containerPort };
+            appConnection.ComposeFile, hostPort, containerPort);
+        return new { ok = true, composeFile = appConnection.ComposeFile, hostPort, containerPort };
     }));
 
 // Pre-publish data for the wizard's port form: the detected container port and
 // a suggested free host port, plus the current .env values once the compose
 // project exists. The generic .env endpoint masks every value, so the wizard
 // needs this dedicated, ports-only view.
-app.MapGet("/api/setup/publish-info", (UiConfigStore store, GitHubDashboardService gitHub) =>
+app.MapGet("/api/setup/publish-info", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
     Safe(async () =>
     {
-        var config = store.Current;
+        var app = ResolveApp(store, context);
 
         // The Dockerfile read is a hint — a GitHub hiccup must degrade to
         // "nothing detected", not break the form.
         int? detectedContainerPort = null;
         try
         {
-            detectedContainerPort = await gitHub.GetDockerfileExposedPortAsync();
+            detectedContainerPort = await gitHub.GetDockerfileExposedPortAsync(app);
         }
         catch (Exception exception)
         {
             logger.LogWarning(exception, "Could not read the Dockerfile's EXPOSE for the publish form");
         }
 
-        var composeExists = File.Exists(config.ComposeFile);
-        var envFile = PinqOpsStatePaths.EnvFile(config.ComposeFile);
+        var composeExists = File.Exists(app.ComposeFile);
+        var envFile = PinqOpsStatePaths.EnvFile(app.ComposeFile);
         var currentHostPort = composeExists
             ? TryParsePort(EnvFileStore.GetValue(envFile, SetupTemplates.HostPortVariable))
             : null;
@@ -772,8 +816,9 @@ app.MapGet("/api/setup/port-check", (HttpContext context, UiConfigStore store) =
 
         // The app's own container legitimately owns its current host port — a
         // bind probe would flag it as busy, so treat "unchanged" as free.
-        var envFile = PinqOpsStatePaths.EnvFile(store.Current.ComposeFile);
-        var currentHostPort = File.Exists(store.Current.ComposeFile)
+        var appConnection = ResolveApp(store, context);
+        var envFile = PinqOpsStatePaths.EnvFile(appConnection.ComposeFile);
+        var currentHostPort = File.Exists(appConnection.ComposeFile)
             ? EnvFileStore.GetValue(envFile, SetupTemplates.HostPortVariable)
             : null;
         var available = currentHostPort == port.ToString(InvariantCulture) || HostPort.IsAvailable(port);
@@ -782,12 +827,12 @@ app.MapGet("/api/setup/port-check", (HttpContext context, UiConfigStore store) =
 
 // Live state of the deployed app for the wizard's "your app is live" card:
 // whether the compose container runs and on which host port it is reachable.
-app.MapGet("/api/setup/app-status", (UiConfigStore store, DockerService docker) =>
+app.MapGet("/api/setup/app-status", (HttpContext context, UiConfigStore store, DockerService docker) =>
     Safe(async () =>
     {
-        var config = store.Current;
-        var composeExists = File.Exists(config.ComposeFile);
-        var envFile = PinqOpsStatePaths.EnvFile(config.ComposeFile);
+        var app = ResolveApp(store, context);
+        var composeExists = File.Exists(app.ComposeFile);
+        var envFile = PinqOpsStatePaths.EnvFile(app.ComposeFile);
 
         string? state = null;
         int? publishedPort = null;
@@ -797,7 +842,7 @@ app.MapGet("/api/setup/app-status", (UiConfigStore store, DockerService docker) 
             try
             {
                 (state, publishedPort) = ComposeAppStatus.FromServices(
-                    await docker.ComposeServicesAsync(config.ComposeFile));
+                    await docker.ComposeServicesAsync(app.ComposeFile));
             }
             catch (InvalidOperationException)
             {
@@ -815,16 +860,17 @@ app.MapGet("/api/setup/app-status", (UiConfigStore store, DockerService docker) 
             // fall back to what the .env says will be published.
             hostPort = publishedPort ?? TryParsePort(EnvFileStore.GetValue(envFile, SetupTemplates.HostPortVariable)),
             currentTag = EnvFileStore.GetValue(envFile, Deployer.TagVariable),
-            currentDeployedAt = new DeployHistoryStore(config.ComposeFile).LastSuccessful()?.StartedAt,
+            currentDeployedAt = new DeployHistoryStore(app.ComposeFile).LastSuccessful()?.StartedAt,
         };
     }));
 
 // Starts the first deploy right from the wizard instead of waiting for a push:
 // dispatches the generated workflow on the repository's default branch.
-app.MapPost("/api/setup/trigger-deploy", (GitHubDashboardService gitHub) =>
+app.MapPost("/api/setup/trigger-deploy", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
     Safe(async () =>
     {
-        var branch = await gitHub.GetDefaultBranchAsync();
+        var app = ResolveApp(store, context);
+        var branch = await gitHub.GetDefaultBranchAsync(app);
 
         // A workflow the wizard committed seconds ago may not be indexed by
         // the Actions API yet — 404s briefly even though the file is there.
@@ -832,7 +878,7 @@ app.MapPost("/api/setup/trigger-deploy", (GitHubDashboardService gitHub) =>
         {
             try
             {
-                await gitHub.TriggerDeployWorkflowAsync(branch);
+                await gitHub.TriggerDeployWorkflowAsync(app, branch);
                 break;
             }
             catch (GitHubApiException exception) when (exception.StatusCode == 404 && attempt < 5)
@@ -848,25 +894,41 @@ app.MapPost("/api/setup/trigger-deploy", (GitHubDashboardService gitHub) =>
 // Full runner install driven from the dashboard: registration token via the
 // stored PAT, then download + config.sh + systemd service (same code path as
 // `pinqops install-runner`).
-app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRunner processRunner) =>
+app.MapPost("/api/setup/install-runner", async (HttpContext context, UiConfigStore store, IProcessRunner processRunner) =>
 {
-    if (!await runnerInstallGate.WaitAsync(0))
+    // One install at a time across ALL apps: the installer sets a process-wide
+    // env var and downloads are huge — serialize, and stamp the buffer with the
+    // app so a poller for another app can ignore foreign lines.
+    AppConnection appConnection;
+    try
     {
-        return Error(409, "A runner install is already in progress.");
+        appConnection = ResolveApp(store, context);
+    }
+    catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+    {
+        return Error(400, exception.Message);
     }
 
-    runnerInstallProgress.Start();
+    if (!await runnerInstallGate.WaitAsync(0))
+    {
+        var busyFor = runnerInstallProgress.AppId;
+        return Error(409, busyFor is null
+            ? "A runner install is already in progress."
+            : $"A runner install is already in progress (app '{busyFor}').");
+    }
+
+    runnerInstallProgress.Start(appConnection.Id);
     var succeeded = false;
     try
     {
         var config = store.Current;
-        if (string.IsNullOrWhiteSpace(config.RepoUrl) || string.IsNullOrWhiteSpace(config.Pat))
+        if (string.IsNullOrWhiteSpace(appConnection.RepoUrl) || string.IsNullOrWhiteSpace(config.Pat))
         {
             return Error(400, "Connect GitHub first.");
         }
 
         runnerInstallProgress.Add("requesting a runner registration token…");
-        var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
+        var repository = GitHubRepositoryParser.Parse(appConnection.RepoUrl);
         string registrationToken;
         string? removalToken = null;
         using (var apiClient = new GitHubApiClient())
@@ -884,7 +946,7 @@ app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRun
             // A leftover runner registered to another repository must be
             // de-registered first; mint a removal token for THAT repo. Best
             // effort — cleanup falls back to deleting local files without it.
-            var registeredUrl = LocalRunnerService.GetRegisteredUrl(config.RunnerDirectory);
+            var registeredUrl = LocalRunnerService.GetRegisteredUrl(appConnection.RunnerDirectory);
             if (registeredUrl is not null)
             {
                 try
@@ -901,7 +963,12 @@ app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRun
         }
 
         runnerInstallProgress.Add("token received; installing the runner…");
-        var options = RunnerInstallOptions.Create(config.RepoUrl, registrationToken, installDirectory: config.RunnerDirectory)
+        var options = RunnerInstallOptions.Create(
+                appConnection.RepoUrl, registrationToken,
+                // Per-app agent name so `docker ps`-style debugging reads well;
+                // names are repo-scoped on GitHub, so this is cosmetic but nice.
+                runnerName: $"{Environment.MachineName}-{appConnection.Id}",
+                installDirectory: appConnection.RunnerDirectory)
             with { RemovalToken = removalToken };
         using var downloader = new HttpFileDownloader();
         var installer = new RunnerInstaller(processRunner, downloader, runnerInstallProgress.Add);
@@ -1084,10 +1151,10 @@ app.MapGet("/api/apps/{id}/credentials", (string id, AppCredentialStore credenti
 
 // ---- Compose project ----------------------------------------------------------
 
-app.MapGet("/api/compose", (UiConfigStore store, DockerService docker) =>
+app.MapGet("/api/compose", (HttpContext context, UiConfigStore store, DockerService docker) =>
     Safe(async () =>
     {
-        var composeFile = store.Current.ComposeFile;
+        var composeFile = ResolveApp(store, context).ComposeFile;
         if (!File.Exists(composeFile))
         {
             return new { composeFile, exists = false, items = new List<System.Text.Json.JsonElement>() };
@@ -1098,18 +1165,18 @@ app.MapGet("/api/compose", (UiConfigStore store, DockerService docker) =>
 
 // ---- Deploy history & rollback ------------------------------------------------
 
-app.MapGet("/api/deploy/state", (UiConfigStore store, DeployService deploys) =>
+app.MapGet("/api/deploy/state", (HttpContext context, UiConfigStore store, DeployService deploys) =>
     Safe(async () =>
     {
         await Task.CompletedTask;
-        return deploys.GetState(store.Current.ComposeFile);
+        return deploys.GetState(ResolveApp(store, context).ComposeFile);
     }));
 
-app.MapGet("/api/deploy/history", (UiConfigStore store, DeployService deploys) =>
+app.MapGet("/api/deploy/history", (HttpContext context, UiConfigStore store, DeployService deploys) =>
     Safe(async () =>
     {
         await Task.CompletedTask;
-        return new { items = deploys.History(store.Current.ComposeFile) };
+        return new { items = deploys.History(ResolveApp(store, context).ComposeFile) };
     }));
 
 app.MapPost("/api/deploy/rollback", async (HttpContext context, UiConfigStore store, DeployService deploys) =>
@@ -1131,7 +1198,7 @@ app.MapPost("/api/deploy/rollback", async (HttpContext context, UiConfigStore st
 
     try
     {
-        var job = deploys.TryStartRollback(store.Current.ComposeFile, tag);
+        var job = deploys.TryStartRollback(ResolveApp(store, context).ComposeFile, tag);
         if (job is null)
         {
             return Error(409, "A rollback is already in progress.");
@@ -1160,11 +1227,11 @@ app.MapGet("/api/deploy/job/{jobId}", (string jobId, DeployService deploys) =>
 
 // ---- Compose project env (.env) -------------------------------------------------
 
-app.MapGet("/api/compose/env", (UiConfigStore store) =>
+app.MapGet("/api/compose/env", (HttpContext context, UiConfigStore store) =>
     Safe(async () =>
     {
         await Task.CompletedTask;
-        var envFile = PinqOpsStatePaths.EnvFile(store.Current.ComposeFile);
+        var envFile = PinqOpsStatePaths.EnvFile(ResolveApp(store, context).ComposeFile);
         return new
         {
             envFile,
@@ -1183,7 +1250,7 @@ app.MapPost("/api/compose/env", (HttpContext context, UiConfigStore store) =>
     {
         var request = await context.Request.ReadFromJsonAsync<ComposeEnvRequest>()
             ?? throw new ArgumentException("Invalid request body.");
-        var envFile = PinqOpsStatePaths.EnvFile(store.Current.ComposeFile);
+        var envFile = PinqOpsStatePaths.EnvFile(ResolveApp(store, context).ComposeFile);
 
         // Same predicate the GET projection reports as `managed`, so the editor
         // never offers an edit the write path will reject.
@@ -1244,10 +1311,10 @@ app.MapPost("/api/compose/env", (HttpContext context, UiConfigStore store) =>
     }));
 
 // New env only takes effect when the containers are recreated.
-app.MapPost("/api/compose/apply", (UiConfigStore store, IProcessRunner processRunner) =>
+app.MapPost("/api/compose/apply", (HttpContext context, UiConfigStore store, IProcessRunner processRunner) =>
     Safe(async () =>
     {
-        var composeFile = store.Current.ComposeFile;
+        var composeFile = ResolveApp(store, context).ComposeFile;
         if (!File.Exists(composeFile))
         {
             throw new InvalidOperationException($"{composeFile} does not exist.");
@@ -1266,11 +1333,11 @@ app.MapPost("/api/compose/apply", (UiConfigStore store, IProcessRunner processRu
 
 // ---- Notifications --------------------------------------------------------------
 
-app.MapGet("/api/notifications", (UiConfigStore store) =>
+app.MapGet("/api/notifications", (HttpContext context, UiConfigStore store) =>
     Safe(async () =>
     {
         await Task.CompletedTask;
-        var config = new PinqOps.Notifications.NotificationConfigStore(store.Current.ComposeFile).Load();
+        var config = new PinqOps.Notifications.NotificationConfigStore(ResolveApp(store, context).ComposeFile).Load();
         return new
         {
             events = new
@@ -1297,7 +1364,7 @@ app.MapPost("/api/notifications", (HttpContext context, UiConfigStore store) =>
         var request = await context.Request.ReadFromJsonAsync<NotificationsRequest>()
             ?? throw new ArgumentException("Invalid request body.");
 
-        var configStore = new PinqOps.Notifications.NotificationConfigStore(store.Current.ComposeFile);
+        var configStore = new PinqOps.Notifications.NotificationConfigStore(ResolveApp(store, context).ComposeFile);
         var config = configStore.Load();
 
         if (request.Events is { } events)
@@ -1366,15 +1433,15 @@ app.MapPost("/api/notifications/test", (HttpContext context, UiConfigStore store
             throw new ArgumentException("A channel is required.");
         }
 
-        using var dispatcher = new PinqOps.Notifications.NotificationDispatcher(store.Current.ComposeFile);
+        using var dispatcher = new PinqOps.Notifications.NotificationDispatcher(ResolveApp(store, context).ComposeFile);
         var delivered = await dispatcher.SendTestAsync(channel);
         return new { ok = delivered, delivered };
     }));
 
 // ---- Local runner & system ------------------------------------------------------
 
-app.MapGet("/api/runner/local", (UiConfigStore store, LocalRunnerService runner) =>
-    Safe(async () => await runner.GetStatusAsync(store.Current.RunnerDirectory)));
+app.MapGet("/api/runner/local", (HttpContext context, UiConfigStore store, LocalRunnerService runner) =>
+    Safe(async () => await runner.GetStatusAsync(ResolveApp(store, context).RunnerDirectory)));
 
 app.MapGet("/api/runner/logs", (HttpContext context, LocalRunnerService runner) =>
     Safe(async () =>
@@ -1444,6 +1511,10 @@ static int? ParseFirstHostPort(string portsColumn)
     var match = System.Text.RegularExpressions.Regex.Match(portsColumn ?? "", @":(\d+)->");
     return match.Success && int.TryParse(match.Groups[1].Value, out var port) ? port : null;
 }
+
+/// <summary>The app a request targets: ?appId=… or the sole/first app.</summary>
+static AppConnection ResolveApp(UiConfigStore store, HttpContext context) =>
+    AppResolver.Resolve(store.Current, context.Request.Query["appId"].ToString());
 
 /// <summary>A stored .env port value as an int, or null when absent/garbage.</summary>
 static int? TryParsePort(string? value) =>

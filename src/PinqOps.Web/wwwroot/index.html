@@ -277,6 +277,8 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
     <header class="topbar">
       <button class="icon nav-toggle" id="btn-nav-toggle" aria-label="Menu"></button>
       <h1 id="view-title"></h1>
+      <select id="app-switch" class="hidden" title=""></select>
+      <button class="small ghost hidden" id="btn-add-app" title="">+</button>
       <button class="icon" id="btn-refresh"></button>
       <button class="ghost" id="btn-logout"></button>
     </header>
@@ -508,6 +510,7 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
             <div class="wiz-step" id="wiz-connect"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.connect">Connecting the repository</b><div class="ws-detail" id="wiz-connect-d"></div></div></div>
             <div class="wiz-step" id="wiz-dockerfile"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.dockerfile">Dockerfile</b><div class="ws-detail" id="wiz-dockerfile-d"></div></div></div>
             <div class="wiz-step" id="wiz-workflow"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.workflow">Deploy workflow</b><div class="ws-detail" id="wiz-workflow-d"></div></div></div>
+            <div class="wiz-step" id="wiz-var"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.var">Repository variable</b><div class="ws-detail" id="wiz-var-d"></div></div></div>
             <div class="wiz-step" id="wiz-compose"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.compose">Compose project</b><div class="ws-detail" id="wiz-compose-d"></div></div></div>
             <div class="wiz-step" id="wiz-runner"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.runner">Self-hosted runner</b><div class="ws-detail" id="wiz-runner-d"></div></div></div>
             <div class="wiz-step" id="wiz-verify"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.verify">Verification</b><div class="ws-detail" id="wiz-verify-d"></div></div></div>
@@ -541,6 +544,8 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
               </div>
               <div style="display:flex;gap:10px;margin-top:14px">
                 <button type="submit" class="small" data-i18n="c.save">Save</button>
+                <span style="flex:1"></span>
+                <button type="button" class="small danger hidden" id="btn-app-remove" data-i18n="app.remove">Remove app</button>
               </div>
               <div class="stat-sub" id="settings-meta" style="margin-top:10px"></div>
             </form>
@@ -631,7 +636,12 @@ en:{
  "gh.pickHelp":"Search your repositories and pick the one to publish — the next step readies everything (workflow, compose project, runner) automatically.",
  "gh.moreRepos":"{n} more — keep typing to narrow down","gh.noRepos":"No repository matches.",
  "gh.connectedAs":"connected",
- "wz.s1":"Connect GitHub","wz.s2":"Choose repository","wz.s3":"Publish",
+ "app.switch":"App","app.add":"Add app","app.remove":"Remove app",
+ "app.removeConfirm":"Remove “{n}” from the dashboard? Files on the server (compose project, runner) are kept and re-attach if you add the repository again.",
+ "app.removed":"{n} removed — kept on disk: {p}",
+ "wiz.var":"Repository variable","wiz.varDone":"APP_COMPOSE_PATH → {p}",
+ "wiz.varFail":"Could not set APP_COMPOSE_PATH — with a custom compose path the deploy would land on the wrong project. The token needs Variables: write.",
+ "wz.s1":"Connect GitHub","wz.s2":"Add app repository","wz.s3":"Publish",
  "wz.continue":"Continue →","wz.back":"← Back","wz.changeRepo":"change repository",
  "wz.hostPort":"Host port (public, on this server)","wz.ctrPort":"Container port (your app listens on)",
  "wz.ctrDetected":"detected from the Dockerfile's EXPOSE ({p})",
@@ -775,7 +785,12 @@ tr:{
  "gh.pickHelp":"Depolarında ara ve yayınlayacağını seç — sonraki adım her şeyi (workflow, compose projesi, runner) otomatik hazırlar.",
  "gh.moreRepos":"{n} depo daha — daraltmak için yazmaya devam et","gh.noRepos":"Eşleşen depo yok.",
  "gh.connectedAs":"bağlı",
- "wz.s1":"GitHub'a bağlan","wz.s2":"Depo seç","wz.s3":"Yayına al",
+ "app.switch":"Uygulama","app.add":"Uygulama ekle","app.remove":"Uygulamayı kaldır",
+ "app.removeConfirm":"“{n}” panelden kaldırılsın mı? Sunucudaki dosyalar (compose projesi, runner) korunur; depoyu yeniden eklersen aynı yollara bağlanır.",
+ "app.removed":"{n} kaldırıldı — diskte korunanlar: {p}",
+ "wiz.var":"Depo değişkeni","wiz.varDone":"APP_COMPOSE_PATH → {p}",
+ "wiz.varFail":"APP_COMPOSE_PATH ayarlanamadı — özel compose yolunda dağıtım yanlış projeye gider. Token'da Variables: write olmalı.",
+ "wz.s1":"GitHub'a bağlan","wz.s2":"Uygulama deposu ekle","wz.s3":"Yayına al",
  "wz.continue":"Devam →","wz.back":"← Geri","wz.changeRepo":"depoyu değiştir",
  "wz.hostPort":"Host portu (bu sunucuda, dışarı açık)","wz.ctrPort":"Konteyner portu (uygulamanın dinlediği)",
  "wz.ctrDetected":"Dockerfile'daki EXPOSE'dan algılandı ({p})",
@@ -931,6 +946,12 @@ const API_TR=[
  [/^Connect GitHub first\.$/,"Önce GitHub'ı bağla."],
  [/^(.+) already exists\.$/,(m)=>`${m[1]} zaten var.`],
  [/^A runner install is already in progress\.$/,"Zaten bir runner kurulumu sürüyor."],
+ [/^A runner install is already in progress \(app '(.+)'\)\.$/,(m)=>`Zaten bir runner kurulumu sürüyor ('${m[1]}' uygulaması).`],
+ [/^Unknown app '(.+)'\.$/,(m)=>`Bilinmeyen uygulama: '${m[1]}'.`],
+ [/^An app id is required\.$/,"Uygulama kimliği (id) gerekli."],
+ [/^This repository is already added as '(.+)'\.$/,(m)=>`Bu depo zaten '${m[1]}' olarak ekli.`],
+ [/^Compose file (.+) already belongs to app '(.+)'\.$/,(m)=>`${m[1]} compose dosyası zaten '${m[2]}' uygulamasına ait.`],
+ [/^Runner directory (.+) already belongs to app '(.+)'\.$/,(m)=>`${m[1]} runner dizini zaten '${m[2]}' uygulamasına ait.`],
  [/^Unknown app '(.*)'\.$/,(m)=>`Bilinmeyen uygulama: '${m[1]}'.`],
  [/^Host port must be between 1 and 65535\.$/,"Host portu 1-65535 arasında olmalı."],
  [/^'(.+)' is not a valid host port \(1-65535\)\.$/,(m)=>`'${m[1]}' geçerli bir host portu değil (1-65535).`],
@@ -1058,6 +1079,7 @@ function applyLang(){
   $("#banner-connect").innerHTML=t("banner.connect");
   $("#btn-logout").innerHTML=IC.logout+`<span class="btn-logout-txt">${t("tb.signout")}</span>`;
   $("#btn-refresh").innerHTML=IC.refresh;$("#btn-refresh").title=t("tb.refresh");
+  $("#app-switch").title=t("app.switch");$("#btn-add-app").title=t("app.add");
   $("#btn-nav-toggle").innerHTML=IC.menu;$("#btn-nav-toggle").title=t("tb.menu");
   $("#refresh-select").innerHTML=`<option value="5000">5s</option><option value="10000">10s</option><option value="30000">30s</option><option value="0">${t("tb.off")}</option>`;
   $("#refresh-select").value=String(refreshMs);
@@ -1262,12 +1284,12 @@ let runnerAutoStartTried=false;
 async function githubOverview(force){
   if(!ghConfigured)return null;
   if(!force&&ghCache&&Date.now()-ghCacheAt<8000)return ghCache;
-  ghCache=await api("/api/github/overview");ghCacheAt=Date.now();
+  ghCache=await api(withApp("/api/github/overview"));ghCacheAt=Date.now();
   return ghCache;
 }
 async function loadOverview(){
   const[containersR,composeR,systemR,ghR,statsR]=await Promise.allSettled([
-    api("/api/docker/containers"),api("/api/compose"),api("/api/system"),githubOverview(),api("/api/docker/stats")]);
+    api("/api/docker/containers"),api(withApp("/api/compose")),api("/api/system"),githubOverview(),api("/api/docker/stats")]);
   chartRes(statsR.status==="fulfilled"?statsR.value.items:null);
   if(containersR.status==="fulfilled"){
     const items=containersR.value.items;
@@ -1328,7 +1350,7 @@ function deployResultChip(r){
   const[k,l]=map[r]||["mut",r||"?"];return`<span class="chip ${k}">${esc(l)}</span>`;}
 async function loadDeployHistory(){
   try{
-    const[state,history]=await Promise.all([api("/api/deploy/state"),api("/api/deploy/history")]);
+    const[state,history]=await Promise.all([api(withApp("/api/deploy/state")),api(withApp("/api/deploy/history"))]);
     $("#dep-current").textContent=state.currentTag
       ?t("dh.current",{tag:shortTag(state.currentTag)})
       :"";
@@ -1357,7 +1379,7 @@ $("#dep-history-table").addEventListener("click",e=>{
     {label:t("dh.rollback"),danger:true,onClick:async()=>{
       closeModal();
       try{
-        const{jobId}=await api("/api/deploy/rollback",{method:"POST",body:JSON.stringify({tag})});
+        const{jobId}=await api(withApp("/api/deploy/rollback"),{method:"POST",body:JSON.stringify({tag})});
         toast(t("dh.rbStarted",{tag:shortTag(tag)}),"ok");
         const poll=setInterval(async()=>{
           try{
@@ -1374,7 +1396,7 @@ $("#dep-history-table").addEventListener("click",e=>{
 /* ---- compose project .env editor ---- */
 async function loadComposeEnv(){
   try{
-    const env=await api("/api/compose/env");
+    const env=await api(withApp("/api/compose/env"));
     $("#env-file").textContent=env.envFile;
     table($("#env-table"),[t("th.name"),"",""],
       env.items.map(i=>[
@@ -1386,7 +1408,7 @@ async function loadComposeEnv(){
 }
 $("#env-table").addEventListener("click",async e=>{
   const b=e.target.closest("button[data-env-rm]");if(!b)return;
-  try{await api("/api/compose/env",{method:"POST",body:JSON.stringify({remove:[b.dataset.envRm]})});
+  try{await api(withApp("/api/compose/env"),{method:"POST",body:JSON.stringify({remove:[b.dataset.envRm]})});
     toast(t("ev.removed",{k:b.dataset.envRm}),"ok");await loadComposeEnv();}
   catch(ex){toast(ex.message,"err");}
 });
@@ -1394,7 +1416,7 @@ $("#env-add").addEventListener("submit",async e=>{
   e.preventDefault();
   const key=$("#env-key").value.trim(),val=$("#env-val").value;
   if(!key)return;
-  try{await api("/api/compose/env",{method:"POST",body:JSON.stringify({set:{[key]:val}})});
+  try{await api(withApp("/api/compose/env"),{method:"POST",body:JSON.stringify({set:{[key]:val}})});
     $("#env-key").value="";$("#env-val").value="";
     toast(t("ev.saved",{k:key}),"ok");await loadComposeEnv();}
   catch(ex){toast(ex.message,"err");}
@@ -1404,7 +1426,7 @@ $("#env-apply").addEventListener("click",()=>{
     {label:t("c.cancel")},
     {label:t("ev.apply"),primary:true,onClick:async()=>{
       closeModal();
-      try{await api("/api/compose/apply",{method:"POST"});toast(t("ev.applied"),"ok");}
+      try{await api(withApp("/api/compose/apply"),{method:"POST"});toast(t("ev.applied"),"ok");}
       catch(ex){toast(ex.message,"err");}
     }}]);
 });
@@ -1441,7 +1463,7 @@ async function loadRunner(){
       <div>${(r.labels||[]).map(l=>`<span class="lbl">${esc(l)}</span>`).join("")}</div></div>`).join("");
   }catch(ex){cards.innerHTML=`<div class="card muted">${esc(ex.message)}</div>`;}
   try{
-    const l=await api("/api/runner/local");
+    const l=await api(withApp("/api/runner/local"));
     const svc=l.service
       ?`${esc(l.service.unit)} — <span class="chip ${l.service.activeState==="active"?"ok":"err"}">${esc(l.service.activeState||"?")}/${esc(l.service.subState||"?")}</span>${l.service.since?` · ${t("rn.since")}: ${esc(l.service.since)}`:""}`
       :t("rn.svcMissing");
@@ -1903,22 +1925,50 @@ async function loadSystem(){
   }catch(ex){$("#sys-docker").innerHTML=`<dt>Docker</dt><dd>${esc(ex.message)}</dd>`;}
 }
 
-/* ================= github view ================= */
+/* ================= github view / multi-app state ================= */
 let settingsCache=null;
+let apps=[],currentAppId=localStorage.getItem("pinqops.app")||null;
+const currentApp=()=>apps.find(a=>a.id===currentAppId)||null;
+// Per-app endpoints take ?appId=…; without it the server falls back to the
+// first app, so pre-upgrade tabs keep working.
+const withApp=p=>currentAppId?p+(p.includes("?")?"&":"?")+"appId="+encodeURIComponent(currentAppId):p;
+function renderAppSwitch(){
+  const sel=$("#app-switch");
+  sel.classList.toggle("hidden",apps.length<2);
+  $("#btn-add-app").classList.toggle("hidden",!(settingsCache&&settingsCache.patMasked));
+  sel.innerHTML=apps.map(a=>`<option value="${esc(a.id)}"${a.id===currentAppId?" selected":""}>${esc(a.fullName||a.id)}</option>`).join("");
+}
+function setCurrentApp(id,opts){
+  if(id===currentAppId&&!(opts&&opts.force))return;
+  currentAppId=id;
+  if(id)localStorage.setItem("pinqops.app",id);else localStorage.removeItem("pinqops.app");
+  ghCache=null;pubPortsSeededFor=null;stopPubPoll();
+  renderAppSwitch();
+  if(!(opts&&opts.quiet))refresh();
+}
+function applySettings(s){
+  settingsCache=s;
+  apps=s.apps||[];
+  if(!apps.some(a=>a.id===currentAppId))currentAppId=apps[0]?apps[0].id:null;
+  if(currentAppId)localStorage.setItem("pinqops.app",currentAppId);
+  renderAppSwitch();
+  const app=currentApp();
+  $("#set-repo").value=app?app.repoUrl:"";
+  $("#set-compose").value=app?app.composeFile:"";
+  $("#set-runnerdir").value=app?app.runnerDirectory:"";
+  $("#set-clientid").value=s.githubClientId||"";
+  $("#btn-app-remove").classList.toggle("hidden",!app);
+  if(s.version)$("#side-foot").textContent=`pinqops web ui v${s.version}`;
+  $("#settings-meta").textContent=`${t("se.configFile")}: ${s.configPath}`;
+  ghConfigured=!!(s.patMasked&&apps.length);
+  updateGhUi();
+}
+async function reloadSettings(){applySettings(await api("/api/settings"));}
 async function loadGithubView(){
   try{
-    const s=await api("/api/settings");
-    settingsCache=s;
-    $("#set-repo").value=s.repoUrl||"";
-    $("#set-compose").value=s.composeFile||"";
-    $("#set-runnerdir").value=s.runnerDirectory||"";
-    $("#set-clientid").value=s.githubClientId||"";
-    if(s.version)$("#side-foot").textContent=`pinqops web ui v${s.version}`;
-    $("#settings-meta").textContent=`${t("se.configFile")}: ${s.configPath}`;
-    ghConfigured=!!(s.repoUrl&&s.patMasked);
-    updateGhUi();
+    await reloadSettings();
     // The repo picker needs a token (the repo list comes from the account).
-    if(s.patMasked)loadIdentityAndRepos();
+    if(settingsCache.patMasked)loadIdentityAndRepos();
     else{$("#gh-identity").classList.add("hidden");renderRepoList([]);}
     syncWizard();
   }catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
@@ -1951,7 +2001,7 @@ function renderRepoList(items,filter){
   list.innerHTML=visible.map(r=>{
     const url=`https://github.com/${r.fullName}`;
     const role=r.admin?t("se.admin"):r.push?t("se.write"):t("se.read");
-    const connected=!!(settingsCache&&(settingsCache.fullName===r.fullName||settingsCache.repoUrl===url));
+    const connected=apps.some(a=>a.fullName===r.fullName||a.repoUrl===url);
     return`<div class="repo-row${url===selectedRepoUrl?" sel":""}" data-repo="${esc(url)}">
       <span class="rname">${esc(r.fullName)}</span>
       ${r.isPrivate?`<span class="chip mut">🔒 ${t("se.private")}</span>`:""}
@@ -1994,16 +2044,18 @@ $("#wiz-stepper").addEventListener("click",e=>{
 function syncWizard(){
   const connected=!!(settingsCache&&settingsCache.patMasked);
   $("#btn-step1-next").classList.toggle("hidden",!connected);
-  const hasRepo=!!(pendingRepoUrl||(settingsCache&&settingsCache.repoUrl));
+  const hasApp=!!(pendingRepoUrl||currentApp());
   // Never park the user on a step that lost its prerequisite; only
   // auto-advance out of step 1 (sign-in just completed), so a refresh never
   // yanks someone away from the repo list they are browsing.
   if(!connected)gotoStep(1);
-  else if(wizStep===1)gotoStep(hasRepo?3:2);
-  else if(wizStep===3&&!hasRepo)gotoStep(2);
+  else if(wizStep===1)gotoStep(hasApp?3:2);
+  else if(wizStep===3&&!hasApp)gotoStep(2);
   else gotoStep(wizStep);
 }
-$("#btn-step1-next").onclick=()=>gotoStep((pendingRepoUrl||(settingsCache&&settingsCache.repoUrl))?3:2);
+$("#btn-step1-next").onclick=()=>gotoStep((pendingRepoUrl||currentApp())?3:2);
+$("#app-switch").onchange=e=>setCurrentApp(e.target.value);
+$("#btn-add-app").onclick=()=>{pendingRepoUrl=null;setView("github");gotoStep(2);};
 $("#btn-step2-back").onclick=()=>gotoStep(1);
 $("#btn-step3-back").onclick=()=>{if(!pubBusy)gotoStep(2);};
 $("#lnk-change-repo").addEventListener("click",e=>{e.preventDefault();if(!pubBusy)gotoStep(2);});
@@ -2029,29 +2081,34 @@ const wizMark=(k,state,detail,spin)=>{
 /* --- step 3: pre-publish panel — ports form + readiness pre-seed --- */
 async function initPublishPanel(){
   if(pubBusy)return;
-  const repoUrl=pendingRepoUrl||(settingsCache&&settingsCache.repoUrl);
-  if(!repoUrl)return gotoStep(2);
-  $("#pub-repo-name").textContent=repoUrl.replace(/^https?:\/\/[^/]+\//,"");
-  $("#pub-live").innerHTML="";
-  // A repo picked in step 2 must be connected before publish-info and
-  // setup-status can describe it (both read the stored connection).
-  if(!settingsCache||settingsCache.repoUrl!==repoUrl){
-    try{
-      const r=await api("/api/settings",{method:"POST",body:JSON.stringify({repoUrl})});
-      ghCache=null;
-      settingsCache={...(settingsCache||{}),repoUrl,fullName:r.fullName};
-      $("#set-repo").value=repoUrl;
-      ghConfigured=true;updateGhUi();
-      renderRepoList(repoList,$("#repo-search").value);
-    }catch(ex){toast(ex.message,"err");return gotoStep(2);}
+  // A repo picked in step 2 becomes an app connection first (idempotent: an
+  // already-added repo just gets selected).
+  if(pendingRepoUrl){
+    const url=pendingRepoUrl;
+    const existing=apps.find(a=>a.repoUrl===url);
+    if(existing){pendingRepoUrl=null;setCurrentApp(existing.id,{quiet:true});}
+    else{
+      try{
+        const r=await api("/api/settings",{method:"POST",body:JSON.stringify({repoUrl:url})});
+        ghCache=null;pendingRepoUrl=null;
+        await reloadSettings();
+        setCurrentApp(r.appId,{quiet:true,force:true});
+        renderRepoList(repoList,$("#repo-search").value);
+      }catch(ex){toast(ex.message,"err");return gotoStep(2);}
+    }
   }
+  const app=currentApp();
+  if(!app)return gotoStep(2);
+  $("#pub-repo-name").textContent=app.fullName||app.repoUrl.replace(/^https?:\/\/[^/]+\//,"");
+  $("#pub-live").innerHTML="";
+  $("#wiz-summary").innerHTML="";$("#wiz-log").textContent=""; // a previous app's run must not linger
   let info=null,s=null;
-  try{[info,s]=await Promise.all([api("/api/setup/publish-info"),api("/api/setup/status")]);}
+  try{[info,s]=await Promise.all([api(withApp("/api/setup/publish-info")),api(withApp("/api/setup/status"))]);}
   catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
   if(info){
     pubInfoCache=info;
-    if(pubPortsSeededFor!==repoUrl){ // don't clobber values the user typed
-      pubPortsSeededFor=repoUrl;
+    if(pubPortsSeededFor!==app.id){ // don't clobber values the user typed
+      pubPortsSeededFor=app.id;
       $("#pub-hostport").value=info.currentHostPort??info.suggestedHostPort;
       $("#pub-ctrport").value=info.currentContainerPort??info.detectedContainerPort??info.fallbackContainerPort;
     }
@@ -2075,7 +2132,7 @@ async function initPublishPanel(){
     // the only thing a user ever runs is Publish — never a "start" button.
     if(s.runnerInstalled&&s.runnerServiceActive===false&&!runnerAutoStartTried){
       runnerAutoStartTried=true;
-      try{await api("/api/setup/start-runner",{method:"POST"});}catch{}
+      try{await api(withApp("/api/setup/start-runner"),{method:"POST"});}catch{}
     }
     if(s.runnerServiceActive===true)runnerAutoStartTried=false;
     // A token without Administration:read can't list runners — degrade the
@@ -2085,6 +2142,7 @@ async function initPublishPanel(){
     wizMark("connect","ok",esc((s.repo&&s.repo.fullName)||""));
     wizMark("dockerfile",s.repo.hasDockerfile?"ok":"warn",s.repo.hasDockerfile?t("wiz.ready"):t("su.dockerfileMiss"));
     wizMark("workflow",s.repo.hasWorkflow?"ok":"",s.repo.hasWorkflow?t("wiz.ready"):t("su.workflowMiss"));
+    wizMark("var","","");
     wizMark("compose",s.composeExists?"ok":"",s.composeExists?esc(s.composeFile):t("su.composeMiss",{p:esc(s.composeFile)}));
     wizMark("runner",runnerOk?"ok":"",runnerOk?t("wiz.ready"):"");
     wizMark("verify","","");wizMark("deploy","","");
@@ -2109,7 +2167,7 @@ function checkHostPort(){
   clearTimeout(portCheckTimer);
   portCheckTimer=setTimeout(async()=>{
     try{
-      const r=await api("/api/setup/port-check?port="+v);
+      const r=await api(withApp("/api/setup/port-check?port="+v));
       if(+$("#pub-hostport").value!==v)return; // the user typed on — stale answer
       hostPortOk=!!(r.valid&&r.available);
       hint.textContent=hostPortOk?"✓ "+t("wz.portFree",{p:v}):t("wz.portBusy",{p:v});
@@ -2133,7 +2191,7 @@ function startPubPoll(){
   stopPubPoll();
   const tick=async()=>{
     if(view!=="github"||wizStep!==3||pubBusy)return;
-    try{renderLive(await api("/api/setup/app-status"));}catch{}
+    try{renderLive(await api(withApp("/api/setup/app-status")));}catch{}
   };
   tick();
   pubTimer=setInterval(tick,5000);
@@ -2158,7 +2216,7 @@ function renderLive(st){
       <div>${esc(t("wz.stopped",{s:st.state}))} <a href="#" data-goto="containers">${esc(t("nav.containers"))} →</a></div></div>`;
     return;
   }
-  const repo=(settingsCache&&settingsCache.repoUrl||"").replace(/\/$/,"");
+  const repo=((currentApp()||{}).repoUrl||"").replace(/\/$/,"");
   el.innerHTML=`<div class="wait-card"><span class="spin" style="margin-top:3px"></span>
     <div>${esc(t("wz.waitingDeploy"))}${repo?` <a href="${esc(repo)}/actions" target="_blank" rel="noopener">${esc(t("wz.openActions"))}</a>`:""}</div></div>`;
 }
@@ -2173,7 +2231,8 @@ async function installRunnerWithProgress(say){
   let seen=0;
   const poll=async()=>{try{
     const p=await api("/api/setup/install-runner/progress");
-    if((p.generation||0)>gen0){
+    // Skip lines that belong to ANOTHER app's install (the buffer is shared).
+    if((p.generation||0)>gen0&&(!p.appId||p.appId===currentAppId)){
       const lines=(p.log||"").split("\n").filter(Boolean);
       for(;seen<lines.length;seen++)say(lines[seen]);
     }
@@ -2181,7 +2240,7 @@ async function installRunnerWithProgress(say){
   }catch{return null;}};
   const timer=setInterval(poll,2000);
   try{
-    const r=await api("/api/setup/install-runner",{method:"POST"});
+    const r=await api(withApp("/api/setup/install-runner"),{method:"POST"});
     await poll();
     return r;
   }catch(ex){
@@ -2195,7 +2254,7 @@ async function installRunnerWithProgress(say){
     for(let i=0;i<600;i++){ // up to 20 minutes — a runner install includes a large download
       await new Promise(res=>setTimeout(res,2000));
       const p=await poll();
-      if(p&&(p.generation||0)>gen0&&!p.active)return{succeeded:!!p.succeeded,log:p.log};
+      if(p&&(p.generation||0)>gen0&&(!p.appId||p.appId===currentAppId)&&!p.active)return{succeeded:!!p.succeeded,log:p.log};
       if(p&&(p.generation||0)<=gen0&&++stale>=3)break;
     }
     throw ex;
@@ -2205,7 +2264,8 @@ async function installRunnerWithProgress(say){
        Runs inline in step 3 (no modal); the chosen ports ride along. --- */
 async function runPublish(){
   if(pubBusy)return;
-  const repoUrl=pendingRepoUrl||(settingsCache&&settingsCache.repoUrl);
+  const app=currentApp();
+  const repoUrl=pendingRepoUrl||(app&&app.repoUrl);
   if(!repoUrl)return gotoStep(2);
   const hostPort=+$("#pub-hostport").value,ctrPort=+$("#pub-ctrport").value;
   pubBusy=true;stopPubPoll();
@@ -2222,15 +2282,12 @@ async function runPublish(){
 
   let failedAt=null;
   if(!await step("connect",async()=>{
+    // Idempotent upsert: same URL returns the existing app connection.
     const r=await api("/api/settings",{method:"POST",body:JSON.stringify({repoUrl})});
-    // The connected repository may have just changed. Everything derived from
-    // the old one — the header, the ✓ marker in the repo list — reads
-    // settingsCache, so leaving it stale keeps the UI on the previous repo.
     ghCache=null;
-    settingsCache={...(settingsCache||{}),repoUrl,fullName:r.fullName};
+    await reloadSettings();
+    setCurrentApp(r.appId,{quiet:true,force:true});
     selectedRepoUrl=repoUrl;
-    $("#set-repo").value=repoUrl;
-    ghConfigured=true;updateGhUi();
     renderRepoList(repoList,$("#repo-search").value);
     wizSay("✓ "+t("se.connected",{r:r.fullName}));
     return esc(r.fullName)+(r.isPrivate?" 🔒":"");
@@ -2238,7 +2295,7 @@ async function runPublish(){
 
   let s=null;
   if(!failedAt){
-    try{s=await api("/api/setup/status");}
+    try{s=await api(withApp("/api/setup/status"));}
     catch(ex){wizMark("dockerfile","err",esc(ex.message));wizSay("✗ "+ex.message);failedAt=t("wiz.check");}
   }
   if(s){
@@ -2247,13 +2304,24 @@ async function runPublish(){
 
     if(s.repo.hasWorkflow)wizMark("workflow","ok",t("wiz.ready"));
     else if(!await step("workflow",async()=>{
-      await api("/api/setup/create-workflow",{method:"POST"});ghCache=null;
+      await api(withApp("/api/setup/create-workflow"),{method:"POST"});ghCache=null;
       wizSay("✓ "+t("su.workflowDone"));return t("su.workflowDone");
     }))failedAt=failedAt||t("wiz.workflow");
 
-    if(!s.composeExists){
+    // Pin APP_COMPOSE_PATH every publish (idempotent) — with a non-default
+    // compose path the deploy would otherwise land on the wrong project.
+    if(!failedAt){
+      if(!await step("var",async()=>{
+        const r=await api(withApp("/api/setup/app-var"),{method:"POST"});
+        wizSay(`✓ ${r.name} = ${r.value}`);
+        return t("wiz.varDone",{p:esc(r.value)});
+      })){wizMark("var","err",t("wiz.varFail"));failedAt=failedAt||t("wiz.var");}
+    }else wizMark("var","warn");
+
+    if(failedAt){wizMark("compose","warn");wizMark("runner","warn");}
+    else if(!s.composeExists){
       if(!await step("compose",async()=>{
-        const r=await api("/api/setup/create-compose",{method:"POST",
+        const r=await api(withApp("/api/setup/create-compose"),{method:"POST",
           body:JSON.stringify({hostPort,containerPort:ctrPort})});
         wizSay("✓ "+t("su.composeDone"));
         return t("su.composeDone")+` — ${r.hostPort} → ${r.containerPort}`;
@@ -2262,19 +2330,20 @@ async function runPublish(){
       // The project exists but the user changed a port: write the .env (the
       // server re-validates) and recreate the container if one is running.
       if(!await step("compose",async()=>{
-        await api("/api/compose/env",{method:"POST",body:JSON.stringify({
+        await api(withApp("/api/compose/env"),{method:"POST",body:JSON.stringify({
           set:{PINQOPS_HOST_PORT:String(hostPort),PINQOPS_CONTAINER_PORT:String(ctrPort)}})});
         wizSay(`✓ .env → ${hostPort}:${ctrPort}`);
         try{
-          const st=await api("/api/setup/app-status");
-          if(st.state){await api("/api/compose/apply",{method:"POST"});wizSay("✓ "+t("ev.applied"));}
+          const st=await api(withApp("/api/setup/app-status"));
+          if(st.state){await api(withApp("/api/compose/apply"),{method:"POST"});wizSay("✓ "+t("ev.applied"));}
         }catch(ex){wizSay("! "+ex.message);}
         pubInfoCache={...pubInfoCache,currentHostPort:hostPort,currentContainerPort:ctrPort};
         return t("wz.portsApplied",{h:hostPort,c:ctrPort});
       }))failedAt=failedAt||t("wiz.compose");
     }else wizMark("compose","ok",t("wiz.ready"));
 
-    if(s.runnerInstalled&&(s.runnersError||s.runnersOnline>0))wizMark("runner","ok",t("wiz.ready"));
+    if(failedAt&&!s.runnerInstalled)wizMark("runner","warn");
+    else if(s.runnerInstalled&&(s.runnersError||s.runnersOnline>0))wizMark("runner","ok",t("wiz.ready"));
     else if(!await step("runner",async()=>{
       if(!s.runnerInstalled){
         if(s.runnerMismatch)wizSay("! "+t("wiz.replacingRunner",{r:s.runnerRegisteredTo||"?"}));
@@ -2282,7 +2351,7 @@ async function runPublish(){
         if(!r.succeeded)throw new Error(t("su.installBtn")+": "+t("c.failed"));
         return t("su.runnerDone");
       }
-      const r=await api("/api/setup/start-runner",{method:"POST"});
+      const r=await api(withApp("/api/setup/start-runner"),{method:"POST"});
       if(r.log)wizSay(r.log);
       if(!r.succeeded)throw new Error(t("su.startBtn")+": "+t("c.failed"));
       return t("su.started");
@@ -2290,7 +2359,7 @@ async function runPublish(){
 
     if(!failedAt){
       if(!await step("verify",async()=>{
-        const v=await api("/api/setup/status");
+        const v=await api(withApp("/api/setup/status"));
         if(!v.runnerInstalled)throw new Error(t("wiz.verifyFail"));
         if(v.runnersError)return t("wiz.verifyUnknown");
         if(v.runnersTotal>0)return t("wiz.runnerVerified",{n:v.runnersTotal});
@@ -2303,7 +2372,7 @@ async function runPublish(){
     if(!failedAt){
       wizMark("deploy","run",undefined,true);
       try{
-        const r=await api("/api/setup/trigger-deploy",{method:"POST"});
+        const r=await api(withApp("/api/setup/trigger-deploy"),{method:"POST"});
         wizMark("deploy","ok",t("wz.firstDeployStarted",{b:esc(r.branch)}));
         wizSay("✓ workflow_dispatch @ "+r.branch);
       }catch(ex){
@@ -2398,20 +2467,37 @@ $("#settings-form").addEventListener("submit",async e=>{
   e.preventDefault();
   if(!$("#set-repo").value.trim()){toast(t("se.pickFirst"),"err");return;}
   try{
+    const app=currentApp();
+    const url=$("#set-repo").value.trim();
     const r=await api("/api/settings",{method:"POST",body:JSON.stringify({
-      repoUrl:$("#set-repo").value.trim(),
+      // Editing the selected app's paths goes through its id; a different URL
+      // upserts by URL (existing app or a brand-new one).
+      appId:app&&app.repoUrl===url?app.id:null,
+      repoUrl:url,
       composeFile:$("#set-compose").value.trim()||null,
       runnerDirectory:$("#set-runnerdir").value.trim()||null,
       githubClientId:$("#set-clientid").value.trim()})});
     ghCache=null;
+    setCurrentApp(r.appId,{quiet:true,force:true});
     toast(t("se.connected",{r:r.fullName+(r.isPrivate?" ("+t("se.private")+")":"")}),"ok");
     await loadGithubView();
   }catch(ex){toast(ex.message,"err");}
 });
+$("#btn-app-remove").onclick=()=>{
+  const app=currentApp();if(!app)return;
+  openModal(t("app.remove"),esc(t("app.removeConfirm",{n:app.fullName||app.id})),[
+    {label:t("c.cancel")},{label:t("c.remove"),danger:true,onClick:async()=>{closeModal();
+      try{
+        const r=await api("/api/settings/apps/remove",{method:"POST",body:JSON.stringify({id:app.id})});
+        toast(t("app.removed",{n:app.fullName||app.id,p:(r.kept||[]).join(", ")}),"ok");
+        setCurrentApp(null,{quiet:true,force:true});
+        await loadGithubView();
+      }catch(ex){toast(ex.message,"err");}}}]);
+};
 /* ================= notifications settings ================= */
 async function loadNotifSettings(){
   try{
-    const n=await api("/api/notifications");
+    const n=await api(withApp("/api/notifications"));
     $("#nf-ev-ok").checked=n.events.deploySucceeded;$("#nf-ev-fail").checked=n.events.deployFailed;
     $("#nf-ev-health").checked=n.events.healthCheckFailed;$("#nf-ev-rb").checked=n.events.rolledBack;
     $("#nf-webhook-on").checked=n.webhook.enabled;$("#nf-webhook-url").value=n.webhook.url||"";
@@ -2422,7 +2508,7 @@ async function loadNotifSettings(){
   }catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
 }
 async function saveNotifSettings(){
-  await api("/api/notifications",{method:"POST",body:JSON.stringify({
+  await api(withApp("/api/notifications"),{method:"POST",body:JSON.stringify({
     events:{deploySucceeded:$("#nf-ev-ok").checked,deployFailed:$("#nf-ev-fail").checked,
             healthCheckFailed:$("#nf-ev-health").checked,rolledBack:$("#nf-ev-rb").checked},
     webhook:{enabled:$("#nf-webhook-on").checked,url:$("#nf-webhook-url").value.trim()},
@@ -2438,7 +2524,7 @@ for(const ch of["webhook","slack","telegram"]){
   $(`#nf-test-${ch}`).addEventListener("click",async()=>{
     try{
       await saveNotifSettings(); // test what's on screen, not stale disk state
-      const r=await api("/api/notifications/test",{method:"POST",body:JSON.stringify({channel:ch})});
+      const r=await api(withApp("/api/notifications/test"),{method:"POST",body:JSON.stringify({channel:ch})});
       toast(r.delivered?t("nf.testOk",{c:ch}):t("nf.testFail",{c:ch}),r.delivered?"ok":"err");
     }catch(ex){toast(ex.message,"err");}
   });

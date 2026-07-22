@@ -12,7 +12,10 @@ public sealed record SettingsRequest(
     string? Pat,
     string? ComposeFile,
     string? RunnerDirectory,
-    string? GithubClientId);
+    string? GithubClientId,
+    string? AppId);
+
+public sealed record AppRemoveRequest(string? Id);
 
 public sealed record TokenRequest(string? Pat, string? Username);
 

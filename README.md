@@ -49,10 +49,15 @@ host side pre-filled with a free port and validated live as you type — then
 commits the deploy workflow, generates the compose file, **registers the
 self-hosted runner** (replacing a leftover runner from another repository if
 it finds one), streams the install log live, verifies on GitHub that the
-runner actually appeared, and kicks off the first build & deploy via
-`workflow_dispatch`. Once the container is up, the wizard shows a live
-"your app is running" card that opens the app. Subsequent deploys happen the
-intended way: merge to your default branch.
+runner actually appeared, sets the `APP_COMPOSE_PATH` repository variable, and
+kicks off the first build & deploy via `workflow_dispatch`. Once the container
+is up, the wizard shows a live "your app is running" card that opens the app.
+Subsequent deploys happen the intended way: merge to your default branch.
+
+One server hosts **as many apps as you like**: repeat step 2 for each
+repository (the topbar's app switcher jumps between them) — every app gets its
+own compose project under `/opt/pinqops/apps/<app>/`, its own deploy history,
+`.env`, notifications, and its own runner.
 
 There is also a curated catalog of ~50 one-click apps (Redis, PostgreSQL,
 Grafana, MinIO, …) — installed with generated passwords (retrievable in the

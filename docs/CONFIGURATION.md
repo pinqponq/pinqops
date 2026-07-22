@@ -11,7 +11,7 @@ itself. This page lists the knobs that exist.
 | `<compose-dir>/.env` | `pinqops deploy`/`rollback`, dashboard env editor | 0600 | `PINQOPS_IMAGE`, `PINQOPS_TAG`, `PINQOPS_HOST_PORT`, `PINQOPS_CONTAINER_PORT` + your app env |
 | `<compose-dir>/.pinqops/history.json` | deploy engine | 0600 | Deploy history (newest first, capped at 100) |
 | `<compose-dir>/.pinqops/notify.json` | dashboard (read by the CLI) | 0600 | Notification channels + event toggles |
-| `~/.config/pinqops/ui.json` | dashboard | 0600 | Dashboard password hash, GitHub connection (PAT) |
+| `~/.config/pinqops/ui.json` | dashboard | 0600 | Dashboard password hash, GitHub token (PAT), and the list of connected apps (`apps: [{id, repoUrl, composeFile, runnerDirectory}]`). A pre-multi-app config (single top-level `RepoUrl`) is migrated automatically on first load — the existing app keeps its paths; don't downgrade the binary after adding more apps. |
 | `~/.config/pinqops/app-credentials.json` | dashboard | 0600 | Generated catalog app credentials |
 
 ## The compose project pinqops generates

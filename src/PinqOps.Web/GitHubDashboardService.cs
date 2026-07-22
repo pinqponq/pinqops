@@ -26,14 +26,12 @@ public sealed class GitHubDashboardService : IDisposable
         _ownsClient = httpClient is null;
     }
 
-    public bool IsConfigured
-    {
-        get
-        {
-            var config = _configStore.Current;
-            return !string.IsNullOrWhiteSpace(config.RepoUrl) && !string.IsNullOrWhiteSpace(config.Pat);
-        }
-    }
+    /// <summary>Whether a GitHub token is stored (account-level).</summary>
+    public bool HasToken => !string.IsNullOrWhiteSpace(_configStore.Current.Pat);
+
+    /// <summary>Whether <paramref name="app"/> can talk to GitHub.</summary>
+    public bool IsConfiguredFor(AppConnection app) =>
+        HasToken && !string.IsNullOrWhiteSpace(app.RepoUrl);
 
     /// <summary>Validates a candidate connection by fetching the repository.</summary>
     public async Task<JsonElement> TestConnectionAsync(string repoUrl, string? username, string pat)
@@ -107,9 +105,9 @@ public sealed class GitHubDashboardService : IDisposable
     /// Readiness check for the connected repository: does it have the files the
     /// pipeline needs (Dockerfile, deploy workflow)?
     /// </summary>
-    public async Task<object> CheckRepoSetupAsync()
+    public async Task<object> CheckRepoSetupAsync(AppConnection app)
     {
-        var (repository, auth) = Context();
+        var (repository, auth) = Context(app);
         var basePath = $"/repos/{repository.Owner}/{repository.Name}";
         var repo = await GetAsync(repository, auth, basePath).ConfigureAwait(false);
 
@@ -131,9 +129,9 @@ public sealed class GitHubDashboardService : IDisposable
     /// <see cref="CreateWorkflowFileAsync"/> commits to, and therefore the only
     /// branch a generated workflow may be triggered on.
     /// </summary>
-    public async Task<string> GetDefaultBranchAsync()
+    public async Task<string> GetDefaultBranchAsync(AppConnection app)
     {
-        var (repository, auth) = Context();
+        var (repository, auth) = Context(app);
         var repo = await GetAsync(repository, auth, $"/repos/{repository.Owner}/{repository.Name}")
             .ConfigureAwait(false);
         var branch = GetString(repo, "default_branch");
@@ -146,9 +144,9 @@ public sealed class GitHubDashboardService : IDisposable
     }
 
     /// <summary>Commits the deploy workflow into the connected repository.</summary>
-    public async Task<object> CreateWorkflowFileAsync(string yamlContent)
+    public async Task<object> CreateWorkflowFileAsync(AppConnection app, string yamlContent)
     {
-        var (repository, auth) = Context();
+        var (repository, auth) = Context(app);
         var path = $"/repos/{repository.Owner}/{repository.Name}/contents/.github/workflows/deploy.yml";
         var body = JsonSerializer.Serialize(new
         {
@@ -166,18 +164,38 @@ public sealed class GitHubDashboardService : IDisposable
     /// <paramref name="branch"/> — how the wizard starts the first deploy
     /// without waiting for a push.
     /// </summary>
-    public async Task TriggerDeployWorkflowAsync(string branch)
+    public async Task TriggerDeployWorkflowAsync(AppConnection app, string branch)
     {
-        var (repository, auth) = Context();
+        var (repository, auth) = Context(app);
         var path = $"/repos/{repository.Owner}/{repository.Name}/actions/workflows/deploy.yml/dispatches";
         var body = JsonSerializer.Serialize(new { @ref = branch });
         await SendAsync(repository, auth, HttpMethod.Post, path, body).ConfigureAwait(false);
     }
 
-    /// <summary>Just the repository's self-hosted runners (for the setup check).</summary>
-    public async Task<(int Online, int Total)> GetRunnersSummaryAsync()
+    /// <summary>
+    /// Creates or updates a repository Actions variable (POST; 409 "already
+    /// exists" → PATCH). How the wizard pins APP_COMPOSE_PATH per repository.
+    /// </summary>
+    public async Task SetRepositoryVariableAsync(AppConnection app, string name, string value)
     {
-        var (repository, auth) = Context();
+        var (repository, auth) = Context(app);
+        var basePath = $"/repos/{repository.Owner}/{repository.Name}/actions/variables";
+        var body = JsonSerializer.Serialize(new { name, value });
+        try
+        {
+            await SendAsync(repository, auth, HttpMethod.Post, basePath, body).ConfigureAwait(false);
+        }
+        catch (GitHubApiException exception) when (exception.StatusCode == 409)
+        {
+            await SendAsync(repository, auth, HttpMethod.Patch, $"{basePath}/{Uri.EscapeDataString(name)}", body)
+                .ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Just the repository's self-hosted runners (for the setup check).</summary>
+    public async Task<(int Online, int Total)> GetRunnersSummaryAsync(AppConnection app)
+    {
+        var (repository, auth) = Context(app);
         var payload = await GetAsync(
                 repository, auth, $"/repos/{repository.Owner}/{repository.Name}/actions/runners?per_page=100")
             .ConfigureAwait(false);
@@ -194,9 +212,9 @@ public sealed class GitHubDashboardService : IDisposable
     /// failures propagate so the caller can log them and decide — this is a hint,
     /// and callers fall back to a default rather than fail.
     /// </remarks>
-    public async Task<int?> GetDockerfileExposedPortAsync()
+    public async Task<int?> GetDockerfileExposedPortAsync(AppConnection app)
     {
-        var (repository, auth) = Context();
+        var (repository, auth) = Context(app);
 
         JsonElement payload;
         try
@@ -266,9 +284,9 @@ public sealed class GitHubDashboardService : IDisposable
     /// that actually executed on one of those runners ("when did the runner
     /// last run").
     /// </summary>
-    public async Task<object> GetOverviewAsync(int runCount = 20)
+    public async Task<object> GetOverviewAsync(AppConnection app, int runCount = 20)
     {
-        var (repository, auth) = Context();
+        var (repository, auth) = Context(app);
         var basePath = $"/repos/{repository.Owner}/{repository.Name}";
 
         var repoTask = GetAsync(repository, auth, basePath);
@@ -440,15 +458,15 @@ public sealed class GitHubDashboardService : IDisposable
         return result;
     }
 
-    private (GitHubRepository Repository, AuthenticationHeaderValue Auth) Context()
+    private (GitHubRepository Repository, AuthenticationHeaderValue Auth) Context(AppConnection app)
     {
         var config = _configStore.Current;
-        if (string.IsNullOrWhiteSpace(config.RepoUrl) || string.IsNullOrWhiteSpace(config.Pat))
+        if (string.IsNullOrWhiteSpace(app.RepoUrl) || string.IsNullOrWhiteSpace(config.Pat))
         {
             throw new InvalidOperationException("GitHub is not connected yet — add the repository and token in Settings.");
         }
 
-        return (GitHubRepositoryParser.Parse(config.RepoUrl), Credentials(config.Username, config.Pat));
+        return (GitHubRepositoryParser.Parse(app.RepoUrl), Credentials(config.Username, config.Pat));
     }
 
     private static AuthenticationHeaderValue Credentials(string? username, string pat) =>
@@ -471,7 +489,7 @@ public sealed class GitHubDashboardService : IDisposable
     /// </summary>
     private string DefaultApiBase()
     {
-        var repoUrl = _configStore.Current.RepoUrl;
+        var repoUrl = _configStore.Current.Apps.FirstOrDefault()?.RepoUrl;
         if (!string.IsNullOrWhiteSpace(repoUrl))
         {
             try
