@@ -19,6 +19,10 @@ public sealed record AppRemoveRequest(string? Id);
 
 public sealed record CreateDockerfileRequest(string? Content, string? Dir);
 
+public sealed record ProxyInstallRequest(string? AcmeEmail, bool? Staging, bool? Force);
+
+public sealed record DomainRequest(string? Domain, string? Target, int? TargetPort);
+
 public sealed record TokenRequest(string? Pat, string? Username);
 
 public sealed record DeviceStartRequest(string? ClientId);

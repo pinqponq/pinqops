@@ -33,4 +33,42 @@ public class DockerServiceInstallTests
         var run = runner.Invocations.Single(invocation => invocation.Arguments.Contains("run"));
         Assert.Contains("discovery.type=single-node", run.Arguments);
     }
+
+    [Fact]
+    public async Task InstallProxyAsync_PublishesTheWebPortsAndMountsTheCaddyfile()
+    {
+        var runner = new FakeProcessRunner();
+        var docker = new DockerService(runner);
+
+        await docker.InstallProxyAsync("pinqops-proxy", "caddy:2-alpine", "/opt/pinqops/proxy/Caddyfile");
+
+        var run = runner.Invocations.Single(invocation => invocation.Arguments.Contains("run"));
+        Assert.Equal("docker", run.FileName);
+        Assert.Contains("80:80", run.Arguments);
+        Assert.Contains("443:443", run.Arguments);
+        Assert.Contains("443:443/udp", run.Arguments);
+        Assert.Contains("/opt/pinqops/proxy/Caddyfile:/etc/caddy/Caddyfile:ro", run.Arguments);
+        Assert.Contains("pinqops-proxy-data:/data", run.Arguments);
+        Assert.Contains("caddy:2-alpine", run.Arguments);
+    }
+
+    [Fact]
+    public async Task ExecAsync_RunsTheArgvInsideTheContainer()
+    {
+        var runner = new FakeProcessRunner();
+        var docker = new DockerService(runner);
+
+        await docker.ExecAsync("pinqops-proxy", "caddy", "reload", "--config", "/etc/caddy/Caddyfile");
+
+        var exec = runner.Invocations.Single(invocation => invocation.Arguments.Contains("exec"));
+        Assert.Equal(["exec", "--", "pinqops-proxy", "caddy", "reload", "--config", "/etc/caddy/Caddyfile"], exec.Arguments);
+    }
+
+    [Fact]
+    public async Task ExecAsync_RejectsAFlagLikeContainerName()
+    {
+        var docker = new DockerService(new FakeProcessRunner());
+
+        await Assert.ThrowsAsync<ArgumentException>(() => docker.ExecAsync("--rm", "sh"));
+    }
 }

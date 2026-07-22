@@ -206,6 +206,52 @@ public sealed class DockerService
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
+    /// <summary>Runs a command inside a running container (docker exec). The
+    /// container name is validated; the command is an argv, not a shell string.</summary>
+    public async Task<string> ExecAsync(string container, params string[] command)
+    {
+        ValidateResourceName(container);
+        var arguments = new List<string> { "exec", "--", container };
+        arguments.AddRange(command);
+        var result = await RunAsync([.. arguments]).ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
+    /// <summary>Whether a container exists and, if so, whether it is running.</summary>
+    public async Task<(bool Exists, bool Running)> ContainerStateAsync(string name)
+    {
+        ValidateResourceName(name);
+        var result = await RunAsync("inspect", "-f", "{{.State.Running}}", "--", name).ConfigureAwait(false);
+        return result.Succeeded ? (true, result.StandardOutput.Trim() == "true") : (false, false);
+    }
+
+    /// <summary>
+    /// Starts the managed reverse-proxy container: publishes 80/443 (TCP + UDP
+    /// for HTTP/3), mounts the generated Caddyfile read-only, and keeps its ACME
+    /// certificate/config in named volumes so a reinstall does not re-issue certs.
+    /// </summary>
+    public async Task<string> InstallProxyAsync(string container, string image, string caddyfilePath)
+    {
+        await EnsureSharedNetworkAsync().ConfigureAwait(false);
+        string[] arguments =
+        [
+            "run", "-d",
+            "--name", container,
+            "--restart", "unless-stopped",
+            "--network", AppCatalog.SharedNetwork,
+            "-p", "80:80", "-p", "443:443", "-p", "443:443/udp",
+            "-v", $"{caddyfilePath}:/etc/caddy/Caddyfile:ro",
+            "-v", $"{container}-data:/data",
+            "-v", $"{container}-config:/config",
+            image,
+        ];
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        var result = await _processRunner.RunAsync("docker", arguments, workingDirectory: null, cts.Token)
+            .ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
     public async Task EnsureSharedNetworkAsync()
     {
         var inspect = await RunAsync("network", "inspect", AppCatalog.SharedNetwork).ConfigureAwait(false);

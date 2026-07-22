@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.RateLimiting;
 using PinqOps;
+using PinqOps.Proxy;
 using PinqOps.Web;
 using static System.Globalization.CultureInfo;
 
@@ -77,6 +78,7 @@ builder.Services.AddSingleton<UiConfigStore>();
 builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddSingleton<DockerService>();
+builder.Services.AddSingleton<ProxyService>();
 builder.Services.AddSingleton<GitHubDashboardService>();
 builder.Services.AddSingleton<GitHubDeviceFlow>();
 builder.Services.AddSingleton<LocalRunnerService>();
@@ -1414,6 +1416,123 @@ app.MapPost("/api/compose/apply", (HttpContext context, UiConfigStore store, IPr
         return new { ok = true, output = result.StandardOutput.Trim() };
     }));
 
+// ---- Reverse proxy & domains ----------------------------------------------------
+
+app.MapGet("/api/proxy/status", (ProxyService proxy) => Safe(async () => await proxy.StatusAsync()));
+
+app.MapPost("/api/proxy/install", (HttpContext context, ProxyService proxy) =>
+    Safe(async () =>
+    {
+        ProxyInstallRequest? request;
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync<ProxyInstallRequest>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            request = null;
+        }
+
+        return await proxy.InstallAsync(request?.AcmeEmail, request?.Staging ?? false, request?.Force ?? false);
+    }));
+
+app.MapGet("/api/domains", (UiConfigStore store, ProxyService proxy, DockerService docker) =>
+    Safe(async () =>
+    {
+        var config = proxy.Store.Load();
+        var appConfig = store.Current;
+        var items = new List<object>();
+        foreach (var entry in config.Domains)
+        {
+            var (_, running) = await docker.ContainerStateAsync(entry.TargetContainer);
+            // Drift: the app was renamed or its container port changed, so the
+            // stored route now points at the wrong container/port.
+            var drift = false;
+            try
+            {
+                var (container, port) = ResolveDomainTarget(appConfig, entry.Target, null);
+                drift = container != entry.TargetContainer || port != entry.TargetPort;
+            }
+            catch (ArgumentException)
+            {
+                drift = true; // the target app no longer exists
+            }
+
+            items.Add(new
+            {
+                entry.Domain,
+                entry.Target,
+                entry.TargetContainer,
+                entry.TargetPort,
+                entry.Enabled,
+                running,
+                drift,
+                url = $"https://{entry.Domain}",
+            });
+        }
+
+        return new { items };
+    }));
+
+app.MapGet("/api/domains/check", (HttpContext context, ProxyService proxy) =>
+    Safe(async () => await proxy.CheckDnsAsync(context.Request.Query["domain"].ToString())));
+
+app.MapPost("/api/domains", (HttpContext context, UiConfigStore store, ProxyService proxy) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<DomainRequest>()
+            ?? throw new ArgumentException("Invalid request body.");
+        var domain = DomainName.Normalize(request.Domain);
+        if (string.IsNullOrWhiteSpace(request.Target))
+        {
+            throw new ArgumentException("A target is required.");
+        }
+
+        var (container, port) = ResolveDomainTarget(store.Current, request.Target, request.TargetPort);
+        var dns = await proxy.CheckDnsAsync(domain);
+
+        var config = proxy.Store.Load();
+        config.Domains.RemoveAll(d => string.Equals(d.Domain, domain, StringComparison.Ordinal));
+        config.Domains.Add(new DomainEntry
+        {
+            Domain = domain,
+            Target = request.Target,
+            TargetContainer = container,
+            TargetPort = port,
+            Enabled = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
+        proxy.Store.Save(config);
+        await proxy.ApplyAsync();
+
+        logger.LogWarning("Domain {Domain} → {Container}:{Port}", domain, container, port);
+        return new { ok = true, domain, dnsMatches = dns.Matches, resolvedIps = dns.ResolvedIps, serverIps = dns.ServerIps };
+    }));
+
+app.MapPost("/api/domains/{domain}/toggle", (string domain, ProxyService proxy) =>
+    Safe(async () =>
+    {
+        var normalized = domain.Trim().ToLowerInvariant();
+        var config = proxy.Store.Load();
+        var entry = config.Domains.FirstOrDefault(d => string.Equals(d.Domain, normalized, StringComparison.Ordinal))
+            ?? throw new ArgumentException($"Unknown domain '{domain}'.");
+        entry.Enabled = !entry.Enabled;
+        proxy.Store.Save(config);
+        await proxy.ApplyAsync();
+        return new { ok = true, enabled = entry.Enabled };
+    }));
+
+app.MapPost("/api/domains/{domain}/delete", (string domain, ProxyService proxy) =>
+    Safe(async () =>
+    {
+        var normalized = domain.Trim().ToLowerInvariant();
+        var config = proxy.Store.Load();
+        config.Domains.RemoveAll(d => string.Equals(d.Domain, normalized, StringComparison.Ordinal));
+        proxy.Store.Save(config);
+        await proxy.ApplyAsync();
+        return new { ok = true };
+    }));
+
 // ---- Notifications --------------------------------------------------------------
 
 app.MapGet("/api/notifications", (HttpContext context, UiConfigStore store) =>
@@ -1593,6 +1712,29 @@ static int? ParseFirstHostPort(string portsColumn)
 {
     var match = System.Text.RegularExpressions.Regex.Match(portsColumn ?? "", @":(\d+)->");
     return match.Success && int.TryParse(match.Groups[1].Value, out var port) ? port : null;
+}
+
+/// <summary>The container name and port a domain target resolves to. Target is
+/// an app id (→ that app's compose container) or "catalog:&lt;id&gt;" (→ a catalog
+/// container). An optional requested port overrides the default.</summary>
+static (string Container, int Port) ResolveDomainTarget(UiConfig config, string target, int? requestedPort)
+{
+    if (target.StartsWith("catalog:", StringComparison.Ordinal))
+    {
+        var id = target["catalog:".Length..];
+        var spec = AppCatalog.Find(id) ?? throw new ArgumentException($"Unknown app '{id}'.");
+        var catalogPort = requestedPort
+            ?? (spec.Ports.Length > 0 ? spec.Ports[0].Container : throw new ArgumentException("This app exposes no port to route to."));
+        return ($"{AppCatalog.ContainerPrefix}{id}", catalogPort);
+    }
+
+    var connection = config.Apps.FirstOrDefault(a => string.Equals(a.Id, target, StringComparison.OrdinalIgnoreCase))
+        ?? throw new ArgumentException($"Unknown app '{target}'.");
+    var repository = GitHubRepositoryParser.Parse(connection.RepoUrl);
+    var container = $"{ComposeProjectName.FromRepository(repository.Name)}-app-1";
+    var envPort = TryParsePort(
+        EnvFileStore.GetValue(PinqOpsStatePaths.EnvFile(connection.ComposeFile), SetupTemplates.ContainerPortVariable));
+    return (container, requestedPort ?? envPort ?? DockerfileInspector.DefaultPort);
 }
 
 /// <summary>Whether <paramref name="path"/> is a build manifest directly in the

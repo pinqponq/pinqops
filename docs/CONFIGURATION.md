@@ -13,6 +13,21 @@ itself. This page lists the knobs that exist.
 | `<compose-dir>/.pinqops/notify.json` | dashboard (read by the CLI) | 0600 | Notification channels + event toggles |
 | `~/.config/pinqops/ui.json` | dashboard | 0600 | Dashboard password hash, GitHub token (PAT), and the list of connected apps (`apps: [{id, repoUrl, composeFile, runnerDirectory}]`). A pre-multi-app config (single top-level `RepoUrl`) is migrated automatically on first load — the existing app keeps its paths; don't downgrade the binary after adding more apps. |
 | `~/.config/pinqops/app-credentials.json` | dashboard | 0600 | Generated catalog app credentials |
+| `/opt/pinqops/proxy/domains.json` | dashboard (read by the runner CLI) | 0600 | Managed-proxy domain routes + ACME settings |
+| `/opt/pinqops/proxy/Caddyfile` | dashboard | 0644 | Generated from `domains.json`; mounted read-only into the `pinqops-proxy` container |
+
+## Domains & HTTPS (optional reverse proxy)
+
+The **Domains** page installs a managed Caddy container (`pinqops-proxy`) that
+publishes ports 80/443 and gives your apps real domains with automatic Let's
+Encrypt certificates (HTTP/3 included). It forwards to each app by container
+name over the shared `pinqops-apps` network — `reverse_proxy <repo>-app-1:<port>`
+— so domain access and the plain `host:port` publish coexist. A DNS preflight
+warns when a domain does not yet point at this server, and a staging-CA toggle
+lets you validate the setup without hitting Let's Encrypt's rate limits.
+Catalog apps (Grafana, etc.) can take domains the same way. The dashboard's own
+port (7467) stays direct, so the control plane is reachable even if the proxy is
+down.
 
 ## The compose project pinqops generates
 

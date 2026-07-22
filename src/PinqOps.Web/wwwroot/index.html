@@ -553,6 +553,27 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
         </div>
       </section>
 
+      <!-- domains: managed reverse proxy + custom domains with auto-TLS -->
+      <section id="view-domains" class="view hidden">
+        <div class="card" id="proxy-card">
+          <h3 data-i18n="dm.title">Domains &amp; HTTPS</h3>
+          <div id="proxy-body"></div>
+        </div>
+        <div class="card hidden" id="domains-card" style="margin-top:16px">
+          <div class="section-head"><h2 data-i18n="dm.add">Add a domain</h2></div>
+          <div class="form-grid">
+            <div><label for="dm-domain" data-i18n="dm.domainLbl">Domain</label>
+              <input id="dm-domain" placeholder="app.example.com" spellcheck="false">
+              <div class="port-hint" id="dm-dns-hint"></div></div>
+            <div><label for="dm-target" data-i18n="dm.targetLbl">Routes to</label>
+              <select id="dm-target"></select>
+              <div class="port-hint muted" id="dm-target-note"></div></div>
+          </div>
+          <div style="margin-top:12px"><button class="primary" id="btn-dm-add" data-i18n="dm.addBtn">Add domain</button></div>
+          <div class="tablewrap" style="margin-top:16px"><table id="domains-table"></table></div>
+        </div>
+      </section>
+
       <!-- settings: local dashboard preferences only -->
       <section id="view-settings" class="view hidden">
         <div class="card">
@@ -631,7 +652,23 @@ en:{
  "nav.grp.monitor":"Monitor","nav.grp.docker":"Docker","nav.grp.server":"Server","nav.grp.github":"Publishing",
  "nav.overview":"Overview","nav.deployments":"Deployments","nav.runner":"Runner","nav.containers":"Containers",
  "nav.images":"Images","nav.storage":"Storage","nav.networks":"Networks","nav.system":"System","nav.settings":"Settings",
- "nav.apps":"Apps","nav.github":"GitHub",
+ "nav.apps":"Apps","nav.github":"GitHub","nav.domains":"Domains",
+ "dm.title":"Domains & HTTPS","dm.installHelp":"Install a managed reverse proxy (Caddy) to give your apps real domains with automatic Let's Encrypt HTTPS. It publishes ports 80 and 443; your apps stay reachable on their host ports too.",
+ "dm.portBusy":"Port 80 or 443 is already in use on this server — free it (is another web server running?) before installing.",
+ "dm.probeUnreliable":"(pinqops may lack permission to bind these ports; you can install anyway.)",
+ "dm.email":"Let's Encrypt e-mail (recommended)","dm.staging":"Use staging CA (testing — untrusted certs, no rate limit)",
+ "dm.installBtn":"Install proxy","dm.installed":"Proxy installed","dm.running":"proxy running","dm.stopped":"proxy stopped",
+ "dm.noEmail":"no ACME e-mail set","dm.stagingOn":"staging CA","dm.domainsN":"{n} domain(s)",
+ "dm.add":"Add a domain","dm.domainLbl":"Domain","dm.targetLbl":"Routes to","dm.addBtn":"Add domain","dm.catalog":"catalog",
+ "dm.noTargets":"deploy an app first","dm.drift":"drifted","dm.driftHint":"The target's container or port changed — remove and re-add this domain.",
+ "dm.up":"up","dm.down":"down","dm.enabled":"enabled","dm.disabled":"disabled","dm.enable":"Enable","dm.disable":"Disable",
+ "dm.thDomain":"Domain","dm.thTarget":"Target","dm.thContainer":"Container","dm.thRunning":"Live","dm.thState":"State",
+ "dm.none":"No domains yet.","dm.rmTitle":"Remove domain","dm.rmConfirm":"Remove the route for {d}? Its certificate is kept by the proxy.",
+ "dm.domainReq":"Enter a domain.","dm.targetReq":"Pick a target.","dm.added":"{d} added — HTTPS will be issued shortly",
+ "dm.addedDnsWarn":"{d} added, but its DNS does not point here yet — the certificate will fail until it does",
+ "dm.dnsOk":"✓ resolves to this server ({ip})","dm.dnsMismatch":"resolves to {ips}, not this server ({srv}) — point DNS here first",
+ "dm.dnsNone":"does not resolve yet — add a DNS A record pointing here",
+ "wz.wantDomain":"Want a custom domain with HTTPS?","wz.addDomain":"add a domain →",
  "gh.locked":"Not connected — click to sign in","gh.pickTitle":"Set up a repository",
  "gh.pickHelp":"Search your repositories and pick the one to publish — the next step readies everything (workflow, compose project, runner) automatically.",
  "gh.moreRepos":"{n} more — keep typing to narrow down","gh.noRepos":"No repository matches.",
@@ -785,7 +822,23 @@ tr:{
  "nav.grp.monitor":"İzleme","nav.grp.docker":"Docker","nav.grp.server":"Sunucu","nav.grp.github":"Yayınlama",
  "nav.overview":"Genel Bakış","nav.deployments":"Dağıtımlar","nav.runner":"Runner","nav.containers":"Konteynerler",
  "nav.images":"İmajlar","nav.storage":"Depolama","nav.networks":"Ağlar","nav.system":"Sistem","nav.settings":"Ayarlar",
- "nav.apps":"Uygulamalar","nav.github":"GitHub",
+ "nav.apps":"Uygulamalar","nav.github":"GitHub","nav.domains":"Alan adları",
+ "dm.title":"Alan adları & HTTPS","dm.installHelp":"Uygulamalarına otomatik Let's Encrypt HTTPS ile gerçek alan adları vermek için yönetilen bir reverse proxy (Caddy) kur. 80 ve 443 portlarını yayınlar; uygulamaların host portlarından da erişilebilir kalır.",
+ "dm.portBusy":"Bu sunucuda 80 veya 443 portu zaten kullanımda — kurmadan önce boşalt (başka bir web sunucusu mu çalışıyor?).",
+ "dm.probeUnreliable":"(pinqops bu portları bağlama yetkisine sahip olmayabilir; yine de kurabilirsin.)",
+ "dm.email":"Let's Encrypt e-postası (önerilir)","dm.staging":"Staging CA kullan (test — güvenilmeyen sertifika, limitsiz)",
+ "dm.installBtn":"Proxy'yi kur","dm.installed":"Proxy kuruldu","dm.running":"proxy çalışıyor","dm.stopped":"proxy durdu",
+ "dm.noEmail":"ACME e-postası ayarlı değil","dm.stagingOn":"staging CA","dm.domainsN":"{n} alan adı",
+ "dm.add":"Alan adı ekle","dm.domainLbl":"Alan adı","dm.targetLbl":"Yönlendirilecek","dm.addBtn":"Alan adı ekle","dm.catalog":"katalog",
+ "dm.noTargets":"önce bir uygulama yayına al","dm.drift":"kaymış","dm.driftHint":"Hedefin konteyneri veya portu değişti — bu alan adını kaldırıp yeniden ekle.",
+ "dm.up":"ayakta","dm.down":"kapalı","dm.enabled":"etkin","dm.disabled":"devre dışı","dm.enable":"Etkinleştir","dm.disable":"Devre dışı bırak",
+ "dm.thDomain":"Alan adı","dm.thTarget":"Hedef","dm.thContainer":"Konteyner","dm.thRunning":"Çalışıyor","dm.thState":"Durum",
+ "dm.none":"Henüz alan adı yok.","dm.rmTitle":"Alan adını kaldır","dm.rmConfirm":"{d} yönlendirmesi kaldırılsın mı? Sertifikası proxy'de korunur.",
+ "dm.domainReq":"Bir alan adı gir.","dm.targetReq":"Bir hedef seç.","dm.added":"{d} eklendi — HTTPS birazdan verilecek",
+ "dm.addedDnsWarn":"{d} eklendi ama DNS henüz buraya işaret etmiyor — işaret edene kadar sertifika alınamaz",
+ "dm.dnsOk":"✓ bu sunucuya çözülüyor ({ip})","dm.dnsMismatch":"{ips} adresine çözülüyor, bu sunucuya değil ({srv}) — önce DNS'i buraya yönlendir",
+ "dm.dnsNone":"henüz çözülmüyor — buraya işaret eden bir DNS A kaydı ekle",
+ "wz.wantDomain":"HTTPS'li özel alan adı ister misin?","wz.addDomain":"alan adı ekle →",
  "gh.locked":"Bağlı değil — giriş için tıkla","gh.pickTitle":"Depo kur",
  "gh.pickHelp":"Depolarında ara ve yayınlayacağını seç — sonraki adım her şeyi (workflow, compose projesi, runner) otomatik hazırlar.",
  "gh.moreRepos":"{n} depo daha — daraltmak için yazmaya devam et","gh.noRepos":"Eşleşen depo yok.",
@@ -963,6 +1016,14 @@ const API_TR=[
  [/^Dockerfile content is required\.$/,"Dockerfile içeriği gerekli."],
  [/^Dockerfile is too large\.$/,"Dockerfile çok büyük."],
  [/^(.+) already exists in the repository\.$/,(m)=>`${m[1]} depoda zaten var.`],
+ [/^Wildcard domains are not supported.*$/,"Joker (wildcard) alan adları desteklenmiyor — HTTP-01 sertifikası bunları kapsayamaz."],
+ [/^'(.+)' is not a valid domain name\.$/,(m)=>`'${m[1]}' geçerli bir alan adı değil.`],
+ [/^Enter a domain name.*$/,"Bir alan adı gir (en fazla 253 karakter)."],
+ [/^A target is required\.$/,"Bir hedef gerekli."],
+ [/^Port 80 or 443 is already in use.*$/,"Bu sunucuda 80 veya 443 portu zaten kullanımda — proxy'yi kurmadan önce boşalt."],
+ [/^The reverse proxy is not installed yet\.$/,"Reverse proxy henüz kurulu değil."],
+ [/^Unknown domain '(.+)'\.$/,(m)=>`Bilinmeyen alan adı: '${m[1]}'.`],
+ [/^This app exposes no port to route to\.$/,"Bu uygulamanın yönlendirilecek portu yok."],
  [/^Compose file (.+) already belongs to app '(.+)'\.$/,(m)=>`${m[1]} compose dosyası zaten '${m[2]}' uygulamasına ait.`],
  [/^Runner directory (.+) already belongs to app '(.+)'\.$/,(m)=>`${m[1]} runner dizini zaten '${m[2]}' uygulamasına ait.`],
  [/^Unknown app '(.*)'\.$/,(m)=>`Bilinmeyen uygulama: '${m[1]}'.`],
@@ -1005,7 +1066,7 @@ let view="overview", refreshMs=10000, timer=null, logTimer=null, needsSetup=fals
 let deviceTimer=null, deviceHandle=null, repoList=[];
 const NAV=[["nav.grp.monitor",[["overview",IC.grid],["deployments",IC.rocket],["runner",IC.cpu]]],
            ["nav.grp.docker",[["containers",IC.box],["apps",IC.zap],["images",IC.layers],["storage",IC.db],["networks",IC.globe]]],
-           ["nav.grp.github",[["github",IC.github]]],
+           ["nav.grp.github",[["github",IC.github],["domains",IC.globe]]],
            ["nav.grp.server",[["system",IC.activity],["settings",IC.sliders]]]];
 
 /* ================= api ================= */
@@ -1210,6 +1271,8 @@ async function refresh(quiet){
     // refresh it only on view entry / manual refresh, never on the auto-refresh
     // tick, to protect the rate limit and the user's in-progress search.
     else if(view==="github"&&!quiet)await loadGithubView();
+    // Domains holds an add form; populate on view entry / manual refresh only.
+    else if(view==="domains"&&!quiet)await loadDomains();
   }catch(ex){if(!quiet&&ex.message!=="unauthorized")toast(ex.message,"err");}
 }
 
@@ -2261,7 +2324,8 @@ function renderLive(st){
       <span class="lc-dot"></span>
       <div class="lc-body"><div class="lc-title">${esc(t("wz.liveTitle"))}</div>
         <div class="lc-url">${esc(url)}${st.currentTag?` · ${esc(st.currentTag)}`:""}</div></div>
-      <span class="lc-open">${esc(t("wz.liveOpen"))}</span></a>`;
+      <span class="lc-open">${esc(t("wz.liveOpen"))}</span></a>
+      <div class="muted" style="font-size:12px;margin-top:8px">${esc(t("wz.wantDomain"))} <a href="#" data-goto="domains">${esc(t("wz.addDomain"))}</a></div>`;
     return;
   }
   if(st.state&&!st.running){
@@ -2547,6 +2611,93 @@ $("#btn-app-remove").onclick=()=>{
         await loadGithubView();
       }catch(ex){toast(ex.message,"err");}}}]);
 };
+
+/* ================= domains / reverse proxy ================= */
+async function loadDomains(){
+  let st;
+  try{st=await api("/api/proxy/status");}
+  catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");return;}
+  renderProxyBody(st);
+  $("#domains-card").classList.toggle("hidden",!st.installed);
+  if(st.installed){await populateDomainTargets();await renderDomainsTable();}
+}
+function renderProxyBody(st){
+  const body=$("#proxy-body");
+  if(!st.installed){
+    body.innerHTML=`<p class="muted" style="font-size:13px">${esc(t("dm.installHelp"))}</p>
+      ${!st.ports80443Free?`<div class="banner">${esc(t("dm.portBusy"))}${st.probeUnreliable?" "+esc(t("dm.probeUnreliable")):""}</div>`:""}
+      <div class="form-grid" style="margin-top:8px">
+        <div><label for="proxy-email">${esc(t("dm.email"))}</label><input id="proxy-email" placeholder="ops@example.com" spellcheck="false"></div>
+        <div><label style="margin:0 0 5px">&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;margin:9px 0"><input type="checkbox" id="proxy-staging" style="width:auto"> ${esc(t("dm.staging"))}</label></div>
+      </div>
+      <div style="margin-top:12px"><button class="primary" id="btn-proxy-install">${esc(t("dm.installBtn"))}</button></div>`;
+    $("#btn-proxy-install").onclick=()=>installProxy(!st.ports80443Free);
+    return;
+  }
+  const chip=st.running?`<span class="chip ok">${t("dm.running")}</span>`:`<span class="chip warn">${t("dm.stopped")}</span>`;
+  body.innerHTML=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${chip}
+    <span class="muted" style="font-size:13px">${st.acmeEmail?esc(st.acmeEmail):t("dm.noEmail")}${st.staging?` · ${t("dm.stagingOn")}`:""} · ${t("dm.domainsN",{n:st.domainsCount})}</span></div>`;
+}
+async function installProxy(force){
+  const email=$("#proxy-email").value.trim(),staging=$("#proxy-staging").checked;
+  const btn=$("#btn-proxy-install");btn.disabled=true;
+  try{await api("/api/proxy/install",{method:"POST",body:JSON.stringify({acmeEmail:email,staging,force})});
+    toast(t("dm.installed"),"ok");await loadDomains();}
+  catch(ex){toast(ex.message,"err");btn.disabled=false;}
+}
+async function populateDomainTargets(){
+  let catalog=[];
+  try{const r=await api("/api/apps");catalog=(r.items||[]).filter(a=>a.installed);}catch{}
+  const appOpts=apps.map(a=>`<option value="${esc(a.id)}">${esc(a.fullName||a.id)}</option>`).join("");
+  const catOpts=catalog.map(a=>`<option value="catalog:${esc(a.id)}">${esc(a.name)} (${t("dm.catalog")})</option>`).join("");
+  $("#dm-target").innerHTML=(appOpts+catOpts)||`<option value="">${t("dm.noTargets")}</option>`;
+}
+async function renderDomainsTable(){
+  let d;
+  try{d=await api("/api/domains");}catch(ex){toast(ex.message,"err");return;}
+  const rows=(d.items||[]).map(x=>[
+    {h:`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.domain)}</a>`},
+    {h:esc(x.target)+(x.drift?` <span class="chip warn" title="${esc(t("dm.driftHint"))}">${t("dm.drift")}</span>`:"")},
+    {h:`${esc(x.targetContainer)}:${x.targetPort}`,cls:"mono"},
+    {h:x.running?`<span class="chip ok">${t("dm.up")}</span>`:`<span class="chip mut">${t("dm.down")}</span>`},
+    {h:`<span class="chip ${x.enabled?"ok":"mut"}">${x.enabled?t("dm.enabled"):t("dm.disabled")}</span>`},
+    {h:`<div class="actions-cell"><button class="small" data-dm-toggle="${esc(x.domain)}">${x.enabled?t("dm.disable"):t("dm.enable")}</button><button class="small danger" data-dm-del="${esc(x.domain)}">${t("c.remove")}</button></div>`},
+  ]);
+  table($("#domains-table"),[t("dm.thDomain"),t("dm.thTarget"),t("dm.thContainer"),t("dm.thRunning"),t("dm.thState"),t("th.actions")],rows,t("dm.none"));
+}
+$("#domains-table").addEventListener("click",async e=>{
+  const tg=e.target.closest("[data-dm-toggle]"),dl=e.target.closest("[data-dm-del]");
+  if(tg){try{await api(`/api/domains/${encodeURIComponent(tg.dataset.dmToggle)}/toggle`,{method:"POST"});await renderDomainsTable();}catch(ex){toast(ex.message,"err");}}
+  if(dl){openModal(t("dm.rmTitle"),esc(t("dm.rmConfirm",{d:dl.dataset.dmDel})),[{label:t("c.cancel")},{label:t("c.remove"),danger:true,onClick:async()=>{closeModal();
+    try{await api(`/api/domains/${encodeURIComponent(dl.dataset.dmDel)}/delete`,{method:"POST"});await renderDomainsTable();await loadDomains();}catch(ex){toast(ex.message,"err");}}}]);}
+});
+$("#btn-dm-add").onclick=async()=>{
+  const domain=$("#dm-domain").value.trim(),target=$("#dm-target").value;
+  if(!domain){toast(t("dm.domainReq"),"err");return;}
+  if(!target){toast(t("dm.targetReq"),"err");return;}
+  const btn=$("#btn-dm-add");btn.disabled=true;
+  try{const r=await api("/api/domains",{method:"POST",body:JSON.stringify({domain,target})});
+    $("#dm-domain").value="";$("#dm-dns-hint").textContent="";
+    toast(r.dnsMatches?t("dm.added",{d:r.domain}):t("dm.addedDnsWarn",{d:r.domain}),r.dnsMatches?"ok":"warn");
+    await renderDomainsTable();await loadDomains();}
+  catch(ex){toast(ex.message,"err");}
+  btn.disabled=false;
+};
+let dmDnsTimer=null;
+$("#dm-domain").addEventListener("input",()=>{
+  const hint=$("#dm-dns-hint"),v=$("#dm-domain").value.trim();
+  if(!v){hint.textContent="";return;}
+  hint.textContent="…";hint.className="port-hint";
+  clearTimeout(dmDnsTimer);
+  dmDnsTimer=setTimeout(async()=>{
+    try{const r=await api("/api/domains/check?domain="+encodeURIComponent(v));
+      if($("#dm-domain").value.trim()!==v)return;
+      hint.textContent=r.matches?t("dm.dnsOk",{ip:r.resolvedIps[0]||""})
+        :(r.resolvedIps.length?t("dm.dnsMismatch",{ips:r.resolvedIps.join(", "),srv:r.serverIps.join(", ")}):t("dm.dnsNone"));
+      hint.className="port-hint "+(r.matches?"ok":"err");
+    }catch{hint.textContent="";}
+  },500);
+});
 /* ================= notifications settings ================= */
 async function loadNotifSettings(){
   try{

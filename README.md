@@ -62,6 +62,12 @@ repository (the topbar's app switcher jumps between them) — every app gets its
 own compose project under `/opt/pinqops/apps/<app>/`, its own deploy history,
 `.env`, notifications, and its own runner.
 
+**Real domains with automatic HTTPS** are one click away: the **Domains** page
+installs a managed Caddy reverse proxy and points `app.example.com` at your
+container with an auto-renewing Let's Encrypt certificate (HTTP/3 included) —
+apps stay reachable on their host ports too, and the plain port access keeps
+working for anything without a domain.
+
 There is also a curated catalog of ~50 one-click apps (Redis, PostgreSQL,
 Grafana, MinIO, …) — installed with generated passwords (retrievable in the
 dashboard, reused on reinstall), running in the background with live
