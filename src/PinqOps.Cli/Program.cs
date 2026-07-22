@@ -20,6 +20,7 @@ try
         "rollback" => await RunRollbackAsync(rest),
         "history" => RunHistory(rest),
         "install-runner" => await RunInstallRunnerAsync(rest),
+        "mcp" => await PinqOps.Cli.McpServer.RunAsync(),
         "version" or "--version" or "-v" => PrintVersion(),
         "help" or "--help" or "-h" => PrintUsage(),
         _ => Unknown(command),
@@ -247,6 +248,14 @@ int PrintUsage()
                                  [--version <runner-version>] [--dir <path>] [--user <user>]
               Install and register a GitHub Actions self-hosted runner as a
               systemd service (outbound-only; no inbound port on the server).
+
+          pinqops mcp
+              Run a Model Context Protocol server (stdio) that exposes the
+              dashboard's API as agent tools — works with any MCP client
+              (Claude Code/Desktop, Cursor, the OpenAI Agents SDK / Codex).
+              Reads PINQOPS_URL and PINQOPS_TOKEN (a 'pot_…' token from the
+              dashboard's Settings → API tokens); PINQOPS_INSECURE=1 accepts a
+              self-signed cert.
 
           pinqops version
           pinqops help

@@ -73,6 +73,13 @@ database container (PostgreSQL, MySQL, MariaDB, MongoDB, Redis) or any docker
 volume on a schedule, with retention, one-click restore, and download — a
 background worker runs whatever is due.
 
+**AI agents & the API**: create a scoped API token (Settings → API tokens) and
+drive deploys, rollbacks, status, logs, and metrics from any agent. `pinqops
+mcp` is a Model Context Protocol server that works with Claude Code/Desktop,
+Cursor, and the OpenAI Agents SDK / Codex; the token-authed REST API also works
+with plain OpenAI function calling or curl. See
+[docs/API-AND-AGENTS.md](docs/API-AND-AGENTS.md).
+
 There is also a curated catalog of ~50 one-click apps (Redis, PostgreSQL,
 Grafana, MinIO, …) — installed with generated passwords (retrievable in the
 dashboard, reused on reinstall), running in the background with live

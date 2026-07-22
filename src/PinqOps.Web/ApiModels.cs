@@ -28,6 +28,8 @@ public sealed record BackupTargetRequest(
 
 public sealed record BackupRestoreRequest(string? TargetId, string? Snapshot);
 
+public sealed record TokenCreateRequest(string? Name, string? Scope);
+
 public sealed record TokenRequest(string? Pat, string? Username);
 
 public sealed record DeviceStartRequest(string? ClientId);

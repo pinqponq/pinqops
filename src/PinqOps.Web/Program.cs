@@ -83,6 +83,8 @@ builder.Services.AddSingleton<ProxyService>();
 builder.Services.AddSingleton<BackupService>();
 builder.Services.AddSingleton(sp => new PinqOps.Backups.BackupConfigStore(
     Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<UiConfigStore>().Path_)!, "backups.json")));
+builder.Services.AddSingleton(sp => new ApiTokenStore(
+    Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<UiConfigStore>().Path_)!, "tokens.json")));
 builder.Services.AddHostedService<BackupScheduler>();
 builder.Services.AddSingleton<GitHubDashboardService>();
 builder.Services.AddSingleton<GitHubDeviceFlow>();
@@ -159,12 +161,42 @@ app.Use(async (context, next) =>
     if (path.StartsWithSegments("/api")
         && !anonymousPaths.Contains(path.Value, StringComparer.OrdinalIgnoreCase))
     {
-        var sessions = context.RequestServices.GetRequiredService<SessionStore>();
-        if (ReadBearerToken(context) is not { } token || !sessions.Validate(token))
+        var token = ReadBearerToken(context);
+        if (token is { } bearer && ApiTokenStore.LooksLikeToken(bearer))
         {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            await context.Response.WriteAsJsonAsync(new { error = "Unauthorized." });
-            return;
+            // API-token auth: validate, then enforce the route's required scope.
+            // (Session logins are full admins and skip the scope check below.)
+            var tokens = context.RequestServices.GetRequiredService<ApiTokenStore>();
+            var scope = tokens.Validate(bearer, DateTimeOffset.UtcNow);
+            if (scope is null)
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new { error = "Unauthorized." });
+                return;
+            }
+
+            var required = ApiScopes.RequiredFor(context.Request.Method, path.Value ?? string.Empty);
+            if (!ApiScopes.Satisfies(scope, required))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    error = $"This token has '{scope}' scope; '{required}' is required for this action.",
+                });
+                return;
+            }
+
+            context.Items["scope"] = scope;
+        }
+        else
+        {
+            var sessions = context.RequestServices.GetRequiredService<SessionStore>();
+            if (token is null || !sessions.Validate(token))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new { error = "Unauthorized." });
+                return;
+            }
         }
     }
 
@@ -1660,6 +1692,40 @@ app.MapGet("/api/backups/download", (HttpContext context, BackupService backups)
         ? Error(404, "Snapshot not found.")
         : Results.File(path, "application/octet-stream", snapshot);
 });
+
+// ---- API tokens -----------------------------------------------------------------
+
+app.MapGet("/api/tokens", (ApiTokenStore tokens) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        return new
+        {
+            items = tokens.List().Select(t => new
+            {
+                t.Id, t.Name, t.Scope, t.Last4, t.CreatedAt, t.LastUsedAt,
+            }),
+        };
+    }));
+
+app.MapPost("/api/tokens", (HttpContext context, ApiTokenStore tokens) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<TokenCreateRequest>();
+        var scope = request?.Scope is "read" or "deploy" or "admin" ? request.Scope : "read";
+        var (token, plaintext) = tokens.Create(request?.Name ?? "token", scope, DateTimeOffset.UtcNow);
+        logger.LogWarning("API token '{Name}' created with scope {Scope}", token.Name, token.Scope);
+        // The plaintext is returned exactly once, here.
+        return new { ok = true, id = token.Id, token = plaintext, scope = token.Scope };
+    }));
+
+app.MapDelete("/api/tokens/{id}", (string id, ApiTokenStore tokens) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        tokens.Delete(id);
+        return new { ok = true };
+    }));
 
 // ---- Notifications --------------------------------------------------------------
 
