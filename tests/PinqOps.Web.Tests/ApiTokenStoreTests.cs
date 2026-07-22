@@ -70,6 +70,7 @@ public class ApiScopesTests
     [InlineData("POST", "/api/compose/apply", "deploy")]
     [InlineData("POST", "/api/apps/install", "deploy")]
     [InlineData("POST", "/api/backups/run/db-postgres", "deploy")]
+    [InlineData("POST", "/api/previews/acme-shop/7/teardown", "deploy")]
     [InlineData("POST", "/api/settings", "admin")]
     [InlineData("POST", "/api/tokens", "admin")]
     [InlineData("POST", "/api/domains", "admin")]

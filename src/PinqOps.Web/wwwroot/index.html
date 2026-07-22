@@ -319,6 +319,10 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
           <div id="dep-tagvar-hint" class="muted hidden" style="font-size:12px;margin-bottom:8px"></div>
           <div class="tablewrap"><table id="dep-history-table"></table></div>
         </div>
+        <div class="section" style="margin-bottom:16px" id="previews-section">
+          <div class="section-head"><h2 data-i18n="pv.title">Preview environments</h2><div class="spacer"></div><span class="muted" style="font-size:12px" data-i18n="pv.perPr">one per open pull request</span></div>
+          <div class="tablewrap"><table id="previews-table"></table></div>
+        </div>
         <div class="section" style="margin-bottom:16px">
           <div class="section-head"><h2 data-i18n="ev.title">Environment (.env)</h2><div class="spacer"></div><span class="muted mono" id="env-file" style="font-size:12px"></span></div>
           <div class="tablewrap"><table id="env-table"></table></div>
@@ -744,6 +748,12 @@ en:{
  "wz.openActions":"open GitHub Actions ↗",
  "wz.stopped":"The app container is not running ({s}).",
  "wz.dockerDown":"Docker is unreachable — live status unknown.",
+ "wz.wfOutdated":"an update is available (adds PR preview environments)","wz.wfUpdateBtn":"update workflow","wz.wfUpdated":"Deploy workflow updated.",
+ "pv.title":"Preview environments","pv.perPr":"one per open pull request",
+ "pv.pr":"Pull request","pv.project":"Project","pv.status":"Status","pv.port":"Port",
+ "pv.running":"running","pv.stopped":"stopped","pv.teardown":"Tear down",
+ "pv.none":"No previews. Open a pull request and one is built automatically.",
+ "pv.tdConfirm":"Tear down the preview for PR #{pr}? Its containers and volumes are removed.","pv.tdDone":"Preview for PR #{pr} torn down.",
  "wiz.deploy":"Deploy",
  "wiz.connect":"Connecting the repository","wiz.check":"Checking repo & server",
  "wiz.dockerfile":"Dockerfile","wiz.workflow":"Deploy workflow","wiz.compose":"Compose project","wiz.runner":"Self-hosted runner","wiz.verify":"Verification",
@@ -930,6 +940,12 @@ tr:{
  "wz.openActions":"GitHub Actions'ı aç ↗",
  "wz.stopped":"Uygulama konteyneri çalışmıyor ({s}).",
  "wz.dockerDown":"Docker'a ulaşılamıyor — canlı durum bilinmiyor.",
+ "wz.wfOutdated":"güncelleme mevcut (PR önizleme ortamlarını ekler)","wz.wfUpdateBtn":"iş akışını güncelle","wz.wfUpdated":"Dağıtım iş akışı güncellendi.",
+ "pv.title":"Önizleme ortamları","pv.perPr":"her açık PR için bir tane",
+ "pv.pr":"Pull request","pv.project":"Proje","pv.status":"Durum","pv.port":"Port",
+ "pv.running":"çalışıyor","pv.stopped":"durdu","pv.teardown":"Kaldır",
+ "pv.none":"Önizleme yok. Bir pull request aç, otomatik olarak biri kurulur.",
+ "pv.tdConfirm":"PR #{pr} önizlemesi kaldırılsın mı? Konteynerleri ve volume'ları silinir.","pv.tdDone":"PR #{pr} önizlemesi kaldırıldı.",
  "wiz.deploy":"Dağıtım",
  "wiz.connect":"Depo bağlanıyor","wiz.check":"Depo ve sunucu kontrol ediliyor",
  "wiz.dockerfile":"Dockerfile","wiz.workflow":"Deploy workflow","wiz.compose":"Compose projesi","wiz.runner":"Self-hosted runner","wiz.verify":"Doğrulama",
@@ -1544,6 +1560,35 @@ $("#dep-history-table").addEventListener("click",e=>{
       }catch(ex){toast(ex.message,"err");}
     }}]);
 });
+/* ---- preview environments (one per open PR) ---- */
+async function loadPreviews(){
+  try{
+    const{items}=await api("/api/previews");
+    const rows=currentAppId?items.filter(p=>p.appId===currentAppId):items;
+    $("#previews-section").classList.toggle("hidden",rows.length===0&&items.length===0);
+    table($("#previews-table"),
+      [t("pv.pr"),t("pv.project"),t("pv.status"),t("pv.port"),""],
+      rows.map(p=>[
+        {h:`<a href="${esc(p.prUrl)}" target="_blank" rel="noopener">#${p.pr} ↗</a>`},
+        {h:`<span class="mono">${esc(p.projectName)}</span>`},
+        {h:p.running?`<span class="chip ok">${t("pv.running")}</span>`:`<span class="chip mut">${t("pv.stopped")}</span>`},
+        p.hostPort?{h:`<a href="http://${location.hostname}:${p.hostPort}" target="_blank" rel="noopener">${p.hostPort} ↗</a>`}:"–",
+        {h:`<button class="small danger" data-preview-teardown="${esc(p.appId)}:${p.pr}">${t("pv.teardown")}</button>`}]),
+      t("pv.none"));
+  }catch(ex){table($("#previews-table"),[],[],esc(ex.message));}
+}
+$("#previews-table").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-preview-teardown]");if(!b)return;
+  const[appId,pr]=b.dataset.previewTeardown.split(":");
+  openModal(t("pv.teardown"),t("pv.tdConfirm",{pr}),[
+    {label:t("c.cancel")},
+    {label:t("pv.teardown"),danger:true,onClick:async()=>{
+      closeModal();
+      try{await api(`/api/previews/${encodeURIComponent(appId)}/${pr}/teardown`,{method:"POST"});
+        toast(t("pv.tdDone",{pr}),"ok");await loadPreviews();}
+      catch(ex){toast(ex.message,"err");}
+    }}]);
+});
 /* ---- compose project .env editor ---- */
 async function loadComposeEnv(){
   try{
@@ -1583,6 +1628,7 @@ $("#env-apply").addEventListener("click",()=>{
 });
 async function loadDeployments(){
   await loadDeployHistory();
+  await loadPreviews();
   await loadComposeEnv();
   const gh=await githubOverview();
   if(!gh){table($("#runs-table"),[],[],t("dp.connectFirst"));return;}
@@ -2298,7 +2344,18 @@ async function initPublishPanel(){
       wizMark("dockerfile","warn",`${t("su.dockerfileMiss")} <a href="#" id="lnk-gen-dockerfile">${esc(t("sd.generateBtn"))}</a>`);
       const g=$("#lnk-gen-dockerfile");if(g)g.onclick=e=>{e.preventDefault();openDockerfileModal();};
     }
-    wizMark("workflow",s.repo.hasWorkflow?"ok":"",s.repo.hasWorkflow?t("wiz.ready"):t("su.workflowMiss"));
+    if(s.repo.hasWorkflow&&s.repo.workflowVersion<s.repo.currentWorkflowVersion){
+      // The workflow is committed but on an older shape (e.g. before preview
+      // environments) — offer an in-place update.
+      wizMark("workflow","warn",`${t("wz.wfOutdated")} <a href="#" id="lnk-update-workflow">${esc(t("wz.wfUpdateBtn"))}</a>`);
+      const u=$("#lnk-update-workflow");if(u)u.onclick=async e=>{
+        e.preventDefault();u.textContent="…";
+        try{await api(withApp("/api/setup/update-workflow"),{method:"POST"});toast(t("wz.wfUpdated"),"ok");await initPublishPanel();}
+        catch(ex){toast(ex.message,"err");u.textContent=t("wz.wfUpdateBtn");}
+      };
+    }else{
+      wizMark("workflow",s.repo.hasWorkflow?"ok":"",s.repo.hasWorkflow?t("wiz.ready"):t("su.workflowMiss"));
+    }
     wizMark("var","","");
     wizMark("compose",s.composeExists?"ok":"",s.composeExists?esc(s.composeFile):t("su.composeMiss",{p:esc(s.composeFile)}));
     wizMark("runner",runnerOk?"ok":"",runnerOk?t("wiz.ready"):"");

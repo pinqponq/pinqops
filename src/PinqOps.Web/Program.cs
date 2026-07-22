@@ -92,6 +92,7 @@ builder.Services.AddSingleton<LocalRunnerService>();
 builder.Services.AddSingleton<SystemInfoService>();
 builder.Services.AddSingleton<AppInstallJobs>();
 builder.Services.AddSingleton<DeployService>();
+builder.Services.AddSingleton<PreviewService>();
 builder.Services.AddSingleton<AppCredentialStore>();
 
 // Blunt per-client request ceiling on top of the login throttle, so a single
@@ -690,6 +691,19 @@ app.MapPost("/api/setup/create-workflow", (HttpContext context, UiConfigStore st
         var defaultBranch = await gitHub.GetDefaultBranchAsync(app);
         var result = await gitHub.CreateWorkflowFileAsync(app, SetupTemplates.DeployWorkflowYaml(defaultBranch));
         logger.LogWarning("Deploy workflow committed, triggering on {Branch}", defaultBranch);
+        return result;
+    }));
+
+// Updates the deploy workflow in place to the current shape (e.g. adding the
+// preview jobs to a v1 repo). The wizard offers this when a repo's workflow
+// version is behind — a contents PUT with the file's sha, so it replaces.
+app.MapPost("/api/setup/update-workflow", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        var app = ResolveApp(store, context);
+        var defaultBranch = await gitHub.GetDefaultBranchAsync(app);
+        var result = await gitHub.UpdateWorkflowFileAsync(app, SetupTemplates.DeployWorkflowYaml(defaultBranch));
+        logger.LogWarning("Deploy workflow updated to v{Version} for {Repo}", SetupTemplates.CurrentWorkflowVersion, app.RepoUrl);
         return result;
     }));
 
@@ -1299,6 +1313,19 @@ app.MapGet("/api/deploy/history", (HttpContext context, UiConfigStore store, Dep
     {
         await Task.CompletedTask;
         return new { items = deploys.History(ResolveApp(store, context).ComposeFile) };
+    }));
+
+// Preview environments across every app: what is on disk and whether it is up.
+app.MapGet("/api/previews", (UiConfigStore store, PreviewService previews) =>
+    Safe(async () => new { items = await previews.ListAsync(store.Current) }));
+
+// Manual teardown — the fallback for a PR that closed while the runner was
+// offline (the workflow's preview-teardown normally handles it).
+app.MapPost("/api/previews/{appId}/{pr:int}/teardown", (string appId, int pr, UiConfigStore store, PreviewService previews) =>
+    Safe(async () =>
+    {
+        var app = AppResolver.Resolve(store.Current, appId);
+        return await previews.TeardownAsync(app, pr);
     }));
 
 app.MapPost("/api/deploy/rollback", async (HttpContext context, UiConfigStore store, DeployService deploys) =>

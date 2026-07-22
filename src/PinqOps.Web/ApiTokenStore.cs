@@ -165,6 +165,7 @@ public static class ApiScopes
     [
         "/api/deploy/rollback", "/api/setup/", "/api/compose/apply",
         "/api/apps/", "/api/backups/run", "/api/backups/restore",
+        "/api/previews/",
     ];
 
     public static string RequiredFor(string method, string path)

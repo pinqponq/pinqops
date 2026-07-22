@@ -68,6 +68,16 @@ container with an auto-renewing Let's Encrypt certificate (HTTP/3 included) —
 apps stay reachable on their host ports too, and the plain port access keeps
 working for anything without a domain.
 
+**Preview environments** give every pull request its own throwaway copy of the
+app: open a PR and GitHub builds its image, the runner brings it up as a
+separate compose project (`<repo>-pr-<n>`) on a free host port next to
+production — reusing production's `.env` minus the pinned image/tag/host-port —
+and, when the app has a domain, routes `pr-<n>.<domain>` to it. Closing the PR
+tears it down. Only the repository's own PRs are ever built and deployed (a
+fork's PR never reaches your server), and a concurrency cap bounds how many run
+at once. The Deployments page lists live previews with a manual teardown; repos
+on the older workflow get a one-click "update workflow" in the wizard.
+
 **Scheduled backups** cover your data services: the **Backups** page dumps a
 database container (PostgreSQL, MySQL, MariaDB, MongoDB, Redis) or any docker
 volume on a schedule, with retention, one-click restore, and download — a
