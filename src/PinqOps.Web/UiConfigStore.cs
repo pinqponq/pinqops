@@ -41,10 +41,24 @@ public sealed class UiConfigStore
     {
         lock (_gate)
         {
-            mutate(_current);
-            Save(_current);
+            // Copy-on-write: mutate a private clone and publish it only after it
+            // is safely saved. Readers hold whichever snapshot was current when
+            // they called Current; because that object is never mutated in place
+            // again, a concurrent GET that enumerates config.Apps / config.Users
+            // can't throw "collection was modified" or observe a half-applied
+            // change. It also keeps the in-memory state consistent with disk when
+            // a Save fails — the old snapshot stays current.
+            var next = Clone(_current);
+            mutate(next);
+            Save(next);
+            _current = next;
         }
     }
+
+    /// <summary>A deep copy via the same JSON round-trip used to persist and load
+    /// the config, so the clone is independent of the live snapshot.</summary>
+    private static UiConfig Clone(UiConfig config) =>
+        JsonSerializer.Deserialize<UiConfig>(JsonSerializer.Serialize(config, SerializerOptions)) ?? new UiConfig();
 
     private UiConfig Load()
     {
