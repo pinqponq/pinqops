@@ -83,6 +83,14 @@ database container (PostgreSQL, MySQL, MariaDB, MongoDB, Redis) or any docker
 volume on a schedule, with retention, one-click restore, and download — a
 background worker runs whatever is due.
 
+**Teams & audit**: invite more users (Settings → Users) with a role —
+**viewer** (read-only), **deployer** (deploy & roll back), or **admin**
+(everything, including user management) — the same permission levels the API
+tokens use. Every change made through the dashboard is written to an
+append-only audit log (who, what, result), browsable and filterable on the
+**Audit** page. Your existing single password migrates to the first admin
+automatically.
+
 **AI agents & the API**: create a scoped API token (Settings → API tokens) and
 drive deploys, rollbacks, status, logs, and metrics from any agent. `pinqops
 mcp` is a Model Context Protocol server that works with Claude Code/Desktop,
