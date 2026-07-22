@@ -68,6 +68,11 @@ container with an auto-renewing Let's Encrypt certificate (HTTP/3 included) —
 apps stay reachable on their host ports too, and the plain port access keeps
 working for anything without a domain.
 
+**Scheduled backups** cover your data services: the **Backups** page dumps a
+database container (PostgreSQL, MySQL, MariaDB, MongoDB, Redis) or any docker
+volume on a schedule, with retention, one-click restore, and download — a
+background worker runs whatever is due.
+
 There is also a curated catalog of ~50 one-click apps (Redis, PostgreSQL,
 Grafana, MinIO, …) — installed with generated passwords (retrievable in the
 dashboard, reused on reinstall), running in the background with live

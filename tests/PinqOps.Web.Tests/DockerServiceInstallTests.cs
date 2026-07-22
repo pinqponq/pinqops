@@ -71,4 +71,43 @@ public class DockerServiceInstallTests
 
         await Assert.ThrowsAsync<ArgumentException>(() => docker.ExecAsync("--rm", "sh"));
     }
+
+    [Fact]
+    public async Task BackupVolumeAsync_TarsTheVolumeReadOnlyIntoTheBackupDir()
+    {
+        var runner = new FakeProcessRunner();
+        var docker = new DockerService(runner);
+
+        await docker.BackupVolumeAsync("pinqops-postgres-data", "/opt/pinqops/backups/db", "20260722-030405.tgz");
+
+        var run = runner.Invocations.Single(invocation => invocation.Arguments.Contains("run"));
+        Assert.Contains("pinqops-postgres-data:/src:ro", run.Arguments);
+        Assert.Contains("/opt/pinqops/backups/db:/dst", run.Arguments);
+        Assert.Contains("/dst/20260722-030405.tgz", run.Arguments);
+    }
+
+    [Fact]
+    public async Task RestoreVolumeAsync_ClearsThenExtracts()
+    {
+        var runner = new FakeProcessRunner();
+        var docker = new DockerService(runner);
+
+        await docker.RestoreVolumeAsync("vol", "/opt/pinqops/backups/vol", "20260722-030405.tgz");
+
+        var run = runner.Invocations.Single(invocation => invocation.Arguments.Contains("run"));
+        Assert.Contains("vol:/dst", run.Arguments);
+        Assert.Contains(run.Arguments, a => a.Contains("find /dst -mindepth 1 -delete") && a.Contains("tar xzf"));
+    }
+
+    [Fact]
+    public async Task CopyFromContainerAsync_UsesDockerCp()
+    {
+        var runner = new FakeProcessRunner();
+        var docker = new DockerService(runner);
+
+        await docker.CopyFromContainerAsync("pinqops-redis", "/data/dump.rdb", "/opt/pinqops/backups/redis/x.rdb");
+
+        var cp = runner.Invocations.Single(invocation => invocation.Arguments.Contains("cp"));
+        Assert.Equal(["cp", "pinqops-redis:/data/dump.rdb", "/opt/pinqops/backups/redis/x.rdb"], cp.Arguments);
+    }
 }

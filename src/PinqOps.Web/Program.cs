@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.RateLimiting;
 using PinqOps;
+using PinqOps.Backups;
 using PinqOps.Proxy;
 using PinqOps.Web;
 using static System.Globalization.CultureInfo;
@@ -79,6 +80,10 @@ builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddSingleton<DockerService>();
 builder.Services.AddSingleton<ProxyService>();
+builder.Services.AddSingleton<BackupService>();
+builder.Services.AddSingleton(sp => new PinqOps.Backups.BackupConfigStore(
+    Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<UiConfigStore>().Path_)!, "backups.json")));
+builder.Services.AddHostedService<BackupScheduler>();
 builder.Services.AddSingleton<GitHubDashboardService>();
 builder.Services.AddSingleton<GitHubDeviceFlow>();
 builder.Services.AddSingleton<LocalRunnerService>();
@@ -1533,6 +1538,129 @@ app.MapPost("/api/domains/{domain}/delete", (string domain, ProxyService proxy) 
         return new { ok = true };
     }));
 
+// ---- Backups --------------------------------------------------------------------
+
+app.MapGet("/api/backups", (BackupConfigStore store, BackupService backups, DockerService docker) =>
+    Safe(async () =>
+    {
+        var items = new List<object>();
+        foreach (var target in store.Load().Targets)
+        {
+            var running = target.Kind == "db" && (await docker.ContainerStateAsync(target.Name)).Running;
+            items.Add(new
+            {
+                target.Id, target.Kind, target.Name, target.Engine, target.Schedule,
+                target.AtHour, target.RetentionCount, target.Enabled,
+                lastRun = backups.LastRun(target.Id),
+                running,
+                snapshots = backups.ListSnapshots(target.Id),
+            });
+        }
+
+        return new { items };
+    }));
+
+app.MapPost("/api/backups/targets", (HttpContext context, BackupConfigStore store) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<BackupTargetRequest>()
+            ?? throw new ArgumentException("Invalid request body.");
+        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Engine)
+            || string.IsNullOrWhiteSpace(request.Kind))
+        {
+            throw new ArgumentException("A source and engine are required.");
+        }
+
+        var config = store.Load();
+        var id = request.Id;
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            var basis = request.Kind == "volume" ? request.Name : request.Engine;
+            id = $"{(request.Kind == "volume" ? "vol" : "db")}-{Slugify(basis)}";
+        }
+
+        if (!BackupNaming.IsValidId(id))
+        {
+            throw new ArgumentException("Invalid backup id.");
+        }
+
+        var target = config.Targets.FirstOrDefault(t => t.Id == id);
+        if (target is null)
+        {
+            target = new BackupTarget { Id = id };
+            config.Targets.Add(target);
+        }
+
+        target.Kind = request.Kind;
+        target.Name = request.Name;
+        target.Engine = request.Engine;
+        target.Schedule = request.Schedule is "hourly" or "daily" or "weekly" ? request.Schedule : "daily";
+        target.AtHour = Math.Clamp(request.AtHour ?? target.AtHour, 0, 23);
+        target.RetentionCount = Math.Clamp(request.RetentionCount ?? target.RetentionCount, 1, 365);
+        target.Enabled = request.Enabled ?? target.Enabled;
+        store.Save(config);
+        return new { ok = true, id };
+    }));
+
+app.MapPost("/api/backups/targets/{id}/toggle", (string id, BackupConfigStore store) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        var config = store.Load();
+        var target = config.Targets.FirstOrDefault(t => t.Id == id)
+            ?? throw new ArgumentException($"Unknown backup target '{id}'.");
+        target.Enabled = !target.Enabled;
+        store.Save(config);
+        return new { ok = true, enabled = target.Enabled };
+    }));
+
+app.MapDelete("/api/backups/targets/{id}", (string id, BackupConfigStore store) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        var config = store.Load();
+        config.Targets.RemoveAll(t => t.Id == id);
+        store.Save(config);
+        return new { ok = true };
+    }));
+
+app.MapPost("/api/backups/run/{id}", (string id, BackupConfigStore store, BackupService backups) =>
+    Safe(async () =>
+    {
+        var target = store.Load().Targets.FirstOrDefault(t => t.Id == id)
+            ?? throw new ArgumentException($"Unknown backup target '{id}'.");
+        return await backups.RunGuardedAsync(target);
+    }));
+
+app.MapPost("/api/backups/restore", (HttpContext context, BackupConfigStore store, BackupService backups) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<BackupRestoreRequest>()
+            ?? throw new ArgumentException("Invalid request body.");
+        var target = store.Load().Targets.FirstOrDefault(t => t.Id == request.TargetId)
+            ?? throw new ArgumentException($"Unknown backup target '{request.TargetId}'.");
+        await backups.RestoreAsync(target, request.Snapshot ?? "");
+        return new { ok = true };
+    }));
+
+app.MapDelete("/api/backups/{targetId}/snapshots/{snapshot}", (string targetId, string snapshot, BackupService backups) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        backups.DeleteSnapshot(targetId, snapshot);
+        return new { ok = true };
+    }));
+
+app.MapGet("/api/backups/download", (HttpContext context, BackupService backups) =>
+{
+    var targetId = context.Request.Query["target"].ToString();
+    var snapshot = context.Request.Query["snapshot"].ToString();
+    var path = backups.SnapshotPath(targetId, snapshot);
+    return path is null
+        ? Error(404, "Snapshot not found.")
+        : Results.File(path, "application/octet-stream", snapshot);
+});
+
 // ---- Notifications --------------------------------------------------------------
 
 app.MapGet("/api/notifications", (HttpContext context, UiConfigStore store) =>
@@ -1712,6 +1840,16 @@ static int? ParseFirstHostPort(string portsColumn)
 {
     var match = System.Text.RegularExpressions.Regex.Match(portsColumn ?? "", @":(\d+)->");
     return match.Success && int.TryParse(match.Groups[1].Value, out var port) ? port : null;
+}
+
+/// <summary>Lowercases and reduces a name to a safe id fragment ([a-z0-9._-]).</summary>
+static string Slugify(string value)
+{
+    var kept = value.ToLowerInvariant()
+        .Select(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or '-' ? c : '-')
+        .ToArray();
+    var slug = new string(kept).Trim('-', '.', '_');
+    return slug.Length > 0 ? slug : "target";
 }
 
 /// <summary>The container name and port a domain target resolves to. Target is

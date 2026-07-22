@@ -23,6 +23,11 @@ public sealed record ProxyInstallRequest(string? AcmeEmail, bool? Staging, bool?
 
 public sealed record DomainRequest(string? Domain, string? Target, int? TargetPort);
 
+public sealed record BackupTargetRequest(
+    string? Id, string? Kind, string? Name, string? Engine, string? Schedule, int? AtHour, int? RetentionCount, bool? Enabled);
+
+public sealed record BackupRestoreRequest(string? TargetId, string? Snapshot);
+
 public sealed record TokenRequest(string? Pat, string? Username);
 
 public sealed record DeviceStartRequest(string? ClientId);

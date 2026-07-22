@@ -15,6 +15,21 @@ itself. This page lists the knobs that exist.
 | `~/.config/pinqops/app-credentials.json` | dashboard | 0600 | Generated catalog app credentials |
 | `/opt/pinqops/proxy/domains.json` | dashboard (read by the runner CLI) | 0600 | Managed-proxy domain routes + ACME settings |
 | `/opt/pinqops/proxy/Caddyfile` | dashboard | 0644 | Generated from `domains.json`; mounted read-only into the `pinqops-proxy` container |
+| `~/.config/pinqops/backups.json` | dashboard | 0600 | Scheduled backup targets |
+| `/opt/pinqops/backups/<target>/<ts>.<ext>` | dashboard | — | Backup snapshots (pruned to each target's retention) |
+
+## Scheduled backups (optional)
+
+The **Backups** page schedules dumps of a database container or a docker volume
+(hourly / daily / weekly, with a retention count). A per-minute background
+worker runs whatever is due; **Run now** triggers one immediately. Database
+dumps use the container's own tools and read the password from the container's
+environment (`sh -c` inside the container), so no credential is ever passed on
+the command line: `pg_dumpall` for PostgreSQL, `mysqldump` / `mariadb-dump`,
+`mongodump`, and `redis-cli SAVE`; volumes are tarred through a throwaway
+`alpine` container. Restore overwrites the target in place (a Redis restore
+stops the container, swaps the RDB, and starts it). Snapshots can be downloaded
+or deleted from the UI. A run refuses to start under 500 MB of free disk.
 
 ## Domains & HTTPS (optional reverse proxy)
 

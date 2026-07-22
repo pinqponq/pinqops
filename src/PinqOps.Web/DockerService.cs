@@ -252,6 +252,67 @@ public sealed class DockerService
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
+    private static readonly TimeSpan BackupTimeout = TimeSpan.FromMinutes(30);
+
+    /// <summary>Copies a file out of a container to the host (docker cp).</summary>
+    public async Task CopyFromContainerAsync(string container, string containerPath, string hostPath)
+    {
+        ValidateResourceName(container);
+        var result = await RunAsync(BackupTimeout, "cp", $"{container}:{containerPath}", hostPath).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            throw Failed(result);
+        }
+    }
+
+    /// <summary>Copies a host file into a container (docker cp).</summary>
+    public async Task CopyToContainerAsync(string hostPath, string container, string containerPath)
+    {
+        ValidateResourceName(container);
+        var result = await RunAsync(BackupTimeout, "cp", hostPath, $"{container}:{containerPath}").ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            throw Failed(result);
+        }
+    }
+
+    /// <summary>Tars a volume's contents into <paramref name="fileName"/> under
+    /// <paramref name="hostBackupDir"/> (via a throwaway alpine container).</summary>
+    public async Task BackupVolumeAsync(string volume, string hostBackupDir, string fileName)
+    {
+        ValidateResourceName(volume);
+        string[] arguments =
+        [
+            "run", "--rm",
+            "-v", $"{volume}:/src:ro",
+            "-v", $"{hostBackupDir}:/dst",
+            "alpine", "tar", "czf", $"/dst/{fileName}", "-C", "/src", ".",
+        ];
+        var result = await RunAsync(BackupTimeout, arguments).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            throw Failed(result);
+        }
+    }
+
+    /// <summary>Clears a volume and extracts a snapshot tar back into it.</summary>
+    public async Task RestoreVolumeAsync(string volume, string hostBackupDir, string fileName)
+    {
+        ValidateResourceName(volume);
+        string[] arguments =
+        [
+            "run", "--rm",
+            "-v", $"{volume}:/dst",
+            "-v", $"{hostBackupDir}:/src:ro",
+            "alpine", "sh", "-c", $"find /dst -mindepth 1 -delete && tar xzf /src/{fileName} -C /dst",
+        ];
+        var result = await RunAsync(BackupTimeout, arguments).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            throw Failed(result);
+        }
+    }
+
     public async Task EnsureSharedNetworkAsync()
     {
         var inspect = await RunAsync("network", "inspect", AppCatalog.SharedNetwork).ConfigureAwait(false);
