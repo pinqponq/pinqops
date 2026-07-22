@@ -70,6 +70,12 @@ Add a `Dockerfile` at the repository root that builds your application image.
 The pipeline is Dockerfile-agnostic — the `build` job just runs `docker build .`.
 See [`../examples/app/Dockerfile.example`](../examples/app/Dockerfile.example).
 
+> The dashboard's publish wizard can **generate this for you**: for a repo with
+> no Dockerfile it detects the stack and commits an editable starting Dockerfile
+> (this manual step is only for a CLI-only setup). For a monorepo, pick the
+> project subdirectory in the wizard — it sets the `PINQOPS_BUILD_CONTEXT`
+> repository variable so the `build` job builds from there (default: repo root).
+
 No repository secrets are needed: the `build` job pushes to GHCR with the
 automatic `GITHUB_TOKEN`.
 

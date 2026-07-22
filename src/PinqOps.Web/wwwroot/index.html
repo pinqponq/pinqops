@@ -641,6 +641,11 @@ en:{
  "app.removed":"{n} removed — kept on disk: {p}",
  "wiz.var":"Repository variable","wiz.varDone":"APP_COMPOSE_PATH → {p}",
  "wiz.varFail":"Could not set APP_COMPOSE_PATH — with a custom compose path the deploy would land on the wrong project. The token needs Variables: write.",
+ "sd.generateBtn":"Generate a Dockerfile →","sd.title":"Generate a Dockerfile",
+ "sd.detected":"detected — edit the Dockerfile below if anything is off","sd.subdirLbl":"Project directory (monorepo)",
+ "sd.editHint":"Review and edit — this exact content is committed to the repository as Dockerfile.",
+ "sd.commitBtn":"Commit to repository","sd.committed":"Dockerfile committed — re-checking the repository",
+ "sd.truncated":"This repository is too large to scan fully — detection may be incomplete. Pick the right directory or edit the Dockerfile below.",
  "wz.s1":"Connect GitHub","wz.s2":"Add app repository","wz.s3":"Publish",
  "wz.continue":"Continue →","wz.back":"← Back","wz.changeRepo":"change repository",
  "wz.hostPort":"Host port (public, on this server)","wz.ctrPort":"Container port (your app listens on)",
@@ -790,6 +795,11 @@ tr:{
  "app.removed":"{n} kaldırıldı — diskte korunanlar: {p}",
  "wiz.var":"Depo değişkeni","wiz.varDone":"APP_COMPOSE_PATH → {p}",
  "wiz.varFail":"APP_COMPOSE_PATH ayarlanamadı — özel compose yolunda dağıtım yanlış projeye gider. Token'da Variables: write olmalı.",
+ "sd.generateBtn":"Dockerfile üret →","sd.title":"Dockerfile üret",
+ "sd.detected":"algılandı — bir şey yanlışsa aşağıdaki Dockerfile'ı düzenle","sd.subdirLbl":"Proje dizini (monorepo)",
+ "sd.editHint":"İncele ve düzenle — bu içerik aynen depoya Dockerfile olarak commit'lenir.",
+ "sd.commitBtn":"Depoya commit'le","sd.committed":"Dockerfile commit'lendi — depo yeniden kontrol ediliyor",
+ "sd.truncated":"Bu depo tam taranamayacak kadar büyük — tespit eksik olabilir. Doğru dizini seç ya da aşağıdaki Dockerfile'ı düzenle.",
  "wz.s1":"GitHub'a bağlan","wz.s2":"Uygulama deposu ekle","wz.s3":"Yayına al",
  "wz.continue":"Devam →","wz.back":"← Geri","wz.changeRepo":"depoyu değiştir",
  "wz.hostPort":"Host portu (bu sunucuda, dışarı açık)","wz.ctrPort":"Konteyner portu (uygulamanın dinlediği)",
@@ -950,6 +960,9 @@ const API_TR=[
  [/^Unknown app '(.+)'\.$/,(m)=>`Bilinmeyen uygulama: '${m[1]}'.`],
  [/^An app id is required\.$/,"Uygulama kimliği (id) gerekli."],
  [/^This repository is already added as '(.+)'\.$/,(m)=>`Bu depo zaten '${m[1]}' olarak ekli.`],
+ [/^Dockerfile content is required\.$/,"Dockerfile içeriği gerekli."],
+ [/^Dockerfile is too large\.$/,"Dockerfile çok büyük."],
+ [/^(.+) already exists in the repository\.$/,(m)=>`${m[1]} depoda zaten var.`],
  [/^Compose file (.+) already belongs to app '(.+)'\.$/,(m)=>`${m[1]} compose dosyası zaten '${m[2]}' uygulamasına ait.`],
  [/^Runner directory (.+) already belongs to app '(.+)'\.$/,(m)=>`${m[1]} runner dizini zaten '${m[2]}' uygulamasına ait.`],
  [/^Unknown app '(.*)'\.$/,(m)=>`Bilinmeyen uygulama: '${m[1]}'.`],
@@ -2140,7 +2153,13 @@ async function initPublishPanel(){
     const runnerOk=s.runnerInstalled&&(s.runnersOnline>0||!!s.runnersError);
     $("#pub-progress").classList.remove("hidden");
     wizMark("connect","ok",esc((s.repo&&s.repo.fullName)||""));
-    wizMark("dockerfile",s.repo.hasDockerfile?"ok":"warn",s.repo.hasDockerfile?t("wiz.ready"):t("su.dockerfileMiss"));
+    if(s.repo.hasDockerfile){
+      wizMark("dockerfile","ok",t("wiz.ready"));
+    }else{
+      // No Dockerfile: offer to generate one from the detected stack.
+      wizMark("dockerfile","warn",`${t("su.dockerfileMiss")} <a href="#" id="lnk-gen-dockerfile">${esc(t("sd.generateBtn"))}</a>`);
+      const g=$("#lnk-gen-dockerfile");if(g)g.onclick=e=>{e.preventDefault();openDockerfileModal();};
+    }
     wizMark("workflow",s.repo.hasWorkflow?"ok":"",s.repo.hasWorkflow?t("wiz.ready"):t("su.workflowMiss"));
     wizMark("var","","");
     wizMark("compose",s.composeExists?"ok":"",s.composeExists?esc(s.composeFile):t("su.composeMiss",{p:esc(s.composeFile)}));
@@ -2153,6 +2172,40 @@ async function initPublishPanel(){
     $("#pub-progress").classList.add("hidden");
     $("#btn-publish").textContent=t("wz.publish");
   }
+}
+
+/* --- Dockerfile generator: detect the stack, let the user edit, then commit.
+       The committed EXPOSE flows straight back into the port form. --- */
+async function openDockerfileModal(){
+  let data;
+  try{data=await api(withApp("/api/setup/detect-stack"));}
+  catch(ex){toast(ex.message,"err");return;}
+  const cands=(data.candidates||[]);
+  if(!cands.length)cands.push({kind:"unknown",suggestedPort:8080,dir:"",dockerfile:"# EXPOSE 8080\nFROM alpine\nEXPOSE 8080"});
+  const opts=cands.map((c,i)=>`<option value="${i}">${c.dir?esc(c.dir):"/"} — ${esc(c.kind)}</option>`).join("");
+  openModal(t("sd.title"),
+    `${data.truncated?`<div class="banner">${esc(t("sd.truncated"))}</div>`:""}
+     ${cands.length>1?`<label for="dockerfile-cand">${esc(t("sd.subdirLbl"))}</label><select id="dockerfile-cand">${opts}</select>`:""}
+     <div class="muted" id="dockerfile-detected" style="font-size:12.5px;margin:8px 0"></div>
+     <div class="muted" style="font-size:12px;margin-bottom:6px">${esc(t("sd.editHint"))}</div>
+     <textarea id="dockerfile-content" spellcheck="false" style="width:100%;height:300px;font-family:var(--mono);font-size:12px;resize:vertical;line-height:1.5"></textarea>`,
+    [{label:t("c.cancel")},{label:t("sd.commitBtn"),primary:true,onClick:async()=>{
+      const idx=+(($("#dockerfile-cand")||{}).value||0);
+      const content=$("#dockerfile-content").value;
+      try{
+        await api(withApp("/api/setup/create-dockerfile"),{method:"POST",body:JSON.stringify({content,dir:cands[idx].dir||""})});
+        closeModal();
+        toast(t("sd.committed"),"ok");
+        pubPortsSeededFor=null; // the new EXPOSE re-seeds the container port
+        initPublishPanel();
+      }catch(ex){toast(ex.message,"err");}
+    }}]);
+  const sync=idx=>{
+    $("#dockerfile-content").value=cands[idx].dockerfile;
+    $("#dockerfile-detected").innerHTML=`<span class="chip ok">${esc(cands[idx].kind)}</span> ${esc(t("sd.detected",{k:cands[idx].kind}))}`;
+  };
+  const sel=$("#dockerfile-cand");if(sel)sel.onchange=e=>sync(+e.target.value);
+  sync(0);
 }
 
 /* --- host-port availability, checked live while typing (debounced) --- */

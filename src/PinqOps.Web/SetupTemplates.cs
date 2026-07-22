@@ -82,10 +82,15 @@ public static class SetupTemplates
               # repository. Without it the link is left to implicit behaviour
               # that does NOT hold after a rename (a rename creates a new package
               # name), and the deploy job's GITHUB_TOKEN then gets 403 on pull.
+              # Build context and Dockerfile default to the repository root; a
+              # monorepo overrides them with the PINQOPS_BUILD_CONTEXT /
+              # PINQOPS_DOCKERFILE repository variables (set by the dashboard when
+              # you pick a subdirectory) — no workflow edit needed.
               - name: Build and push image
                 uses: docker/build-push-action@v6
                 with:
-                  context: .
+                  context: ${{ vars.PINQOPS_BUILD_CONTEXT || '.' }}
+                  file: ${{ vars.PINQOPS_DOCKERFILE || format('{0}/Dockerfile', vars.PINQOPS_BUILD_CONTEXT || '.') }}
                   push: true
                   tags: |
                     ${{ steps.image.outputs.name }}:latest

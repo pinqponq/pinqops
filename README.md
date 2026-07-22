@@ -42,10 +42,13 @@ volumes, network management with a visual map, workflow runs, runner status
 
 The **GitHub** menu is the whole onboarding, as a three-step wizard:
 **1 Connect** (OAuth device flow or paste a token) → **2 Choose repository**
-(search and pick from the list — no URLs) → **3 Publish**. The publish step
-shows the ports up front — the container side read from your Dockerfile's
-`EXPOSE` (with a clear warning and an editable field when there is none), the
-host side pre-filled with a free port and validated live as you type — then
+(search and pick from the list — no URLs) → **3 Publish**. If the repository
+has no Dockerfile, the publish step **detects the stack** (Node, Python, Go,
+.NET, Rust, PHP, Ruby, or a static site) and offers a generated, editable
+Dockerfile to commit — monorepos included. It then shows the ports up front —
+the container side read from your Dockerfile's `EXPOSE` (with a clear warning
+and an editable field when there is none), the host side pre-filled with a free
+port and validated live as you type — then
 commits the deploy workflow, generates the compose file, **registers the
 self-hosted runner** (replacing a leftover runner from another repository if
 it finds one), streams the install log live, verifies on GitHub that the

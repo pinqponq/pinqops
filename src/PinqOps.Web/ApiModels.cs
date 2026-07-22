@@ -17,6 +17,8 @@ public sealed record SettingsRequest(
 
 public sealed record AppRemoveRequest(string? Id);
 
+public sealed record CreateDockerfileRequest(string? Content, string? Dir);
+
 public sealed record TokenRequest(string? Pat, string? Username);
 
 public sealed record DeviceStartRequest(string? ClientId);

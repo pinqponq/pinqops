@@ -31,6 +31,17 @@ public class SetupTemplatesTests
     }
 
     [Fact]
+    public void DeployWorkflowYaml_BuildContextIsOverridableForMonorepos()
+    {
+        // A subdirectory app sets PINQOPS_BUILD_CONTEXT; the default keeps the
+        // repository root, so existing single-app repos are unaffected.
+        var yaml = SetupTemplates.DeployWorkflowYaml("main");
+
+        Assert.Contains("context: ${{ vars.PINQOPS_BUILD_CONTEXT || '.' }}", yaml);
+        Assert.Contains("vars.PINQOPS_DOCKERFILE", yaml);
+    }
+
+    [Fact]
     public void DeployWorkflowYaml_KeepsGitHubExpressionsIntact()
     {
         // The template is an interpolated raw literal; too few '$' would swallow
