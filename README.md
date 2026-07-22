@@ -132,9 +132,17 @@ HTTPS.
 
 ## Updating
 
-Re-run the install commands above — the download URLs always point at the
-latest release. Stop `pinqops-ui` first if it's running, then start it again.
-Check with:
+Self-update in place — no curl, no copy-paste:
+
+```bash
+sudo pinqops update       # replaces the pinqops binary with the latest release
+sudo pinqops-ui update    # replaces pinqops-ui and restarts its service
+```
+
+Each downloads the latest release binary, swaps it in atomically, and — for the
+dashboard, when it runs as the systemd service — restarts it so the new version
+takes over. (Prefer doing it by hand? Re-running the install commands above
+still works; the download URLs always point at the latest release.) Check with:
 
 ```bash
 pinqops version

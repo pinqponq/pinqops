@@ -21,6 +21,7 @@ try
         "history" => RunHistory(rest),
         "install-runner" => await RunInstallRunnerAsync(rest),
         "preview" => await RunPreviewAsync(rest),
+        "update" => await RunUpdateAsync(),
         "mcp" => await PinqOps.Cli.McpServer.RunAsync(),
         "version" or "--version" or "-v" => PrintVersion(),
         "help" or "--help" or "-h" => PrintUsage(),
@@ -205,13 +206,13 @@ async Task<int> RunPreviewAsync(string[] previewArgs)
     var previewRest = previewArgs.Skip(1).ToArray();
     var composeFilePath = ResolveComposePath(previewRest);
     var pr = ParsePr(GetOption(previewRest, "--pr"));
-    var (owner, repo) = ResolvePreviewRepo(previewRest);
 
     var manager = new PreviewManager(new ProcessRunner(), log: Console.WriteLine);
 
     switch (subcommand)
     {
         case "deploy":
+            var (owner, repo) = ResolvePreviewRepo(previewRest);
             var image = GetOption(previewRest, "--image")
                 ?? throw new ArgumentException("preview deploy needs --image (e.g. ghcr.io/<owner>/<repo>).");
             var tag = GetOption(previewRest, "--tag")
@@ -227,7 +228,20 @@ async Task<int> RunPreviewAsync(string[] previewArgs)
             return 0;
 
         case "teardown":
-            await manager.TeardownAsync(composeFilePath, repo, pr);
+            // teardown brings the compose project down and deletes its directory
+            // from the compose path + PR alone; repo is only needed to drop the
+            // proxy route, so it stays optional here (the workflow passes --image;
+            // a manual `preview teardown --pr N` no longer errors out). Warn when
+            // it's unknown so a leftover route isn't a silent surprise.
+            var teardownRepo = ResolvePreviewRepoOptional(previewRest);
+            if (teardownRepo is null)
+            {
+                Console.WriteLine(
+                    "note: no --repo/--image given, so a preview domain route (if any) can't be removed; "
+                    + "pass --repo <r> to clean that up too.");
+            }
+
+            await manager.TeardownAsync(composeFilePath, teardownRepo ?? string.Empty, pr);
             return 0;
 
         default:
@@ -269,6 +283,47 @@ static (string Owner, string Repo) ResolvePreviewRepo(string[] args)
     }
 
     throw new ArgumentException("preview needs --owner and --repo, or an --image to derive them from.");
+}
+
+// Just the repo for teardown: from --repo, else the last segment of --image, else
+// null. Owner isn't needed to tear down, so this never throws.
+static string? ResolvePreviewRepoOptional(string[] args)
+{
+    if (GetOption(args, "--repo") is { } repo)
+    {
+        return repo;
+    }
+
+    var image = GetOption(args, "--image");
+    if (image is not null)
+    {
+        var path = image.Contains('/') ? image[(image.IndexOf('/') + 1)..] : image;
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length >= 1)
+        {
+            return segments[^1];
+        }
+    }
+
+    return null;
+}
+
+async Task<int> RunUpdateAsync()
+{
+    Console.WriteLine($"pinqops {PinqOpsVersion.Current} — checking for the latest release…");
+    using var downloader = new HttpFileDownloader();
+    var updated = await new SelfUpdater(downloader, Console.WriteLine).UpdateAsync("pinqops");
+    if (updated is null)
+    {
+        return 1;
+    }
+
+    // Report the version the freshly installed binary now prints.
+    var version = await new ProcessRunner().RunAsync(updated, new[] { "version" });
+    Console.WriteLine(version.Succeeded
+        ? $"now on {version.StandardOutput.Trim()}"
+        : "update complete.");
+    return 0;
 }
 
 int PrintVersion()
@@ -338,6 +393,11 @@ int PrintUsage()
               pr-<n>.<domain> to it when the app has a domain. teardown removes
               the project, its volumes and its route. Both are invoked by the PR
               workflow on the runner. Owner/repo default to the --image path.
+
+          pinqops update
+              Replace this binary in place with the latest published release
+              (self-contained linux-x64). Run with sudo if pinqops lives in a
+              root-owned directory such as /usr/local/bin.
 
           pinqops mcp
               Run a Model Context Protocol server (stdio) that exposes the
