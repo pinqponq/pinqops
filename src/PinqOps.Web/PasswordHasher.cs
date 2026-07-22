@@ -54,4 +54,17 @@ public static class PasswordHasher
     /// <summary>True when the stored hash predates the current work factor.</summary>
     public static bool NeedsRehash(string stored) =>
         !stored.StartsWith($"{Iterations}.", StringComparison.Ordinal);
+
+    // A hash of a throwaway secret at the current work factor. Verifying against
+    // it lets the login path spend the same PBKDF2 time on a username that does
+    // not exist as on one that does.
+    private static readonly string DummyHash = Hash("pinqops-timing-equalizer");
+
+    /// <summary>
+    /// Runs one verification against a fixed dummy hash and discards the result.
+    /// Call this on the account-not-found branch of a login so response timing
+    /// costs the same whether or not the username exists — otherwise the PBKDF2
+    /// work only happens for real accounts and leaks which usernames are valid.
+    /// </summary>
+    public static void SpendVerificationTime() => Verify(string.Empty, DummyHash);
 }

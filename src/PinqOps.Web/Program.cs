@@ -324,6 +324,13 @@ app.MapPost("/api/auth/login", async (HttpContext context, UiConfigStore store, 
 
     if (account is null || request?.Password is not { } password || !PasswordHasher.Verify(password, account.PasswordHash))
     {
+        if (account is null)
+        {
+            // Spend the same PBKDF2 time as a real (failed) verify so login
+            // timing can't be used to tell a valid username from an invalid one.
+            PasswordHasher.SpendVerificationTime();
+        }
+
         throttle.RecordFailure(client);
         logger.LogWarning("Failed dashboard login for '{User}' from {Client}", username, client);
         await Task.Delay(500); // keep failures slow even before the lockout kicks in
@@ -380,6 +387,11 @@ app.MapPost("/api/auth/change-password", async (HttpContext context, UiConfigSto
     var account = store.Current.Users.FirstOrDefault(u => string.Equals(u.Username, self, StringComparison.OrdinalIgnoreCase));
     if (account is null || request?.CurrentPassword is not { } current || !PasswordHasher.Verify(current, account.PasswordHash))
     {
+        if (account is null)
+        {
+            PasswordHasher.SpendVerificationTime();
+        }
+
         throttle.RecordFailure(client);
         logger.LogWarning("Failed password change (wrong current password) for '{User}' from {Client}", self, client);
         await Task.Delay(500);
@@ -2105,7 +2117,11 @@ app.MapGet("/api/system", (SystemInfoService system) => Results.Json(system.GetI
 
 Console.WriteLine($"pinqops-ui {PinqOpsVersion.Current} listening on {(useTls ? "https" : "http")}://{host}:{port}");
 var configStore = app.Services.GetRequiredService<UiConfigStore>();
-if (string.IsNullOrEmpty(configStore.Current.PasswordHash))
+// The setup code claims the dashboard by creating the first admin, so it only
+// applies while there are no users. The legacy top-level PasswordHash is always
+// null after migration (the hash lives on the user now), so testing it would
+// print a stale, unusable code on every restart of a configured server.
+if (configStore.Current.Users.Count == 0)
 {
     Console.WriteLine($"first-run setup code: {setupCode}   (required once, to create the dashboard password)");
 }
