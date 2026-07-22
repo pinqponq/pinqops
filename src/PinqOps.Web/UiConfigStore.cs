@@ -64,13 +64,29 @@ public sealed class UiConfigStore
     }
 
     /// <summary>
-    /// Wraps a legacy single-app config into <see cref="UiConfig.Apps"/>. The
-    /// migrated app keeps its paths; account fields (password hash, PAT) are
-    /// untouched. In-memory only — the file is rewritten in the new shape on
-    /// the next <see cref="Update"/>. Idempotent.
+    /// Wraps a legacy single-app / single-user config into
+    /// <see cref="UiConfig.Apps"/> and <see cref="UiConfig.Users"/>. The migrated
+    /// app keeps its paths and the migrated password becomes the sole <c>admin</c>
+    /// user; the PAT is untouched. In-memory only — the file is rewritten in the
+    /// new shape on the next <see cref="Update"/>. Idempotent.
     /// </summary>
     public static UiConfig Migrate(UiConfig config)
     {
+        // A pre-multi-user config has a top-level password hash and no users; that
+        // hash becomes the first admin. The admin must NEVER be locked out, so a
+        // migration failure here is not possible — it is a pure list add.
+        if (config.Users.Count == 0 && !string.IsNullOrWhiteSpace(config.PasswordHash))
+        {
+            config.Users.Add(new UserAccount
+            {
+                Username = UserRoles.LegacyAdmin,
+                PasswordHash = config.PasswordHash,
+                Role = UserRoles.Admin,
+            });
+        }
+
+        config.PasswordHash = null;
+
         if (config.Apps.Count == 0 && !string.IsNullOrWhiteSpace(config.RepoUrl))
         {
             string id;

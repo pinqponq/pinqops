@@ -1,10 +1,14 @@
 namespace PinqOps.Web;
 
-public sealed record PasswordRequest(string? Password);
+public sealed record PasswordRequest(string? Password, string? Username = null);
 
 public sealed record SetupRequest(string? Password, string? SetupCode);
 
 public sealed record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
+
+public sealed record UserRequest(string? Username, string? Password, string? Role);
+
+public sealed record UserPasswordRequest(string? Password);
 
 public sealed record SettingsRequest(
     string? RepoUrl,

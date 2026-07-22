@@ -31,7 +31,12 @@ public class UiConfigStoreTests : IDisposable
         // The migrated app KEEPS its paths — deploy history and .env live there.
         Assert.Equal("/opt/pinqops/docker-compose.yml", app.ComposeFile);
         Assert.Equal("/opt/actions-runner", app.RunnerDirectory);
-        Assert.Equal("c2FsdA==.aGFzaA==", config.PasswordHash);
+        // The legacy password becomes the sole admin user; the top-level field is cleared.
+        var user = Assert.Single(config.Users);
+        Assert.Equal("admin", user.Username);
+        Assert.Equal("c2FsdA==.aGFzaA==", user.PasswordHash);
+        Assert.Equal("admin", user.Role);
+        Assert.Null(config.PasswordHash);
         Assert.Equal("ghp_x", config.Pat);
         Assert.Null(config.RepoUrl);
     }
@@ -55,7 +60,25 @@ public class UiConfigStoreTests : IDisposable
         var config = new UiConfigStore(ConfigPath).Current;
 
         Assert.Empty(config.Apps);
-        Assert.Equal("s.h", config.PasswordHash);
+        // The password still migrates to the sole admin, even with no app connected.
+        Assert.Equal("s.h", Assert.Single(config.Users).PasswordHash);
+        Assert.Null(config.PasswordHash);
+    }
+
+    [Fact]
+    public void Migrate_PreservesExistingUsers_AndIsIdempotent()
+    {
+        var config = new UiConfig
+        {
+            PasswordHash = "legacy.hash",
+            Users = [new UserAccount { Username = "alice", PasswordHash = "a.h", Role = "deployer" }],
+        };
+
+        var migrated = UiConfigStore.Migrate(config);
+
+        // An existing users list means the legacy hash is NOT re-added.
+        Assert.Equal("alice", Assert.Single(migrated.Users).Username);
+        Assert.Null(migrated.PasswordHash);
     }
 
     [Fact]
@@ -96,7 +119,9 @@ public class UiConfigStoreTests : IDisposable
 
         using var saved = JsonDocument.Parse(File.ReadAllText(ConfigPath));
         Assert.False(saved.RootElement.TryGetProperty("RepoUrl", out _));
-        Assert.Equal("s.h", saved.RootElement.GetProperty("PasswordHash").GetString());
+        // The legacy top-level password is gone; it now lives in Users.
+        Assert.False(saved.RootElement.TryGetProperty("PasswordHash", out _));
+        Assert.Equal("s.h", saved.RootElement.GetProperty("Users")[0].GetProperty("PasswordHash").GetString());
         Assert.Equal(1, saved.RootElement.GetProperty("Apps").GetArrayLength());
 
         // And a reload of the saved file round-trips.

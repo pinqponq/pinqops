@@ -85,6 +85,9 @@ builder.Services.AddSingleton(sp => new PinqOps.Backups.BackupConfigStore(
     Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<UiConfigStore>().Path_)!, "backups.json")));
 builder.Services.AddSingleton(sp => new ApiTokenStore(
     Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<UiConfigStore>().Path_)!, "tokens.json")));
+builder.Services.AddSingleton(sp => new AuditLog(
+    Environment.GetEnvironmentVariable("PINQOPS_AUDIT_LOG")
+    ?? Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<UiConfigStore>().Path_)!, "audit.jsonl")));
 builder.Services.AddHostedService<BackupScheduler>();
 builder.Services.AddSingleton<GitHubDashboardService>();
 builder.Services.AddSingleton<GitHubDeviceFlow>();
@@ -163,45 +166,82 @@ app.Use(async (context, next) =>
         && !anonymousPaths.Contains(path.Value, StringComparer.OrdinalIgnoreCase))
     {
         var token = ReadBearerToken(context);
+        string scope;
+        string user;
         if (token is { } bearer && ApiTokenStore.LooksLikeToken(bearer))
         {
-            // API-token auth: validate, then enforce the route's required scope.
-            // (Session logins are full admins and skip the scope check below.)
+            // API-token auth: its scope is the token's scope.
             var tokens = context.RequestServices.GetRequiredService<ApiTokenStore>();
-            var scope = tokens.Validate(bearer, DateTimeOffset.UtcNow);
-            if (scope is null)
+            var tokenScope = tokens.Validate(bearer, DateTimeOffset.UtcNow);
+            if (tokenScope is null)
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 await context.Response.WriteAsJsonAsync(new { error = "Unauthorized." });
                 return;
             }
 
-            var required = ApiScopes.RequiredFor(context.Request.Method, path.Value ?? string.Empty);
-            if (!ApiScopes.Satisfies(scope, required))
-            {
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    error = $"This token has '{scope}' scope; '{required}' is required for this action.",
-                });
-                return;
-            }
-
-            context.Items["scope"] = scope;
+            scope = tokenScope;
+            user = "api-token";
         }
         else
         {
+            // Session auth: the user's role maps to an equivalent scope, so one
+            // check below covers both a session and a token.
             var sessions = context.RequestServices.GetRequiredService<SessionStore>();
-            if (token is null || !sessions.Validate(token))
+            var principal = token is null ? null : sessions.Resolve(token);
+            if (principal is null)
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 await context.Response.WriteAsJsonAsync(new { error = "Unauthorized." });
                 return;
             }
+
+            scope = UserRoles.ScopeFor(principal.Role);
+            user = principal.Username;
         }
+
+        var required = ApiScopes.RequiredFor(context.Request.Method, path.Value ?? string.Empty);
+        if (!ApiScopes.Satisfies(scope, required))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = $"Your role/token grants '{scope}'; '{required}' is required for this action.",
+            });
+            return;
+        }
+
+        context.Items["scope"] = scope;
+        context.Items["user"] = user;
     }
 
     await next();
+});
+
+// Audit trail: record every mutating action once auth has resolved the caller.
+// Reads only happen through GET/HEAD, which are skipped, so the log stays a
+// history of changes rather than a request firehose.
+app.Use(async (context, next) =>
+{
+    await next();
+
+    var path = context.Request.Path;
+    var method = context.Request.Method;
+    var isMutation = !HttpMethods.IsGet(method) && !HttpMethods.IsHead(method) && !HttpMethods.IsOptions(method);
+    if (!path.StartsWithSegments("/api") || !isMutation || context.Items["user"] is not string actor)
+    {
+        return;
+    }
+
+    var status = context.Response.StatusCode;
+    var audit = context.RequestServices.GetRequiredService<AuditLog>();
+    audit.Append(new AuditEntry(
+        DateTimeOffset.UtcNow,
+        actor,
+        $"{method} {path.Value}",
+        context.Request.Query["appId"].ToString(),
+        status < 400 ? "ok" : "err",
+        status));
 });
 
 // ---- Dashboard page (embedded single file) --------------------------------
@@ -216,7 +256,10 @@ app.MapGet("/", (HttpContext context) =>
 
 app.MapGet("/api/auth/state", (UiConfigStore store) => Results.Json(new
 {
-    needsSetup = string.IsNullOrEmpty(store.Current.PasswordHash),
+    needsSetup = store.Current.Users.Count == 0,
+    // The lock screen only shows a username field once there is more than one
+    // user; a lone migrated admin logs in with just a password, as before.
+    multiUser = store.Current.Users.Count > 1,
 }));
 
 app.MapPost("/api/auth/setup", async (HttpContext context, UiConfigStore store, SessionStore sessions, LoginThrottle throttle) =>
@@ -229,7 +272,7 @@ app.MapPost("/api/auth/setup", async (HttpContext context, UiConfigStore store, 
     }
 
     var request = await context.Request.ReadFromJsonAsync<SetupRequest>();
-    if (!string.IsNullOrEmpty(store.Current.PasswordHash))
+    if (store.Current.Users.Count > 0)
     {
         return Error(409, "A password is already set — log in instead.");
     }
@@ -250,9 +293,14 @@ app.MapPost("/api/auth/setup", async (HttpContext context, UiConfigStore store, 
     }
 
     throttle.RecordSuccess(client);
-    store.Update(config => config.PasswordHash = PasswordHasher.Hash(password));
-    logger.LogWarning("Dashboard password created from {Client}", client);
-    return Results.Json(new { token = sessions.Create() });
+    store.Update(config => config.Users.Add(new UserAccount
+    {
+        Username = UserRoles.LegacyAdmin,
+        PasswordHash = PasswordHasher.Hash(password),
+        Role = UserRoles.Admin,
+    }));
+    logger.LogWarning("Dashboard admin created from {Client}", client);
+    return Results.Json(new { token = sessions.Create(UserRoles.LegacyAdmin, UserRoles.Admin) });
 });
 
 app.MapPost("/api/auth/login", async (HttpContext context, UiConfigStore store, SessionStore sessions, LoginThrottle throttle) =>
@@ -265,27 +313,37 @@ app.MapPost("/api/auth/login", async (HttpContext context, UiConfigStore store, 
     }
 
     var request = await context.Request.ReadFromJsonAsync<PasswordRequest>();
-    var hash = store.Current.PasswordHash;
-    if (hash is null)
+    if (store.Current.Users.Count == 0)
     {
         return Error(409, "No password set yet — create one first.");
     }
 
-    if (request?.Password is not { } password || !PasswordHasher.Verify(password, hash))
+    // A missing username means the lone legacy admin — old clients keep working.
+    var username = string.IsNullOrWhiteSpace(request?.Username) ? UserRoles.LegacyAdmin : request!.Username!.Trim();
+    var account = store.Current.Users.FirstOrDefault(u => string.Equals(u.Username, username, StringComparison.OrdinalIgnoreCase));
+
+    if (account is null || request?.Password is not { } password || !PasswordHasher.Verify(password, account.PasswordHash))
     {
         throttle.RecordFailure(client);
-        logger.LogWarning("Failed dashboard login from {Client}", client);
+        logger.LogWarning("Failed dashboard login for '{User}' from {Client}", username, client);
         await Task.Delay(500); // keep failures slow even before the lockout kicks in
-        return Error(401, "Wrong password.");
+        return Error(401, "Wrong username or password.");
     }
 
     throttle.RecordSuccess(client);
-    if (PasswordHasher.NeedsRehash(hash))
+    if (PasswordHasher.NeedsRehash(account.PasswordHash))
     {
-        store.Update(config => config.PasswordHash = PasswordHasher.Hash(password));
+        store.Update(config =>
+        {
+            var stored = config.Users.FirstOrDefault(u => string.Equals(u.Username, account.Username, StringComparison.OrdinalIgnoreCase));
+            if (stored is not null)
+            {
+                stored.PasswordHash = PasswordHasher.Hash(password);
+            }
+        });
     }
 
-    return Results.Json(new { token = sessions.Create() });
+    return Results.Json(new { token = sessions.Create(account.Username, account.Role), username = account.Username, role = account.Role });
 });
 
 app.MapPost("/api/auth/logout", (HttpContext context, SessionStore sessions) =>
@@ -307,12 +365,15 @@ app.MapPost("/api/auth/change-password", async (HttpContext context, UiConfigSto
         return Error(429, $"Too many failed attempts — try again in {(int)Math.Ceiling(wait.TotalMinutes)} minute(s).");
     }
 
+    // change-password runs after auth, so the caller's identity is known — a
+    // user changes their OWN password (admins set others' via /api/users).
+    var self = context.Items["user"] as string ?? UserRoles.LegacyAdmin;
     var request = await context.Request.ReadFromJsonAsync<ChangePasswordRequest>();
-    var hash = store.Current.PasswordHash;
-    if (hash is null || request?.CurrentPassword is not { } current || !PasswordHasher.Verify(current, hash))
+    var account = store.Current.Users.FirstOrDefault(u => string.Equals(u.Username, self, StringComparison.OrdinalIgnoreCase));
+    if (account is null || request?.CurrentPassword is not { } current || !PasswordHasher.Verify(current, account.PasswordHash))
     {
         throttle.RecordFailure(client);
-        logger.LogWarning("Failed password change (wrong current password) from {Client}", client);
+        logger.LogWarning("Failed password change (wrong current password) for '{User}' from {Client}", self, client);
         await Task.Delay(500);
         return Error(401, "Current password is wrong.");
     }
@@ -323,9 +384,16 @@ app.MapPost("/api/auth/change-password", async (HttpContext context, UiConfigSto
     }
 
     throttle.RecordSuccess(client);
-    store.Update(config => config.PasswordHash = PasswordHasher.Hash(fresh));
-    sessions.RevokeAll(); // every device must sign in again with the new password
-    logger.LogWarning("Dashboard password changed from {Client}; all sessions revoked", client);
+    store.Update(config =>
+    {
+        var stored = config.Users.FirstOrDefault(u => string.Equals(u.Username, self, StringComparison.OrdinalIgnoreCase));
+        if (stored is not null)
+        {
+            stored.PasswordHash = PasswordHasher.Hash(fresh);
+        }
+    });
+    sessions.RevokeUser(account.Username); // sign this user's other devices out
+    logger.LogWarning("Password changed for '{User}' from {Client}", self, client);
     return Results.Json(new { ok = true });
 });
 
@@ -1754,6 +1822,153 @@ app.MapDelete("/api/tokens/{id}", (string id, ApiTokenStore tokens) =>
         return new { ok = true };
     }));
 
+// ---- Users & roles (admin only) -------------------------------------------------
+
+app.MapGet("/api/users", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        RequireAdmin(context);
+        await Task.CompletedTask;
+        var me = context.Items["user"] as string;
+        return new
+        {
+            items = store.Current.Users.Select(u => new
+            {
+                u.Username,
+                u.Role,
+                isSelf = string.Equals(u.Username, me, StringComparison.OrdinalIgnoreCase),
+            }),
+        };
+    }));
+
+app.MapPost("/api/users", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<UserRequest>();
+        var username = (request?.Username ?? string.Empty).Trim();
+        if (username is not { Length: >= 2 } || !username.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.'))
+        {
+            throw new ArgumentException("Username must be at least 2 characters (letters, digits, - _ .).");
+        }
+
+        if (request?.Password is not { Length: >= 8 } password)
+        {
+            throw new ArgumentException("Password must be at least 8 characters.");
+        }
+
+        if (!UserRoles.IsValid(request.Role))
+        {
+            throw new ArgumentException("Role must be viewer, deployer, or admin.");
+        }
+
+        if (store.Current.Users.Any(u => string.Equals(u.Username, username, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"A user named '{username}' already exists.");
+        }
+
+        store.Update(config => config.Users.Add(new UserAccount
+        {
+            Username = username,
+            PasswordHash = PasswordHasher.Hash(password),
+            Role = request.Role!,
+        }));
+        logger.LogWarning("User '{User}' created with role {Role}", username, request.Role);
+        return new { ok = true, username, role = request.Role };
+    }));
+
+app.MapPost("/api/users/{name}/password", (string name, HttpContext context, UiConfigStore store, SessionStore sessions) =>
+    Safe(async () =>
+    {
+        RequireAdmin(context);
+        var request = await context.Request.ReadFromJsonAsync<UserPasswordRequest>();
+        if (request?.Password is not { Length: >= 8 } password)
+        {
+            throw new ArgumentException("Password must be at least 8 characters.");
+        }
+
+        var target = store.Current.Users.FirstOrDefault(u => string.Equals(u.Username, name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new ArgumentException($"No user named '{name}'.");
+
+        store.Update(config =>
+        {
+            var stored = config.Users.First(u => string.Equals(u.Username, target.Username, StringComparison.OrdinalIgnoreCase));
+            stored.PasswordHash = PasswordHasher.Hash(password);
+        });
+        sessions.RevokeUser(target.Username); // force a fresh login with the new password
+        logger.LogWarning("Password reset for user '{User}'", target.Username);
+        return new { ok = true };
+    }));
+
+app.MapDelete("/api/users/{name}", (string name, HttpContext context, UiConfigStore store, SessionStore sessions) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        var me = context.Items["user"] as string;
+        if (string.Equals(name, me, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("You cannot delete your own account.");
+        }
+
+        var target = store.Current.Users.FirstOrDefault(u => string.Equals(u.Username, name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new ArgumentException($"No user named '{name}'.");
+
+        // The last admin must never be removed, or no one could ever administer
+        // the dashboard again.
+        if (target.Role == UserRoles.Admin
+            && store.Current.Users.Count(u => u.Role == UserRoles.Admin) <= 1)
+        {
+            throw new InvalidOperationException("Cannot remove the last admin.");
+        }
+
+        store.Update(config => config.Users.RemoveAll(u => string.Equals(u.Username, target.Username, StringComparison.OrdinalIgnoreCase)));
+        sessions.RevokeUser(target.Username);
+        logger.LogWarning("User '{User}' removed", target.Username);
+        return new { ok = true };
+    }));
+
+// Role change is a small, separate action so the UI can inline it in the table.
+app.MapPost("/api/users/{name}/role", (string name, HttpContext context, UiConfigStore store, SessionStore sessions) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<UserRequest>();
+        if (!UserRoles.IsValid(request?.Role))
+        {
+            throw new ArgumentException("Role must be viewer, deployer, or admin.");
+        }
+
+        var target = store.Current.Users.FirstOrDefault(u => string.Equals(u.Username, name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new ArgumentException($"No user named '{name}'.");
+
+        // Demoting the last admin would lock everyone out of administration.
+        if (target.Role == UserRoles.Admin && request!.Role != UserRoles.Admin
+            && store.Current.Users.Count(u => u.Role == UserRoles.Admin) <= 1)
+        {
+            throw new InvalidOperationException("Cannot demote the last admin.");
+        }
+
+        store.Update(config =>
+        {
+            var stored = config.Users.First(u => string.Equals(u.Username, target.Username, StringComparison.OrdinalIgnoreCase));
+            stored.Role = request!.Role!;
+        });
+        sessions.RevokeUser(target.Username); // the new role takes effect on next login
+        logger.LogWarning("User '{User}' role changed to {Role}", target.Username, request!.Role);
+        return new { ok = true, username = target.Username, role = request.Role };
+    }));
+
+// ---- Audit trail (admin only) ---------------------------------------------------
+
+app.MapGet("/api/audit", (HttpContext context, AuditLog audit) =>
+    Safe(async () =>
+    {
+        RequireAdmin(context);
+        await Task.CompletedTask;
+        var limit = int.TryParse(context.Request.Query["limit"], out var n) ? n : 200;
+        var user = context.Request.Query["user"].ToString();
+        var action = context.Request.Query["action"].ToString();
+        return new { items = audit.Read(limit, user, action) };
+    }));
+
 // ---- Notifications --------------------------------------------------------------
 
 app.MapGet("/api/notifications", (HttpContext context, UiConfigStore store) =>
@@ -1911,6 +2126,10 @@ static async Task<IResult> Safe(Func<Task<object?>> action)
     {
         return Error(400, exception.Message);
     }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Error(403, exception.Message);
+    }
     catch (GitHubApiException exception)
     {
         return Error(502, exception.Message);
@@ -1926,6 +2145,17 @@ static IResult Error(int statusCode, string message) =>
 
 static string ClientKey(HttpContext context) =>
     context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+// Guards the user- and audit-management endpoints: a GET falls to "read" scope
+// in the middleware, so admin-only reads (the user list, the audit trail) are
+// enforced here. Writes are already admin-gated by the scope middleware.
+static void RequireAdmin(HttpContext context)
+{
+    if (context.Items["scope"] as string != "admin")
+    {
+        throw new UnauthorizedAccessException("This action requires the admin role.");
+    }
+}
 
 /// <summary>First published host port from docker ps's Ports column, e.g.
 /// "0.0.0.0:3005-&gt;3000/tcp, :::3005-&gt;3000/tcp" → 3005.</summary>
