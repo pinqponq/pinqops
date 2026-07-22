@@ -20,6 +20,7 @@ try
         "rollback" => await RunRollbackAsync(rest),
         "history" => RunHistory(rest),
         "install-runner" => await RunInstallRunnerAsync(rest),
+        "preview" => await RunPreviewAsync(rest),
         "mcp" => await PinqOps.Cli.McpServer.RunAsync(),
         "version" or "--version" or "-v" => PrintVersion(),
         "help" or "--help" or "-h" => PrintUsage(),
@@ -192,6 +193,84 @@ async Task<int> RunInstallRunnerAsync(string[] installArgs)
     return succeeded ? 0 : 1;
 }
 
+async Task<int> RunPreviewAsync(string[] previewArgs)
+{
+    if (previewArgs.Length == 0)
+    {
+        Console.Error.WriteLine("error: preview needs a subcommand: deploy or teardown");
+        return 1;
+    }
+
+    var subcommand = previewArgs[0];
+    var previewRest = previewArgs.Skip(1).ToArray();
+    var composeFilePath = ResolveComposePath(previewRest);
+    var pr = ParsePr(GetOption(previewRest, "--pr"));
+    var (owner, repo) = ResolvePreviewRepo(previewRest);
+
+    var manager = new PreviewManager(new ProcessRunner(), log: Console.WriteLine);
+
+    switch (subcommand)
+    {
+        case "deploy":
+            var image = GetOption(previewRest, "--image")
+                ?? throw new ArgumentException("preview deploy needs --image (e.g. ghcr.io/<owner>/<repo>).");
+            var tag = GetOption(previewRest, "--tag")
+                ?? throw new ArgumentException("preview deploy needs --tag (e.g. sha-<commit>).");
+            var request = new PreviewDeployRequest(composeFilePath, owner, repo, pr, image, tag, DateTimeOffset.UtcNow);
+            var result = await manager.DeployAsync(request);
+            if (!result.Succeeded)
+            {
+                Console.Error.WriteLine($"error: {result.Error}");
+                return 1;
+            }
+
+            return 0;
+
+        case "teardown":
+            await manager.TeardownAsync(composeFilePath, repo, pr);
+            return 0;
+
+        default:
+            Console.Error.WriteLine($"error: unknown preview subcommand '{subcommand}' (expected deploy or teardown)");
+            return 1;
+    }
+}
+
+static int ParsePr(string? raw)
+{
+    if (!int.TryParse(raw, out var pr) || pr <= 0)
+    {
+        throw new ArgumentException($"--pr must be a positive pull request number, got '{raw}'.");
+    }
+
+    return pr;
+}
+
+// Owner/repo come from --owner/--repo when given, otherwise from the image
+// reference (ghcr.io/<owner>/<repo>) — the workflow always passes --image.
+static (string Owner, string Repo) ResolvePreviewRepo(string[] args)
+{
+    var owner = GetOption(args, "--owner");
+    var repo = GetOption(args, "--repo");
+    if (owner is not null && repo is not null)
+    {
+        return (owner, repo);
+    }
+
+    var image = GetOption(args, "--image");
+    if (image is not null)
+    {
+        var path = image.Contains('/') ? image[(image.IndexOf('/') + 1)..] : image;
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length >= 2)
+        {
+            return (owner ?? segments[^2], repo ?? segments[^1]);
+        }
+    }
+
+    throw new ArgumentException("preview needs --owner and --repo, or an --image to derive them from.");
+}
+
 int PrintVersion()
 {
     Console.WriteLine($"pinqops {PinqOpsVersion.Current}");
@@ -248,6 +327,17 @@ int PrintUsage()
                                  [--version <runner-version>] [--dir <path>] [--user <user>]
               Install and register a GitHub Actions self-hosted runner as a
               systemd service (outbound-only; no inbound port on the server).
+
+          pinqops preview deploy --pr <n> --image <registry/path> --tag <image-tag>
+                                 [--compose-file <path>] [--owner <o>] [--repo <r>]
+          pinqops preview teardown --pr <n> [--compose-file <path>] [--repo <r>]
+              Bring up (or tear down) a per-PR preview environment as its own
+              compose project (<repo>-pr-<n>) on a free host port, next to
+              production. deploy reuses production's .env — minus the pinned
+              image/tag/host-port — pulls the PR image and starts it, routing
+              pr-<n>.<domain> to it when the app has a domain. teardown removes
+              the project, its volumes and its route. Both are invoked by the PR
+              workflow on the runner. Owner/repo default to the --image path.
 
           pinqops mcp
               Run a Model Context Protocol server (stdio) that exposes the
