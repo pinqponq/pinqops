@@ -52,7 +52,7 @@ public sealed class UiConfigStore
         {
             if (File.Exists(_path))
             {
-                return JsonSerializer.Deserialize<UiConfig>(File.ReadAllText(_path)) ?? new UiConfig();
+                return Migrate(JsonSerializer.Deserialize<UiConfig>(File.ReadAllText(_path)) ?? new UiConfig());
             }
         }
         catch (JsonException)
@@ -61,6 +61,62 @@ public sealed class UiConfigStore
         }
 
         return new UiConfig();
+    }
+
+    /// <summary>
+    /// Wraps a legacy single-app / single-user config into
+    /// <see cref="UiConfig.Apps"/> and <see cref="UiConfig.Users"/>. The migrated
+    /// app keeps its paths and the migrated password becomes the sole <c>admin</c>
+    /// user; the PAT is untouched. In-memory only — the file is rewritten in the
+    /// new shape on the next <see cref="Update"/>. Idempotent.
+    /// </summary>
+    public static UiConfig Migrate(UiConfig config)
+    {
+        // A pre-multi-user config has a top-level password hash and no users; that
+        // hash becomes the first admin. The admin must NEVER be locked out, so a
+        // migration failure here is not possible — it is a pure list add.
+        if (config.Users.Count == 0 && !string.IsNullOrWhiteSpace(config.PasswordHash))
+        {
+            config.Users.Add(new UserAccount
+            {
+                Username = UserRoles.LegacyAdmin,
+                PasswordHash = config.PasswordHash,
+                Role = UserRoles.Admin,
+            });
+        }
+
+        config.PasswordHash = null;
+
+        if (config.Apps.Count == 0 && !string.IsNullOrWhiteSpace(config.RepoUrl))
+        {
+            string id;
+            try
+            {
+                id = AppConnection.SlugFor(GitHubRepositoryParser.Parse(config.RepoUrl));
+            }
+            catch (ArgumentException)
+            {
+                // A hand-edited garbage URL still must not lose the connection.
+                id = ComposeProjectName.Fallback;
+            }
+
+            config.Apps.Add(new AppConnection
+            {
+                Id = id,
+                RepoUrl = config.RepoUrl,
+                ComposeFile = string.IsNullOrWhiteSpace(config.ComposeFile)
+                    ? UiConfig.DefaultComposeFile
+                    : config.ComposeFile,
+                RunnerDirectory = string.IsNullOrWhiteSpace(config.RunnerDirectory)
+                    ? UiConfig.DefaultRunnerDirectory
+                    : config.RunnerDirectory,
+            });
+        }
+
+        config.RepoUrl = null;
+        config.ComposeFile = null;
+        config.RunnerDirectory = null;
+        return config;
     }
 
     private void Save(UiConfig config)

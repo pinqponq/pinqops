@@ -1,10 +1,12 @@
+# pinqops-workflow-version: 2
 # TEMPLATE — copy this into YOUR application repository as
 # .github/workflows/deploy.yml
 #
 # This is not an active workflow in the pinqops product repo (pinqops has no
 # container app to deploy). It shows how a consuming application uses pinqops:
 # GitHub builds the app image in the cloud and pushes it to GHCR, then a
-# self-hosted runner on your closed server runs `pinqops deploy`.
+# self-hosted runner on your closed server runs `pinqops deploy`. v2 adds a
+# per-PR preview environment (the preview-* jobs at the bottom).
 #
 # Requirements in the consuming repo:
 #   - A Dockerfile at the repository root (your application image).
@@ -27,6 +29,14 @@ on:
   push:
     branches:
       - master
+  # A pull request gets its own throwaway preview environment; closing it tears
+  # the preview down. Only this repo's own PRs are built and deployed — a fork's
+  # PR is skipped (see the fork guard on the preview jobs).
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  # Lets the dashboard (or you, from the Actions tab) start a deploy without
+  # pushing — the wizard uses this to kick off the first one.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -37,6 +47,8 @@ jobs:
   #    The production server never builds and never receives the source code.
   # ---------------------------------------------------------------------------
   build:
+    # Production build: pushes and manual runs only. A PR uses the preview jobs.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # A superseded build is pure waste, so cancel it. The deploy below is
     # deliberately NOT cancellable — see its own concurrency block.
@@ -96,6 +108,7 @@ jobs:
   # ---------------------------------------------------------------------------
   deploy:
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: [self-hosted, pinqops-prod]
     # A deploy mutates the one fixed compose project on the server. Killing it
     # mid-flight can leave the app stopped between `down` and `up` with no
@@ -139,3 +152,110 @@ jobs:
       - name: Log out of GHCR
         if: always()
         run: docker logout ghcr.io || true
+
+  # ---------------------------------------------------------------------------
+  # 3) Preview environments — one throwaway compose project per pull request.
+  #    Same cloud-build → runner-deploy flow, but to <repo>-pr-<n> on a free
+  #    host port next to production. Closing the PR tears it down.
+  # ---------------------------------------------------------------------------
+
+  # Build a PR's image in the cloud. The fork guard is a HARD SECURITY boundary:
+  # a fork's PR must never build code that then runs the preview-deploy job on
+  # your self-hosted server. Skipped on the 'closed' event.
+  preview-build:
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.action != 'closed'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    concurrency:
+      group: preview-build-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Resolve image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Only the immutable :sha-<commit> tag — a preview build must never move
+      # :latest, which production tracks by default.
+      - name: Build and push preview image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ vars.PINQOPS_BUILD_CONTEXT || '.' }}
+          file: ${{ vars.PINQOPS_DOCKERFILE || format('{0}/Dockerfile', vars.PINQOPS_BUILD_CONTEXT || '.') }}
+          push: true
+          tags: ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  preview-deploy:
+    needs: preview-build
+    runs-on: [self-hosted, pinqops-prod]
+    # Serialise deploy and teardown for the same PR (same group), never cancel.
+    concurrency:
+      group: preview-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    env:
+      APP_COMPOSE_PATH: ${{ vars.APP_COMPOSE_PATH || '/opt/pinqops/docker-compose.yml' }}
+    steps:
+      - name: Deploy preview with pinqops
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+          # Brings up <repo>-pr-<n> on a free host port, reusing production's
+          # .env minus the pinned image/tag/host-port, and routes
+          # pr-<n>.<domain> to it when the app has a domain.
+          pinqops preview deploy --compose-file "$APP_COMPOSE_PATH" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --image "$IMAGE" --tag "sha-${{ github.sha }}"
+
+      - name: Log out of GHCR
+        if: always()
+        run: docker logout ghcr.io || true
+
+  # Tear the preview down when the PR closes (merged or not). No build and no
+  # registry access — just remove the project, its volumes and its route.
+  preview-teardown:
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.action == 'closed'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, pinqops-prod]
+    concurrency:
+      group: preview-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      APP_COMPOSE_PATH: ${{ vars.APP_COMPOSE_PATH || '/opt/pinqops/docker-compose.yml' }}
+    steps:
+      - name: Tear down preview with pinqops
+        run: |
+          set -euo pipefail
+          pinqops preview teardown --compose-file "$APP_COMPOSE_PATH" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --owner "${GITHUB_REPOSITORY%%/*}" --repo "${GITHUB_REPOSITORY##*/}"

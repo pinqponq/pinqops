@@ -4,6 +4,8 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.RateLimiting;
 using PinqOps;
+using PinqOps.Backups;
+using PinqOps.Proxy;
 using PinqOps.Web;
 using static System.Globalization.CultureInfo;
 
@@ -77,12 +79,23 @@ builder.Services.AddSingleton<UiConfigStore>();
 builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddSingleton<DockerService>();
+builder.Services.AddSingleton<ProxyService>();
+builder.Services.AddSingleton<BackupService>();
+builder.Services.AddSingleton(sp => new PinqOps.Backups.BackupConfigStore(
+    Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<UiConfigStore>().Path_)!, "backups.json")));
+builder.Services.AddSingleton(sp => new ApiTokenStore(
+    Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<UiConfigStore>().Path_)!, "tokens.json")));
+builder.Services.AddSingleton(sp => new AuditLog(
+    Environment.GetEnvironmentVariable("PINQOPS_AUDIT_LOG")
+    ?? Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<UiConfigStore>().Path_)!, "audit.jsonl")));
+builder.Services.AddHostedService<BackupScheduler>();
 builder.Services.AddSingleton<GitHubDashboardService>();
 builder.Services.AddSingleton<GitHubDeviceFlow>();
 builder.Services.AddSingleton<LocalRunnerService>();
 builder.Services.AddSingleton<SystemInfoService>();
 builder.Services.AddSingleton<AppInstallJobs>();
 builder.Services.AddSingleton<DeployService>();
+builder.Services.AddSingleton<PreviewService>();
 builder.Services.AddSingleton<AppCredentialStore>();
 
 // Blunt per-client request ceiling on top of the login throttle, so a single
@@ -152,16 +165,83 @@ app.Use(async (context, next) =>
     if (path.StartsWithSegments("/api")
         && !anonymousPaths.Contains(path.Value, StringComparer.OrdinalIgnoreCase))
     {
-        var sessions = context.RequestServices.GetRequiredService<SessionStore>();
-        if (ReadBearerToken(context) is not { } token || !sessions.Validate(token))
+        var token = ReadBearerToken(context);
+        string scope;
+        string user;
+        if (token is { } bearer && ApiTokenStore.LooksLikeToken(bearer))
         {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            await context.Response.WriteAsJsonAsync(new { error = "Unauthorized." });
+            // API-token auth: its scope is the token's scope.
+            var tokens = context.RequestServices.GetRequiredService<ApiTokenStore>();
+            var tokenScope = tokens.Validate(bearer, DateTimeOffset.UtcNow);
+            if (tokenScope is null)
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new { error = "Unauthorized." });
+                return;
+            }
+
+            scope = tokenScope;
+            user = "api-token";
+        }
+        else
+        {
+            // Session auth: the user's role maps to an equivalent scope, so one
+            // check below covers both a session and a token.
+            var sessions = context.RequestServices.GetRequiredService<SessionStore>();
+            var principal = token is null ? null : sessions.Resolve(token);
+            if (principal is null)
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new { error = "Unauthorized." });
+                return;
+            }
+
+            scope = UserRoles.ScopeFor(principal.Role);
+            user = principal.Username;
+        }
+
+        var required = ApiScopes.RequiredFor(context.Request.Method, path.Value ?? string.Empty);
+        if (!ApiScopes.Satisfies(scope, required))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = $"Your role/token grants '{scope}'; '{required}' is required for this action.",
+            });
             return;
         }
+
+        context.Items["scope"] = scope;
+        context.Items["user"] = user;
     }
 
     await next();
+});
+
+// Audit trail: record every mutating action once auth has resolved the caller.
+// Reads only happen through GET/HEAD, which are skipped, so the log stays a
+// history of changes rather than a request firehose.
+app.Use(async (context, next) =>
+{
+    await next();
+
+    var path = context.Request.Path;
+    var method = context.Request.Method;
+    var isMutation = !HttpMethods.IsGet(method) && !HttpMethods.IsHead(method) && !HttpMethods.IsOptions(method);
+    if (!path.StartsWithSegments("/api") || !isMutation || context.Items["user"] is not string actor)
+    {
+        return;
+    }
+
+    var status = context.Response.StatusCode;
+    var audit = context.RequestServices.GetRequiredService<AuditLog>();
+    audit.Append(new AuditEntry(
+        DateTimeOffset.UtcNow,
+        actor,
+        $"{method} {path.Value}",
+        context.Request.Query["appId"].ToString(),
+        status < 400 ? "ok" : "err",
+        status));
 });
 
 // ---- Dashboard page (embedded single file) --------------------------------
@@ -176,7 +256,10 @@ app.MapGet("/", (HttpContext context) =>
 
 app.MapGet("/api/auth/state", (UiConfigStore store) => Results.Json(new
 {
-    needsSetup = string.IsNullOrEmpty(store.Current.PasswordHash),
+    needsSetup = store.Current.Users.Count == 0,
+    // The lock screen only shows a username field once there is more than one
+    // user; a lone migrated admin logs in with just a password, as before.
+    multiUser = store.Current.Users.Count > 1,
 }));
 
 app.MapPost("/api/auth/setup", async (HttpContext context, UiConfigStore store, SessionStore sessions, LoginThrottle throttle) =>
@@ -189,7 +272,7 @@ app.MapPost("/api/auth/setup", async (HttpContext context, UiConfigStore store, 
     }
 
     var request = await context.Request.ReadFromJsonAsync<SetupRequest>();
-    if (!string.IsNullOrEmpty(store.Current.PasswordHash))
+    if (store.Current.Users.Count > 0)
     {
         return Error(409, "A password is already set — log in instead.");
     }
@@ -210,9 +293,14 @@ app.MapPost("/api/auth/setup", async (HttpContext context, UiConfigStore store, 
     }
 
     throttle.RecordSuccess(client);
-    store.Update(config => config.PasswordHash = PasswordHasher.Hash(password));
-    logger.LogWarning("Dashboard password created from {Client}", client);
-    return Results.Json(new { token = sessions.Create() });
+    store.Update(config => config.Users.Add(new UserAccount
+    {
+        Username = UserRoles.LegacyAdmin,
+        PasswordHash = PasswordHasher.Hash(password),
+        Role = UserRoles.Admin,
+    }));
+    logger.LogWarning("Dashboard admin created from {Client}", client);
+    return Results.Json(new { token = sessions.Create(UserRoles.LegacyAdmin, UserRoles.Admin) });
 });
 
 app.MapPost("/api/auth/login", async (HttpContext context, UiConfigStore store, SessionStore sessions, LoginThrottle throttle) =>
@@ -225,28 +313,46 @@ app.MapPost("/api/auth/login", async (HttpContext context, UiConfigStore store, 
     }
 
     var request = await context.Request.ReadFromJsonAsync<PasswordRequest>();
-    var hash = store.Current.PasswordHash;
-    if (hash is null)
+    if (store.Current.Users.Count == 0)
     {
         return Error(409, "No password set yet — create one first.");
     }
 
-    if (request?.Password is not { } password || !PasswordHasher.Verify(password, hash))
+    // A missing username means the lone legacy admin — old clients keep working.
+    var username = string.IsNullOrWhiteSpace(request?.Username) ? UserRoles.LegacyAdmin : request!.Username!.Trim();
+    var account = store.Current.Users.FirstOrDefault(u => string.Equals(u.Username, username, StringComparison.OrdinalIgnoreCase));
+
+    if (account is null || request?.Password is not { } password || !PasswordHasher.Verify(password, account.PasswordHash))
     {
         throttle.RecordFailure(client);
-        logger.LogWarning("Failed dashboard login from {Client}", client);
+        logger.LogWarning("Failed dashboard login for '{User}' from {Client}", username, client);
         await Task.Delay(500); // keep failures slow even before the lockout kicks in
-        return Error(401, "Wrong password.");
+        return Error(401, "Wrong username or password.");
     }
 
     throttle.RecordSuccess(client);
-    if (PasswordHasher.NeedsRehash(hash))
+    if (PasswordHasher.NeedsRehash(account.PasswordHash))
     {
-        store.Update(config => config.PasswordHash = PasswordHasher.Hash(password));
+        store.Update(config =>
+        {
+            var stored = config.Users.FirstOrDefault(u => string.Equals(u.Username, account.Username, StringComparison.OrdinalIgnoreCase));
+            if (stored is not null)
+            {
+                stored.PasswordHash = PasswordHasher.Hash(password);
+            }
+        });
     }
 
-    return Results.Json(new { token = sessions.Create() });
+    return Results.Json(new { token = sessions.Create(account.Username, account.Role), username = account.Username, role = account.Role });
 });
+
+// Who the current session/token is, so the UI can gate admin-only views. Runs
+// after the auth middleware, so the identity is already resolved.
+app.MapGet("/api/me", (HttpContext context) => Results.Json(new
+{
+    user = context.Items["user"] as string ?? "",
+    scope = context.Items["scope"] as string ?? "read",
+}));
 
 app.MapPost("/api/auth/logout", (HttpContext context, SessionStore sessions) =>
 {
@@ -267,12 +373,15 @@ app.MapPost("/api/auth/change-password", async (HttpContext context, UiConfigSto
         return Error(429, $"Too many failed attempts — try again in {(int)Math.Ceiling(wait.TotalMinutes)} minute(s).");
     }
 
+    // change-password runs after auth, so the caller's identity is known — a
+    // user changes their OWN password (admins set others' via /api/users).
+    var self = context.Items["user"] as string ?? UserRoles.LegacyAdmin;
     var request = await context.Request.ReadFromJsonAsync<ChangePasswordRequest>();
-    var hash = store.Current.PasswordHash;
-    if (hash is null || request?.CurrentPassword is not { } current || !PasswordHasher.Verify(current, hash))
+    var account = store.Current.Users.FirstOrDefault(u => string.Equals(u.Username, self, StringComparison.OrdinalIgnoreCase));
+    if (account is null || request?.CurrentPassword is not { } current || !PasswordHasher.Verify(current, account.PasswordHash))
     {
         throttle.RecordFailure(client);
-        logger.LogWarning("Failed password change (wrong current password) from {Client}", client);
+        logger.LogWarning("Failed password change (wrong current password) for '{User}' from {Client}", self, client);
         await Task.Delay(500);
         return Error(401, "Current password is wrong.");
     }
@@ -283,9 +392,16 @@ app.MapPost("/api/auth/change-password", async (HttpContext context, UiConfigSto
     }
 
     throttle.RecordSuccess(client);
-    store.Update(config => config.PasswordHash = PasswordHasher.Hash(fresh));
-    sessions.RevokeAll(); // every device must sign in again with the new password
-    logger.LogWarning("Dashboard password changed from {Client}; all sessions revoked", client);
+    store.Update(config =>
+    {
+        var stored = config.Users.FirstOrDefault(u => string.Equals(u.Username, self, StringComparison.OrdinalIgnoreCase));
+        if (stored is not null)
+        {
+            stored.PasswordHash = PasswordHasher.Hash(fresh);
+        }
+    });
+    sessions.RevokeUser(account.Username); // sign this user's other devices out
+    logger.LogWarning("Password changed for '{User}' from {Client}", self, client);
     return Results.Json(new { ok = true });
 });
 
@@ -297,32 +413,36 @@ app.MapGet("/api/settings", (UiConfigStore store) =>
 
     // The canonical owner/repo display name comes from the server-side parser
     // (works for GHES hosts too) so the UI never re-parses the URL itself.
-    string? fullName = null;
-    if (!string.IsNullOrWhiteSpace(config.RepoUrl))
+    static string? FullName(string repoUrl)
     {
         try
         {
-            var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
-            fullName = $"{repository.Owner}/{repository.Name}";
+            var repository = GitHubRepositoryParser.Parse(repoUrl);
+            return $"{repository.Owner}/{repository.Name}";
         }
         catch (ArgumentException)
         {
             // A hand-edited invalid URL just means no pretty name.
+            return null;
         }
     }
 
     return Results.Json(new
     {
-        repoUrl = config.RepoUrl,
-        fullName,
         username = config.Username,
         patMasked = config.Pat is { Length: > 4 } pat ? $"••••••••{pat[^4..]}" : null,
-        composeFile = config.ComposeFile,
-        runnerDirectory = config.RunnerDirectory,
         configPath = store.Path_,
         version = PinqOpsVersion.Current,
         githubClientId = config.GithubClientId
             ?? Environment.GetEnvironmentVariable("PINQOPS_GITHUB_CLIENT_ID"),
+        apps = config.Apps.Select(a => new
+        {
+            id = a.Id,
+            repoUrl = a.RepoUrl,
+            fullName = FullName(a.RepoUrl),
+            composeFile = a.ComposeFile,
+            runnerDirectory = a.RunnerDirectory,
+        }),
     });
 });
 
@@ -349,56 +469,82 @@ app.MapPost("/api/settings", (HttpContext context, UiConfigStore store, GitHubDa
         // Validate the connection before saving anything.
         var repo = await gitHub.TestConnectionAsync(request.RepoUrl, username, pat);
 
+        AppConnection? connection = null;
         store.Update(config =>
         {
-            config.RepoUrl = repository.ToUrl();
             if (request.Username is not null)
             {
                 config.Username = string.IsNullOrWhiteSpace(request.Username) ? null : request.Username.Trim();
             }
 
             config.Pat = pat;
-            if (!string.IsNullOrWhiteSpace(request.ComposeFile))
-            {
-                config.ComposeFile = request.ComposeFile.Trim();
-            }
-
-            if (!string.IsNullOrWhiteSpace(request.RunnerDirectory))
-            {
-                config.RunnerDirectory = request.RunnerDirectory.Trim();
-            }
-
             if (request.GithubClientId is not null)
             {
                 config.GithubClientId = string.IsNullOrWhiteSpace(request.GithubClientId)
                     ? null
                     : request.GithubClientId.Trim();
             }
+
+            // One repo = one app: same URL returns the existing connection,
+            // an explicit AppId edits that app, anything else creates one.
+            connection = AppUpsert.Apply(
+                config, request.AppId, repository, request.ComposeFile, request.RunnerDirectory);
         });
 
+        logger.LogWarning("App '{AppId}' connected to {Repo}", connection!.Id, connection.RepoUrl);
         return new
         {
             ok = true,
+            appId = connection.Id,
             fullName = repo.TryGetProperty("full_name", out var name) ? name.GetString() : repository.ToUrl(),
             isPrivate = repo.TryGetProperty("private", out var isPrivate) && isPrivate.GetBoolean(),
         };
     }));
 
+// Signing out of GitHub drops the token but keeps the app connections — they
+// are unusable until re-auth, and nothing on disk is touched.
 app.MapPost("/api/settings/disconnect", (UiConfigStore store) =>
 {
     store.Update(config =>
     {
-        config.RepoUrl = null;
         config.Username = null;
         config.Pat = null;
     });
     return Results.Json(new { ok = true });
 });
 
+// Removes an app from the dashboard ONLY. The compose project (with .pinqops
+// state and volumes) and the runner stay on disk — deleting live infrastructure
+// has too many failure modes; re-adding the repo re-attaches to the same paths.
+app.MapPost("/api/settings/apps/remove", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<AppRemoveRequest>();
+        if (request?.Id is not { Length: > 0 } id)
+        {
+            throw new ArgumentException("An app id is required.");
+        }
+
+        AppConnection? removed = null;
+        store.Update(config =>
+        {
+            removed = config.Apps.FirstOrDefault(a => string.Equals(a.Id, id.Trim(), StringComparison.OrdinalIgnoreCase))
+                ?? throw new ArgumentException($"Unknown app '{id.Trim()}'.");
+            config.Apps.Remove(removed);
+        });
+
+        logger.LogWarning("App '{AppId}' removed from the dashboard (files kept)", removed!.Id);
+        return new
+        {
+            ok = true,
+            kept = new[] { Path.GetDirectoryName(removed.ComposeFile), removed.RunnerDirectory },
+        };
+    }));
+
 // ---- GitHub (repo, runners, workflow runs) ----------------------------------
 
-app.MapGet("/api/github/overview", (GitHubDashboardService gitHub) =>
-    Safe(async () => await gitHub.GetOverviewAsync()));
+app.MapGet("/api/github/overview", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
+    Safe(async () => await gitHub.GetOverviewAsync(ResolveApp(store, context))));
 
 app.MapGet("/api/github/user", (GitHubDashboardService gitHub) =>
     Safe(async () => await gitHub.GetUserAsync()));
@@ -548,17 +694,22 @@ app.MapPost("/api/docker/prune", (DockerService docker) =>
 
 // ---- Setup (Portainer-style: pick a repo, the dashboard readies everything) ----
 
-app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService gitHub, LocalRunnerService runner) =>
+app.MapGet("/api/setup/status", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub, LocalRunnerService runner) =>
     Safe(async () =>
     {
-        var config = store.Current;
-        if (!gitHub.IsConfigured)
+        if (store.Current.Apps.Count == 0 || !gitHub.HasToken)
         {
             return new { configured = false };
         }
 
-        var repoTask = gitHub.CheckRepoSetupAsync();
-        var runnersTask = gitHub.GetRunnersSummaryAsync();
+        var app = ResolveApp(store, context);
+        if (!gitHub.IsConfiguredFor(app))
+        {
+            return new { configured = false };
+        }
+
+        var repoTask = gitHub.CheckRepoSetupAsync(app);
+        var runnersTask = gitHub.GetRunnersSummaryAsync(app);
         var repo = await repoTask;
 
         // Listing runners needs repo-admin (Administration: read). A token
@@ -579,20 +730,21 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
         // from an earlier repository would otherwise short-circuit the setup
         // flow into starting the wrong repo's runner service. One .runner read
         // answers installed/mismatch/registered-to alike.
-        var runnerRegisteredTo = LocalRunnerService.GetRegisteredUrl(config.RunnerDirectory);
+        var runnerRegisteredTo = LocalRunnerService.GetRegisteredUrl(app.RunnerDirectory);
         var runnerInstalled = runnerRegisteredTo is not null
-            && LocalRunnerService.MatchesRepo(runnerRegisteredTo, config.RepoUrl);
+            && LocalRunnerService.MatchesRepo(runnerRegisteredTo, app.RepoUrl);
 
         // Whether the systemd service is up lets the dashboard auto-start a
         // stopped runner (safe, idempotent) and avoid offering a useless "start"
         // button when the service is running but just can't reach GitHub.
         var runnerServiceActive = runnerInstalled
-            ? await runner.IsServiceActiveAsync(config.RunnerDirectory)
+            ? await runner.IsServiceActiveAsync(app.RunnerDirectory)
             : null;
 
         return (object)new
         {
             configured = true,
+            appId = app.Id,
             repo,
             runnersOnline = online,
             runnersTotal = total,
@@ -601,61 +753,175 @@ app.MapGet("/api/setup/status", (UiConfigStore store, GitHubDashboardService git
             runnerServiceActive,
             runnerMismatch = !runnerInstalled && runnerRegisteredTo is not null,
             runnerRegisteredTo,
-            composeFile = config.ComposeFile,
-            composeExists = File.Exists(config.ComposeFile),
+            composeFile = app.ComposeFile,
+            composeExists = File.Exists(app.ComposeFile),
         };
     }));
 
 // The workflow is committed to the repository's default branch, so that is the
 // branch it must trigger on — a hardcoded one would simply never fire.
-app.MapPost("/api/setup/create-workflow", (GitHubDashboardService gitHub) =>
+app.MapPost("/api/setup/create-workflow", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
     Safe(async () =>
     {
-        var defaultBranch = await gitHub.GetDefaultBranchAsync();
-        var result = await gitHub.CreateWorkflowFileAsync(SetupTemplates.DeployWorkflowYaml(defaultBranch));
+        var app = ResolveApp(store, context);
+        var defaultBranch = await gitHub.GetDefaultBranchAsync(app);
+        var result = await gitHub.CreateWorkflowFileAsync(app, SetupTemplates.DeployWorkflowYaml(defaultBranch));
         logger.LogWarning("Deploy workflow committed, triggering on {Branch}", defaultBranch);
         return result;
     }));
 
-app.MapPost("/api/setup/start-runner", (UiConfigStore store, LocalRunnerService runner) =>
-    Safe(async () => await runner.StartServiceAsync(store.Current.RunnerDirectory)));
-
-app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService docker, GitHubDashboardService gitHub) =>
+// Updates the deploy workflow in place to the current shape (e.g. adding the
+// preview jobs to a v1 repo). The wizard offers this when a repo's workflow
+// version is behind — a contents PUT with the file's sha, so it replaces.
+app.MapPost("/api/setup/update-workflow", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
     Safe(async () =>
     {
-        var config = store.Current;
-        if (string.IsNullOrWhiteSpace(config.RepoUrl))
+        var app = ResolveApp(store, context);
+        var defaultBranch = await gitHub.GetDefaultBranchAsync(app);
+        var result = await gitHub.UpdateWorkflowFileAsync(app, SetupTemplates.DeployWorkflowYaml(defaultBranch));
+        logger.LogWarning("Deploy workflow updated to v{Version} for {Repo}", SetupTemplates.CurrentWorkflowVersion, app.RepoUrl);
+        return result;
+    }));
+
+// Pins the repository variable the generated workflow reads its compose path
+// from. A standalone, idempotent step (create-compose is skipped once the file
+// exists, so it could never repair a missing/stale variable on a republish).
+app.MapPost("/api/setup/app-var", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        var app = ResolveApp(store, context);
+        await gitHub.SetRepositoryVariableAsync(app, "APP_COMPOSE_PATH", app.ComposeFile);
+        logger.LogWarning("APP_COMPOSE_PATH set to {Path} for {Repo}", app.ComposeFile, app.RepoUrl);
+        return new { ok = true, name = "APP_COMPOSE_PATH", value = app.ComposeFile };
+    }));
+
+// Detects the stack of a repo that has no Dockerfile and returns a generated,
+// editable Dockerfile per candidate — pinqops' answer to "zero config".
+app.MapGet("/api/setup/detect-stack", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        var app = ResolveApp(store, context);
+        var branch = await gitHub.GetDefaultBranchAsync(app);
+        var (paths, truncated) = await gitHub.GetRepoTreeAsync(app, branch);
+
+        // First pass (no contents) finds the candidate directories and kinds;
+        // then fetch only those dirs' manifests to enrich the build hints.
+        var firstPass = StackDetector.Detect(paths, _ => null);
+        var contents = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var candidate in firstPass)
         {
-            throw new InvalidOperationException("Connect a repository first.");
+            var prefix = candidate.ManifestDir.Length == 0 ? "" : candidate.ManifestDir + "/";
+            foreach (var manifest in paths.Where(p => IsDirectManifest(p, prefix)))
+            {
+                contents.TryAdd(manifest, null);
+            }
         }
 
-        var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
+        foreach (var key in contents.Keys.ToList())
+        {
+            contents[key] = await gitHub.GetFileContentAsync(app, key);
+        }
+
+        var results = StackDetector.Detect(paths, p => contents.GetValueOrDefault(p));
+        return new
+        {
+            truncated,
+            candidates = results.Select(r => new
+            {
+                kind = r.Kind.ToString().ToLowerInvariant(),
+                suggestedPort = r.SuggestedPort,
+                dir = r.ManifestDir,
+                hints = r.BuildHints,
+                dockerfile = DockerfileTemplates.For(r),
+            }),
+        };
+    }));
+
+// Commits the (user-edited) Dockerfile verbatim. For a monorepo subdirectory it
+// also pins PINQOPS_BUILD_CONTEXT so the workflow builds from there.
+app.MapPost("/api/setup/create-dockerfile", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        var app = ResolveApp(store, context);
+        var request = await context.Request.ReadFromJsonAsync<CreateDockerfileRequest>()
+            ?? throw new ArgumentException("Invalid request body.");
+        if (string.IsNullOrWhiteSpace(request.Content))
+        {
+            throw new ArgumentException("Dockerfile content is required.");
+        }
+
+        if (request.Content.Length > 48 * 1024)
+        {
+            throw new ArgumentException("Dockerfile is too large.");
+        }
+
+        var dir = (request.Dir ?? string.Empty).Trim().Trim('/');
+        var path = dir.Length == 0 ? "Dockerfile" : $"{dir}/Dockerfile";
+        object result;
+        try
+        {
+            result = await gitHub.CreateFileAsync(
+                app, path, "chore: add Dockerfile (generated by pinqops-ui)", request.Content);
+        }
+        catch (GitHubApiException exception) when (exception.StatusCode == 422)
+        {
+            throw new InvalidOperationException($"{path} already exists in the repository.");
+        }
+
+        if (dir.Length > 0)
+        {
+            await gitHub.SetRepositoryVariableAsync(app, "PINQOPS_BUILD_CONTEXT", dir);
+            logger.LogWarning("PINQOPS_BUILD_CONTEXT set to {Dir} for {Repo}", dir, app.RepoUrl);
+        }
+
+        logger.LogWarning("Dockerfile committed to {Path} for {Repo}", path, app.RepoUrl);
+        return result;
+    }));
+
+app.MapPost("/api/setup/start-runner", (HttpContext context, UiConfigStore store, LocalRunnerService runner) =>
+    Safe(async () => await runner.StartServiceAsync(ResolveApp(store, context).RunnerDirectory)));
+
+app.MapPost("/api/setup/create-compose", (HttpContext context, UiConfigStore store, DockerService docker, GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        // The wizard sends its port choices; older callers send no body at all.
+        ComposeCreateRequest? request = null;
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync<ComposeCreateRequest>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+        }
+
+        var appConnection = ResolveApp(store, context);
+        var repository = GitHubRepositoryParser.Parse(appConnection.RepoUrl);
         var project = ComposeProjectName.FromRepository(repository.Name);
 
-        if (File.Exists(config.ComposeFile))
+        if (File.Exists(appConnection.ComposeFile))
         {
             // One compose project per path. Silently sharing it between two
             // repositories is the worst outcome: the second repository's deploy
             // pins ITS tag onto the FIRST one's image and dies pulling a tag that
             // only exists in the other package.
-            var owner = ComposeProjectName.ReadFrom(await File.ReadAllTextAsync(config.ComposeFile));
+            var owner = ComposeProjectName.ReadFrom(await File.ReadAllTextAsync(appConnection.ComposeFile));
             if (owner is not null && owner != project)
             {
                 throw new InvalidOperationException(
-                    $"{config.ComposeFile} already belongs to '{owner}', not '{project}'. pinqops manages one "
-                    + $"application per compose file. Give this repository its own path (Settings → compose file, "
-                    + $"e.g. /opt/{project}/docker-compose.yml) and set the repository variable APP_COMPOSE_PATH "
-                    + $"to the same value so its deploy workflow uses it.");
+                    $"{appConnection.ComposeFile} already belongs to '{owner}', not '{project}'. pinqops manages "
+                    + $"one application per compose file. Give this app its own path (Advanced → compose file, "
+                    + $"e.g. /opt/pinqops/apps/{project}/docker-compose.yml) — the publish step keeps the "
+                    + $"APP_COMPOSE_PATH repository variable in sync automatically.");
             }
 
-            throw new InvalidOperationException($"{config.ComposeFile} already exists.");
+            throw new InvalidOperationException($"{appConnection.ComposeFile} already exists.");
         }
 
         // The template references the shared pinqops-apps network as external;
         // it must exist before the first compose up.
         await docker.EnsureSharedNetworkAsync();
 
-        var directory = Path.GetDirectoryName(config.ComposeFile);
+        var directory = Path.GetDirectoryName(appConnection.ComposeFile);
         if (!string.IsNullOrEmpty(directory))
         {
             Directory.CreateDirectory(directory);
@@ -669,7 +935,7 @@ app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService doc
         int? exposedPort = null;
         try
         {
-            exposedPort = await gitHub.GetDockerfileExposedPortAsync();
+            exposedPort = await gitHub.GetDockerfileExposedPortAsync(appConnection);
         }
         catch (Exception exception)
         {
@@ -677,64 +943,204 @@ app.MapPost("/api/setup/create-compose", (UiConfigStore store, DockerService doc
                 exception, "Could not read the Dockerfile's EXPOSE; defaulting the container port");
         }
 
-        var containerPort = exposedPort ?? DockerfileInspector.DefaultPort;
+        var containerPort = SetupPorts.ResolveContainer(request?.ContainerPort, exposedPort);
 
         // Nothing owns the app's port yet, so this is the one moment a bind test
         // is meaningful. Taking the next free port beats generating a project
         // whose first deploy dies on "port is already allocated".
-        var freePort = HostPort.FindAvailable(UiConfig.DefaultHostPort);
-        if (freePort is null)
+        var hostPort = SetupPorts.ResolveHost(
+            request?.HostPort, UiConfig.DefaultHostPort, HostPort.IsAvailable, HostPort.FindAvailable);
+        if (request?.HostPort is null && hostPort != UiConfig.DefaultHostPort)
         {
             logger.LogWarning(
-                "No free host port in {Count} ports from {Start}; defaulting to {Port}",
-                HostPort.ScanLimit, UiConfig.DefaultHostPort, UiConfig.DefaultHostPort);
+                "Host port {Default} is in use; publishing on {Port} instead", UiConfig.DefaultHostPort, hostPort);
         }
-        else if (freePort != UiConfig.DefaultHostPort)
-        {
-            logger.LogWarning(
-                "Host port {Default} is in use; publishing on {Port} instead", UiConfig.DefaultHostPort, freePort);
-        }
-
-        var hostPort = freePort ?? UiConfig.DefaultHostPort;
 
         await File.WriteAllTextAsync(
-            config.ComposeFile,
+            appConnection.ComposeFile,
             SetupTemplates.ComposeYaml(repository.Owner, repository.Name, hostPort, containerPort));
 
         // Seed the .env so both ports are discoverable (and editable) in the
         // dashboard instead of being invisible defaults inside the YAML.
-        var envFile = PinqOpsStatePaths.EnvFile(config.ComposeFile);
+        var envFile = PinqOpsStatePaths.EnvFile(appConnection.ComposeFile);
         EnvFileStore.SetValue(envFile, SetupTemplates.HostPortVariable, hostPort.ToString(InvariantCulture));
         EnvFileStore.SetValue(envFile, SetupTemplates.ContainerPortVariable, containerPort.ToString(InvariantCulture));
 
         logger.LogWarning(
             "Compose project created at {File} publishing {HostPort}->{ContainerPort}",
-            config.ComposeFile, hostPort, containerPort);
-        return new { ok = true, composeFile = config.ComposeFile, hostPort, containerPort };
+            appConnection.ComposeFile, hostPort, containerPort);
+        return new { ok = true, composeFile = appConnection.ComposeFile, hostPort, containerPort };
+    }));
+
+// Pre-publish data for the wizard's port form: the detected container port and
+// a suggested free host port, plus the current .env values once the compose
+// project exists. The generic .env endpoint masks every value, so the wizard
+// needs this dedicated, ports-only view.
+app.MapGet("/api/setup/publish-info", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        var app = ResolveApp(store, context);
+
+        // The Dockerfile read is a hint — a GitHub hiccup must degrade to
+        // "nothing detected", not break the form.
+        int? detectedContainerPort = null;
+        try
+        {
+            detectedContainerPort = await gitHub.GetDockerfileExposedPortAsync(app);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not read the Dockerfile's EXPOSE for the publish form");
+        }
+
+        var composeExists = File.Exists(app.ComposeFile);
+        var envFile = PinqOpsStatePaths.EnvFile(app.ComposeFile);
+        var currentHostPort = composeExists
+            ? TryParsePort(EnvFileStore.GetValue(envFile, SetupTemplates.HostPortVariable))
+            : null;
+        var currentContainerPort = composeExists
+            ? TryParsePort(EnvFileStore.GetValue(envFile, SetupTemplates.ContainerPortVariable))
+            : null;
+
+        return new
+        {
+            composeExists,
+            detectedContainerPort,
+            fallbackContainerPort = DockerfileInspector.DefaultPort,
+            suggestedHostPort = currentHostPort
+                ?? HostPort.FindAvailable(UiConfig.DefaultHostPort)
+                ?? UiConfig.DefaultHostPort,
+            currentHostPort,
+            currentContainerPort,
+        };
+    }));
+
+// Live validation while the user types a host port in the wizard.
+app.MapGet("/api/setup/port-check", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        var raw = context.Request.Query["port"].ToString().Trim();
+        if (!int.TryParse(raw, NumberStyles.None, InvariantCulture, out var port) || !HostPort.IsValid(port))
+        {
+            return (object)new { port = raw, valid = false, available = false };
+        }
+
+        // The app's own container legitimately owns its current host port — a
+        // bind probe would flag it as busy, so treat "unchanged" as free.
+        var appConnection = ResolveApp(store, context);
+        var envFile = PinqOpsStatePaths.EnvFile(appConnection.ComposeFile);
+        var currentHostPort = File.Exists(appConnection.ComposeFile)
+            ? EnvFileStore.GetValue(envFile, SetupTemplates.HostPortVariable)
+            : null;
+        var available = currentHostPort == port.ToString(InvariantCulture) || HostPort.IsAvailable(port);
+        return (object)new { port, valid = true, available };
+    }));
+
+// Live state of the deployed app for the wizard's "your app is live" card:
+// whether the compose container runs and on which host port it is reachable.
+app.MapGet("/api/setup/app-status", (HttpContext context, UiConfigStore store, DockerService docker) =>
+    Safe(async () =>
+    {
+        var app = ResolveApp(store, context);
+        var composeExists = File.Exists(app.ComposeFile);
+        var envFile = PinqOpsStatePaths.EnvFile(app.ComposeFile);
+
+        string? state = null;
+        int? publishedPort = null;
+        var dockerOk = true;
+        if (composeExists)
+        {
+            try
+            {
+                (state, publishedPort) = ComposeAppStatus.FromServices(
+                    await docker.ComposeServicesAsync(app.ComposeFile));
+            }
+            catch (InvalidOperationException)
+            {
+                dockerOk = false;
+            }
+        }
+
+        return new
+        {
+            composeExists,
+            dockerOk,
+            state,
+            running = string.Equals(state, "running", StringComparison.OrdinalIgnoreCase),
+            // Prefer the port docker actually bound; before the first deploy
+            // fall back to what the .env says will be published.
+            hostPort = publishedPort ?? TryParsePort(EnvFileStore.GetValue(envFile, SetupTemplates.HostPortVariable)),
+            currentTag = EnvFileStore.GetValue(envFile, Deployer.TagVariable),
+            currentDeployedAt = new DeployHistoryStore(app.ComposeFile).LastSuccessful()?.StartedAt,
+        };
+    }));
+
+// Starts the first deploy right from the wizard instead of waiting for a push:
+// dispatches the generated workflow on the repository's default branch.
+app.MapPost("/api/setup/trigger-deploy", (HttpContext context, UiConfigStore store, GitHubDashboardService gitHub) =>
+    Safe(async () =>
+    {
+        var app = ResolveApp(store, context);
+        var branch = await gitHub.GetDefaultBranchAsync(app);
+
+        // A workflow the wizard committed seconds ago may not be indexed by
+        // the Actions API yet — 404s briefly even though the file is there.
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await gitHub.TriggerDeployWorkflowAsync(app, branch);
+                break;
+            }
+            catch (GitHubApiException exception) when (exception.StatusCode == 404 && attempt < 5)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+        }
+
+        logger.LogWarning("First deploy triggered via workflow_dispatch on {Branch}", branch);
+        return new { ok = true, branch };
     }));
 
 // Full runner install driven from the dashboard: registration token via the
 // stored PAT, then download + config.sh + systemd service (same code path as
 // `pinqops install-runner`).
-app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRunner processRunner) =>
+app.MapPost("/api/setup/install-runner", async (HttpContext context, UiConfigStore store, IProcessRunner processRunner) =>
 {
-    if (!await runnerInstallGate.WaitAsync(0))
+    // One install at a time across ALL apps: the installer sets a process-wide
+    // env var and downloads are huge — serialize, and stamp the buffer with the
+    // app so a poller for another app can ignore foreign lines.
+    AppConnection appConnection;
+    try
     {
-        return Error(409, "A runner install is already in progress.");
+        appConnection = ResolveApp(store, context);
+    }
+    catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+    {
+        return Error(400, exception.Message);
     }
 
-    runnerInstallProgress.Start();
+    if (!await runnerInstallGate.WaitAsync(0))
+    {
+        var busyFor = runnerInstallProgress.AppId;
+        return Error(409, busyFor is null
+            ? "A runner install is already in progress."
+            : $"A runner install is already in progress (app '{busyFor}').");
+    }
+
+    runnerInstallProgress.Start(appConnection.Id);
     var succeeded = false;
     try
     {
         var config = store.Current;
-        if (string.IsNullOrWhiteSpace(config.RepoUrl) || string.IsNullOrWhiteSpace(config.Pat))
+        if (string.IsNullOrWhiteSpace(appConnection.RepoUrl) || string.IsNullOrWhiteSpace(config.Pat))
         {
             return Error(400, "Connect GitHub first.");
         }
 
         runnerInstallProgress.Add("requesting a runner registration token…");
-        var repository = GitHubRepositoryParser.Parse(config.RepoUrl);
+        var repository = GitHubRepositoryParser.Parse(appConnection.RepoUrl);
         string registrationToken;
         string? removalToken = null;
         using (var apiClient = new GitHubApiClient())
@@ -752,7 +1158,7 @@ app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRun
             // A leftover runner registered to another repository must be
             // de-registered first; mint a removal token for THAT repo. Best
             // effort — cleanup falls back to deleting local files without it.
-            var registeredUrl = LocalRunnerService.GetRegisteredUrl(config.RunnerDirectory);
+            var registeredUrl = LocalRunnerService.GetRegisteredUrl(appConnection.RunnerDirectory);
             if (registeredUrl is not null)
             {
                 try
@@ -769,7 +1175,12 @@ app.MapPost("/api/setup/install-runner", async (UiConfigStore store, IProcessRun
         }
 
         runnerInstallProgress.Add("token received; installing the runner…");
-        var options = RunnerInstallOptions.Create(config.RepoUrl, registrationToken, installDirectory: config.RunnerDirectory)
+        var options = RunnerInstallOptions.Create(
+                appConnection.RepoUrl, registrationToken,
+                // Per-app agent name so `docker ps`-style debugging reads well;
+                // names are repo-scoped on GitHub, so this is cosmetic but nice.
+                runnerName: $"{Environment.MachineName}-{appConnection.Id}",
+                installDirectory: appConnection.RunnerDirectory)
             with { RemovalToken = removalToken };
         using var downloader = new HttpFileDownloader();
         var installer = new RunnerInstaller(processRunner, downloader, runnerInstallProgress.Add);
@@ -952,10 +1363,10 @@ app.MapGet("/api/apps/{id}/credentials", (string id, AppCredentialStore credenti
 
 // ---- Compose project ----------------------------------------------------------
 
-app.MapGet("/api/compose", (UiConfigStore store, DockerService docker) =>
+app.MapGet("/api/compose", (HttpContext context, UiConfigStore store, DockerService docker) =>
     Safe(async () =>
     {
-        var composeFile = store.Current.ComposeFile;
+        var composeFile = ResolveApp(store, context).ComposeFile;
         if (!File.Exists(composeFile))
         {
             return new { composeFile, exists = false, items = new List<System.Text.Json.JsonElement>() };
@@ -966,18 +1377,31 @@ app.MapGet("/api/compose", (UiConfigStore store, DockerService docker) =>
 
 // ---- Deploy history & rollback ------------------------------------------------
 
-app.MapGet("/api/deploy/state", (UiConfigStore store, DeployService deploys) =>
+app.MapGet("/api/deploy/state", (HttpContext context, UiConfigStore store, DeployService deploys) =>
     Safe(async () =>
     {
         await Task.CompletedTask;
-        return deploys.GetState(store.Current.ComposeFile);
+        return deploys.GetState(ResolveApp(store, context).ComposeFile);
     }));
 
-app.MapGet("/api/deploy/history", (UiConfigStore store, DeployService deploys) =>
+app.MapGet("/api/deploy/history", (HttpContext context, UiConfigStore store, DeployService deploys) =>
     Safe(async () =>
     {
         await Task.CompletedTask;
-        return new { items = deploys.History(store.Current.ComposeFile) };
+        return new { items = deploys.History(ResolveApp(store, context).ComposeFile) };
+    }));
+
+// Preview environments across every app: what is on disk and whether it is up.
+app.MapGet("/api/previews", (UiConfigStore store, PreviewService previews) =>
+    Safe(async () => new { items = await previews.ListAsync(store.Current) }));
+
+// Manual teardown — the fallback for a PR that closed while the runner was
+// offline (the workflow's preview-teardown normally handles it).
+app.MapPost("/api/previews/{appId}/{pr:int}/teardown", (string appId, int pr, UiConfigStore store, PreviewService previews) =>
+    Safe(async () =>
+    {
+        var app = AppResolver.Resolve(store.Current, appId);
+        return await previews.TeardownAsync(app, pr);
     }));
 
 app.MapPost("/api/deploy/rollback", async (HttpContext context, UiConfigStore store, DeployService deploys) =>
@@ -999,7 +1423,7 @@ app.MapPost("/api/deploy/rollback", async (HttpContext context, UiConfigStore st
 
     try
     {
-        var job = deploys.TryStartRollback(store.Current.ComposeFile, tag);
+        var job = deploys.TryStartRollback(ResolveApp(store, context).ComposeFile, tag);
         if (job is null)
         {
             return Error(409, "A rollback is already in progress.");
@@ -1028,11 +1452,11 @@ app.MapGet("/api/deploy/job/{jobId}", (string jobId, DeployService deploys) =>
 
 // ---- Compose project env (.env) -------------------------------------------------
 
-app.MapGet("/api/compose/env", (UiConfigStore store) =>
+app.MapGet("/api/compose/env", (HttpContext context, UiConfigStore store) =>
     Safe(async () =>
     {
         await Task.CompletedTask;
-        var envFile = PinqOpsStatePaths.EnvFile(store.Current.ComposeFile);
+        var envFile = PinqOpsStatePaths.EnvFile(ResolveApp(store, context).ComposeFile);
         return new
         {
             envFile,
@@ -1051,7 +1475,7 @@ app.MapPost("/api/compose/env", (HttpContext context, UiConfigStore store) =>
     {
         var request = await context.Request.ReadFromJsonAsync<ComposeEnvRequest>()
             ?? throw new ArgumentException("Invalid request body.");
-        var envFile = PinqOpsStatePaths.EnvFile(store.Current.ComposeFile);
+        var envFile = PinqOpsStatePaths.EnvFile(ResolveApp(store, context).ComposeFile);
 
         // Same predicate the GET projection reports as `managed`, so the editor
         // never offers an edit the write path will reject.
@@ -1112,10 +1536,10 @@ app.MapPost("/api/compose/env", (HttpContext context, UiConfigStore store) =>
     }));
 
 // New env only takes effect when the containers are recreated.
-app.MapPost("/api/compose/apply", (UiConfigStore store, IProcessRunner processRunner) =>
+app.MapPost("/api/compose/apply", (HttpContext context, UiConfigStore store, IProcessRunner processRunner) =>
     Safe(async () =>
     {
-        var composeFile = store.Current.ComposeFile;
+        var composeFile = ResolveApp(store, context).ComposeFile;
         if (!File.Exists(composeFile))
         {
             throw new InvalidOperationException($"{composeFile} does not exist.");
@@ -1132,13 +1556,434 @@ app.MapPost("/api/compose/apply", (UiConfigStore store, IProcessRunner processRu
         return new { ok = true, output = result.StandardOutput.Trim() };
     }));
 
-// ---- Notifications --------------------------------------------------------------
+// ---- Reverse proxy & domains ----------------------------------------------------
 
-app.MapGet("/api/notifications", (UiConfigStore store) =>
+app.MapGet("/api/proxy/status", (ProxyService proxy) => Safe(async () => await proxy.StatusAsync()));
+
+app.MapPost("/api/proxy/install", (HttpContext context, ProxyService proxy) =>
+    Safe(async () =>
+    {
+        ProxyInstallRequest? request;
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync<ProxyInstallRequest>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            request = null;
+        }
+
+        return await proxy.InstallAsync(request?.AcmeEmail, request?.Staging ?? false, request?.Force ?? false);
+    }));
+
+app.MapGet("/api/domains", (UiConfigStore store, ProxyService proxy, DockerService docker) =>
+    Safe(async () =>
+    {
+        var config = proxy.Store.Load();
+        var appConfig = store.Current;
+        var items = new List<object>();
+        foreach (var entry in config.Domains)
+        {
+            var (_, running) = await docker.ContainerStateAsync(entry.TargetContainer);
+            // Drift: the app was renamed or its container port changed, so the
+            // stored route now points at the wrong container/port.
+            var drift = false;
+            try
+            {
+                var (container, port) = ResolveDomainTarget(appConfig, entry.Target, null);
+                drift = container != entry.TargetContainer || port != entry.TargetPort;
+            }
+            catch (ArgumentException)
+            {
+                drift = true; // the target app no longer exists
+            }
+
+            items.Add(new
+            {
+                entry.Domain,
+                entry.Target,
+                entry.TargetContainer,
+                entry.TargetPort,
+                entry.Enabled,
+                running,
+                drift,
+                url = $"https://{entry.Domain}",
+            });
+        }
+
+        return new { items };
+    }));
+
+app.MapGet("/api/domains/check", (HttpContext context, ProxyService proxy) =>
+    Safe(async () => await proxy.CheckDnsAsync(context.Request.Query["domain"].ToString())));
+
+app.MapPost("/api/domains", (HttpContext context, UiConfigStore store, ProxyService proxy) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<DomainRequest>()
+            ?? throw new ArgumentException("Invalid request body.");
+        var domain = DomainName.Normalize(request.Domain);
+        if (string.IsNullOrWhiteSpace(request.Target))
+        {
+            throw new ArgumentException("A target is required.");
+        }
+
+        var (container, port) = ResolveDomainTarget(store.Current, request.Target, request.TargetPort);
+        var dns = await proxy.CheckDnsAsync(domain);
+
+        var config = proxy.Store.Load();
+        config.Domains.RemoveAll(d => string.Equals(d.Domain, domain, StringComparison.Ordinal));
+        config.Domains.Add(new DomainEntry
+        {
+            Domain = domain,
+            Target = request.Target,
+            TargetContainer = container,
+            TargetPort = port,
+            Enabled = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
+        proxy.Store.Save(config);
+        await proxy.ApplyAsync();
+
+        logger.LogWarning("Domain {Domain} → {Container}:{Port}", domain, container, port);
+        return new { ok = true, domain, dnsMatches = dns.Matches, resolvedIps = dns.ResolvedIps, serverIps = dns.ServerIps };
+    }));
+
+app.MapPost("/api/domains/{domain}/toggle", (string domain, ProxyService proxy) =>
+    Safe(async () =>
+    {
+        var normalized = domain.Trim().ToLowerInvariant();
+        var config = proxy.Store.Load();
+        var entry = config.Domains.FirstOrDefault(d => string.Equals(d.Domain, normalized, StringComparison.Ordinal))
+            ?? throw new ArgumentException($"Unknown domain '{domain}'.");
+        entry.Enabled = !entry.Enabled;
+        proxy.Store.Save(config);
+        await proxy.ApplyAsync();
+        return new { ok = true, enabled = entry.Enabled };
+    }));
+
+app.MapPost("/api/domains/{domain}/delete", (string domain, ProxyService proxy) =>
+    Safe(async () =>
+    {
+        var normalized = domain.Trim().ToLowerInvariant();
+        var config = proxy.Store.Load();
+        config.Domains.RemoveAll(d => string.Equals(d.Domain, normalized, StringComparison.Ordinal));
+        proxy.Store.Save(config);
+        await proxy.ApplyAsync();
+        return new { ok = true };
+    }));
+
+// ---- Backups --------------------------------------------------------------------
+
+app.MapGet("/api/backups", (BackupConfigStore store, BackupService backups, DockerService docker) =>
+    Safe(async () =>
+    {
+        var items = new List<object>();
+        foreach (var target in store.Load().Targets)
+        {
+            var running = target.Kind == "db" && (await docker.ContainerStateAsync(target.Name)).Running;
+            items.Add(new
+            {
+                target.Id, target.Kind, target.Name, target.Engine, target.Schedule,
+                target.AtHour, target.RetentionCount, target.Enabled,
+                lastRun = backups.LastRun(target.Id),
+                running,
+                snapshots = backups.ListSnapshots(target.Id),
+            });
+        }
+
+        return new { items };
+    }));
+
+app.MapPost("/api/backups/targets", (HttpContext context, BackupConfigStore store) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<BackupTargetRequest>()
+            ?? throw new ArgumentException("Invalid request body.");
+        if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Engine)
+            || string.IsNullOrWhiteSpace(request.Kind))
+        {
+            throw new ArgumentException("A source and engine are required.");
+        }
+
+        var config = store.Load();
+        var id = request.Id;
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            var basis = request.Kind == "volume" ? request.Name : request.Engine;
+            id = $"{(request.Kind == "volume" ? "vol" : "db")}-{Slugify(basis)}";
+        }
+
+        if (!BackupNaming.IsValidId(id))
+        {
+            throw new ArgumentException("Invalid backup id.");
+        }
+
+        var target = config.Targets.FirstOrDefault(t => t.Id == id);
+        if (target is null)
+        {
+            target = new BackupTarget { Id = id };
+            config.Targets.Add(target);
+        }
+
+        target.Kind = request.Kind;
+        target.Name = request.Name;
+        target.Engine = request.Engine;
+        target.Schedule = request.Schedule is "hourly" or "daily" or "weekly" ? request.Schedule : "daily";
+        target.AtHour = Math.Clamp(request.AtHour ?? target.AtHour, 0, 23);
+        target.RetentionCount = Math.Clamp(request.RetentionCount ?? target.RetentionCount, 1, 365);
+        target.Enabled = request.Enabled ?? target.Enabled;
+        store.Save(config);
+        return new { ok = true, id };
+    }));
+
+app.MapPost("/api/backups/targets/{id}/toggle", (string id, BackupConfigStore store) =>
     Safe(async () =>
     {
         await Task.CompletedTask;
-        var config = new PinqOps.Notifications.NotificationConfigStore(store.Current.ComposeFile).Load();
+        var config = store.Load();
+        var target = config.Targets.FirstOrDefault(t => t.Id == id)
+            ?? throw new ArgumentException($"Unknown backup target '{id}'.");
+        target.Enabled = !target.Enabled;
+        store.Save(config);
+        return new { ok = true, enabled = target.Enabled };
+    }));
+
+app.MapDelete("/api/backups/targets/{id}", (string id, BackupConfigStore store) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        var config = store.Load();
+        config.Targets.RemoveAll(t => t.Id == id);
+        store.Save(config);
+        return new { ok = true };
+    }));
+
+app.MapPost("/api/backups/run/{id}", (string id, BackupConfigStore store, BackupService backups) =>
+    Safe(async () =>
+    {
+        var target = store.Load().Targets.FirstOrDefault(t => t.Id == id)
+            ?? throw new ArgumentException($"Unknown backup target '{id}'.");
+        return await backups.RunGuardedAsync(target);
+    }));
+
+app.MapPost("/api/backups/restore", (HttpContext context, BackupConfigStore store, BackupService backups) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<BackupRestoreRequest>()
+            ?? throw new ArgumentException("Invalid request body.");
+        var target = store.Load().Targets.FirstOrDefault(t => t.Id == request.TargetId)
+            ?? throw new ArgumentException($"Unknown backup target '{request.TargetId}'.");
+        await backups.RestoreAsync(target, request.Snapshot ?? "");
+        return new { ok = true };
+    }));
+
+app.MapDelete("/api/backups/{targetId}/snapshots/{snapshot}", (string targetId, string snapshot, BackupService backups) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        backups.DeleteSnapshot(targetId, snapshot);
+        return new { ok = true };
+    }));
+
+app.MapGet("/api/backups/download", (HttpContext context, BackupService backups) =>
+{
+    var targetId = context.Request.Query["target"].ToString();
+    var snapshot = context.Request.Query["snapshot"].ToString();
+    var path = backups.SnapshotPath(targetId, snapshot);
+    return path is null
+        ? Error(404, "Snapshot not found.")
+        : Results.File(path, "application/octet-stream", snapshot);
+});
+
+// ---- API tokens -----------------------------------------------------------------
+
+app.MapGet("/api/tokens", (ApiTokenStore tokens) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        return new
+        {
+            items = tokens.List().Select(t => new
+            {
+                t.Id, t.Name, t.Scope, t.Last4, t.CreatedAt, t.LastUsedAt,
+            }),
+        };
+    }));
+
+app.MapPost("/api/tokens", (HttpContext context, ApiTokenStore tokens) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<TokenCreateRequest>();
+        var scope = request?.Scope is "read" or "deploy" or "admin" ? request.Scope : "read";
+        var (token, plaintext) = tokens.Create(request?.Name ?? "token", scope, DateTimeOffset.UtcNow);
+        logger.LogWarning("API token '{Name}' created with scope {Scope}", token.Name, token.Scope);
+        // The plaintext is returned exactly once, here.
+        return new { ok = true, id = token.Id, token = plaintext, scope = token.Scope };
+    }));
+
+app.MapDelete("/api/tokens/{id}", (string id, ApiTokenStore tokens) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        tokens.Delete(id);
+        return new { ok = true };
+    }));
+
+// ---- Users & roles (admin only) -------------------------------------------------
+
+app.MapGet("/api/users", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        RequireAdmin(context);
+        await Task.CompletedTask;
+        var me = context.Items["user"] as string;
+        return new
+        {
+            items = store.Current.Users.Select(u => new
+            {
+                u.Username,
+                u.Role,
+                isSelf = string.Equals(u.Username, me, StringComparison.OrdinalIgnoreCase),
+            }),
+        };
+    }));
+
+app.MapPost("/api/users", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<UserRequest>();
+        var username = (request?.Username ?? string.Empty).Trim();
+        if (username is not { Length: >= 2 } || !username.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.'))
+        {
+            throw new ArgumentException("Username must be at least 2 characters (letters, digits, - _ .).");
+        }
+
+        if (request?.Password is not { Length: >= 8 } password)
+        {
+            throw new ArgumentException("Password must be at least 8 characters.");
+        }
+
+        if (!UserRoles.IsValid(request.Role))
+        {
+            throw new ArgumentException("Role must be viewer, deployer, or admin.");
+        }
+
+        if (store.Current.Users.Any(u => string.Equals(u.Username, username, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"A user named '{username}' already exists.");
+        }
+
+        store.Update(config => config.Users.Add(new UserAccount
+        {
+            Username = username,
+            PasswordHash = PasswordHasher.Hash(password),
+            Role = request.Role!,
+        }));
+        logger.LogWarning("User '{User}' created with role {Role}", username, request.Role);
+        return new { ok = true, username, role = request.Role };
+    }));
+
+app.MapPost("/api/users/{name}/password", (string name, HttpContext context, UiConfigStore store, SessionStore sessions) =>
+    Safe(async () =>
+    {
+        RequireAdmin(context);
+        var request = await context.Request.ReadFromJsonAsync<UserPasswordRequest>();
+        if (request?.Password is not { Length: >= 8 } password)
+        {
+            throw new ArgumentException("Password must be at least 8 characters.");
+        }
+
+        var target = store.Current.Users.FirstOrDefault(u => string.Equals(u.Username, name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new ArgumentException($"No user named '{name}'.");
+
+        store.Update(config =>
+        {
+            var stored = config.Users.First(u => string.Equals(u.Username, target.Username, StringComparison.OrdinalIgnoreCase));
+            stored.PasswordHash = PasswordHasher.Hash(password);
+        });
+        sessions.RevokeUser(target.Username); // force a fresh login with the new password
+        logger.LogWarning("Password reset for user '{User}'", target.Username);
+        return new { ok = true };
+    }));
+
+app.MapDelete("/api/users/{name}", (string name, HttpContext context, UiConfigStore store, SessionStore sessions) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        var me = context.Items["user"] as string;
+        if (string.Equals(name, me, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("You cannot delete your own account.");
+        }
+
+        var target = store.Current.Users.FirstOrDefault(u => string.Equals(u.Username, name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new ArgumentException($"No user named '{name}'.");
+
+        // The last admin must never be removed, or no one could ever administer
+        // the dashboard again.
+        if (target.Role == UserRoles.Admin
+            && store.Current.Users.Count(u => u.Role == UserRoles.Admin) <= 1)
+        {
+            throw new InvalidOperationException("Cannot remove the last admin.");
+        }
+
+        store.Update(config => config.Users.RemoveAll(u => string.Equals(u.Username, target.Username, StringComparison.OrdinalIgnoreCase)));
+        sessions.RevokeUser(target.Username);
+        logger.LogWarning("User '{User}' removed", target.Username);
+        return new { ok = true };
+    }));
+
+// Role change is a small, separate action so the UI can inline it in the table.
+app.MapPost("/api/users/{name}/role", (string name, HttpContext context, UiConfigStore store, SessionStore sessions) =>
+    Safe(async () =>
+    {
+        var request = await context.Request.ReadFromJsonAsync<UserRequest>();
+        if (!UserRoles.IsValid(request?.Role))
+        {
+            throw new ArgumentException("Role must be viewer, deployer, or admin.");
+        }
+
+        var target = store.Current.Users.FirstOrDefault(u => string.Equals(u.Username, name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new ArgumentException($"No user named '{name}'.");
+
+        // Demoting the last admin would lock everyone out of administration.
+        if (target.Role == UserRoles.Admin && request!.Role != UserRoles.Admin
+            && store.Current.Users.Count(u => u.Role == UserRoles.Admin) <= 1)
+        {
+            throw new InvalidOperationException("Cannot demote the last admin.");
+        }
+
+        store.Update(config =>
+        {
+            var stored = config.Users.First(u => string.Equals(u.Username, target.Username, StringComparison.OrdinalIgnoreCase));
+            stored.Role = request!.Role!;
+        });
+        sessions.RevokeUser(target.Username); // the new role takes effect on next login
+        logger.LogWarning("User '{User}' role changed to {Role}", target.Username, request!.Role);
+        return new { ok = true, username = target.Username, role = request.Role };
+    }));
+
+// ---- Audit trail (admin only) ---------------------------------------------------
+
+app.MapGet("/api/audit", (HttpContext context, AuditLog audit) =>
+    Safe(async () =>
+    {
+        RequireAdmin(context);
+        await Task.CompletedTask;
+        var limit = int.TryParse(context.Request.Query["limit"], out var n) ? n : 200;
+        var user = context.Request.Query["user"].ToString();
+        var action = context.Request.Query["action"].ToString();
+        return new { items = audit.Read(limit, user, action) };
+    }));
+
+// ---- Notifications --------------------------------------------------------------
+
+app.MapGet("/api/notifications", (HttpContext context, UiConfigStore store) =>
+    Safe(async () =>
+    {
+        await Task.CompletedTask;
+        var config = new PinqOps.Notifications.NotificationConfigStore(ResolveApp(store, context).ComposeFile).Load();
         return new
         {
             events = new
@@ -1165,7 +2010,7 @@ app.MapPost("/api/notifications", (HttpContext context, UiConfigStore store) =>
         var request = await context.Request.ReadFromJsonAsync<NotificationsRequest>()
             ?? throw new ArgumentException("Invalid request body.");
 
-        var configStore = new PinqOps.Notifications.NotificationConfigStore(store.Current.ComposeFile);
+        var configStore = new PinqOps.Notifications.NotificationConfigStore(ResolveApp(store, context).ComposeFile);
         var config = configStore.Load();
 
         if (request.Events is { } events)
@@ -1234,15 +2079,15 @@ app.MapPost("/api/notifications/test", (HttpContext context, UiConfigStore store
             throw new ArgumentException("A channel is required.");
         }
 
-        using var dispatcher = new PinqOps.Notifications.NotificationDispatcher(store.Current.ComposeFile);
+        using var dispatcher = new PinqOps.Notifications.NotificationDispatcher(ResolveApp(store, context).ComposeFile);
         var delivered = await dispatcher.SendTestAsync(channel);
         return new { ok = delivered, delivered };
     }));
 
 // ---- Local runner & system ------------------------------------------------------
 
-app.MapGet("/api/runner/local", (UiConfigStore store, LocalRunnerService runner) =>
-    Safe(async () => await runner.GetStatusAsync(store.Current.RunnerDirectory)));
+app.MapGet("/api/runner/local", (HttpContext context, UiConfigStore store, LocalRunnerService runner) =>
+    Safe(async () => await runner.GetStatusAsync(ResolveApp(store, context).RunnerDirectory)));
 
 app.MapGet("/api/runner/logs", (HttpContext context, LocalRunnerService runner) =>
     Safe(async () =>
@@ -1289,6 +2134,10 @@ static async Task<IResult> Safe(Func<Task<object?>> action)
     {
         return Error(400, exception.Message);
     }
+    catch (UnauthorizedAccessException exception)
+    {
+        return Error(403, exception.Message);
+    }
     catch (GitHubApiException exception)
     {
         return Error(502, exception.Message);
@@ -1305,6 +2154,17 @@ static IResult Error(int statusCode, string message) =>
 static string ClientKey(HttpContext context) =>
     context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
+// Guards the user- and audit-management endpoints: a GET falls to "read" scope
+// in the middleware, so admin-only reads (the user list, the audit trail) are
+// enforced here. Writes are already admin-gated by the scope middleware.
+static void RequireAdmin(HttpContext context)
+{
+    if (context.Items["scope"] as string != "admin")
+    {
+        throw new UnauthorizedAccessException("This action requires the admin role.");
+    }
+}
+
 /// <summary>First published host port from docker ps's Ports column, e.g.
 /// "0.0.0.0:3005-&gt;3000/tcp, :::3005-&gt;3000/tcp" → 3005.</summary>
 static int? ParseFirstHostPort(string portsColumn)
@@ -1312,6 +2172,69 @@ static int? ParseFirstHostPort(string portsColumn)
     var match = System.Text.RegularExpressions.Regex.Match(portsColumn ?? "", @":(\d+)->");
     return match.Success && int.TryParse(match.Groups[1].Value, out var port) ? port : null;
 }
+
+/// <summary>Lowercases and reduces a name to a safe id fragment ([a-z0-9._-]).</summary>
+static string Slugify(string value)
+{
+    var kept = value.ToLowerInvariant()
+        .Select(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or '-' ? c : '-')
+        .ToArray();
+    var slug = new string(kept).Trim('-', '.', '_');
+    return slug.Length > 0 ? slug : "target";
+}
+
+/// <summary>The container name and port a domain target resolves to. Target is
+/// an app id (→ that app's compose container) or "catalog:&lt;id&gt;" (→ a catalog
+/// container). An optional requested port overrides the default.</summary>
+static (string Container, int Port) ResolveDomainTarget(UiConfig config, string target, int? requestedPort)
+{
+    if (target.StartsWith("catalog:", StringComparison.Ordinal))
+    {
+        var id = target["catalog:".Length..];
+        var spec = AppCatalog.Find(id) ?? throw new ArgumentException($"Unknown app '{id}'.");
+        var catalogPort = requestedPort
+            ?? (spec.Ports.Length > 0 ? spec.Ports[0].Container : throw new ArgumentException("This app exposes no port to route to."));
+        return ($"{AppCatalog.ContainerPrefix}{id}", catalogPort);
+    }
+
+    var connection = config.Apps.FirstOrDefault(a => string.Equals(a.Id, target, StringComparison.OrdinalIgnoreCase))
+        ?? throw new ArgumentException($"Unknown app '{target}'.");
+    var repository = GitHubRepositoryParser.Parse(connection.RepoUrl);
+    var container = $"{ComposeProjectName.FromRepository(repository.Name)}-app-1";
+    var envPort = TryParsePort(
+        EnvFileStore.GetValue(PinqOpsStatePaths.EnvFile(connection.ComposeFile), SetupTemplates.ContainerPortVariable));
+    return (container, requestedPort ?? envPort ?? DockerfileInspector.DefaultPort);
+}
+
+/// <summary>Whether <paramref name="path"/> is a build manifest directly in the
+/// directory identified by <paramref name="prefix"/> (no deeper).</summary>
+static bool IsDirectManifest(string path, string prefix)
+{
+    if (!path.StartsWith(prefix, StringComparison.Ordinal))
+    {
+        return false;
+    }
+
+    var name = path[prefix.Length..];
+    if (name.Contains('/'))
+    {
+        return false;
+    }
+
+    return name.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+        || name is "package.json" or "go.mod" or "Cargo.toml"
+            or "requirements.txt" or "pyproject.toml" or "composer.json" or "Gemfile";
+}
+
+/// <summary>The app a request targets: ?appId=… or the sole/first app.</summary>
+static AppConnection ResolveApp(UiConfigStore store, HttpContext context) =>
+    AppResolver.Resolve(store.Current, context.Request.Query["appId"].ToString());
+
+/// <summary>A stored .env port value as an int, or null when absent/garbage.</summary>
+static int? TryParsePort(string? value) =>
+    int.TryParse(value?.Trim(), NumberStyles.None, InvariantCulture, out var port) && HostPort.IsValid(port)
+        ? port
+        : null;
 
 static string? ReadBearerToken(HttpContext context)
 {

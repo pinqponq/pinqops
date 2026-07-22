@@ -206,6 +206,113 @@ public sealed class DockerService
         return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
     }
 
+    /// <summary>Runs a command inside a running container (docker exec). The
+    /// container name is validated; the command is an argv, not a shell string.</summary>
+    public async Task<string> ExecAsync(string container, params string[] command)
+    {
+        ValidateResourceName(container);
+        var arguments = new List<string> { "exec", "--", container };
+        arguments.AddRange(command);
+        var result = await RunAsync([.. arguments]).ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
+    /// <summary>Whether a container exists and, if so, whether it is running.</summary>
+    public async Task<(bool Exists, bool Running)> ContainerStateAsync(string name)
+    {
+        ValidateResourceName(name);
+        var result = await RunAsync("inspect", "-f", "{{.State.Running}}", "--", name).ConfigureAwait(false);
+        return result.Succeeded ? (true, result.StandardOutput.Trim() == "true") : (false, false);
+    }
+
+    /// <summary>
+    /// Starts the managed reverse-proxy container: publishes 80/443 (TCP + UDP
+    /// for HTTP/3), mounts the generated Caddyfile read-only, and keeps its ACME
+    /// certificate/config in named volumes so a reinstall does not re-issue certs.
+    /// </summary>
+    public async Task<string> InstallProxyAsync(string container, string image, string caddyfilePath)
+    {
+        await EnsureSharedNetworkAsync().ConfigureAwait(false);
+        string[] arguments =
+        [
+            "run", "-d",
+            "--name", container,
+            "--restart", "unless-stopped",
+            "--network", AppCatalog.SharedNetwork,
+            "-p", "80:80", "-p", "443:443", "-p", "443:443/udp",
+            "-v", $"{caddyfilePath}:/etc/caddy/Caddyfile:ro",
+            "-v", $"{container}-data:/data",
+            "-v", $"{container}-config:/config",
+            image,
+        ];
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        var result = await _processRunner.RunAsync("docker", arguments, workingDirectory: null, cts.Token)
+            .ConfigureAwait(false);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw Failed(result);
+    }
+
+    private static readonly TimeSpan BackupTimeout = TimeSpan.FromMinutes(30);
+
+    /// <summary>Copies a file out of a container to the host (docker cp).</summary>
+    public async Task CopyFromContainerAsync(string container, string containerPath, string hostPath)
+    {
+        ValidateResourceName(container);
+        var result = await RunAsync(BackupTimeout, "cp", $"{container}:{containerPath}", hostPath).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            throw Failed(result);
+        }
+    }
+
+    /// <summary>Copies a host file into a container (docker cp).</summary>
+    public async Task CopyToContainerAsync(string hostPath, string container, string containerPath)
+    {
+        ValidateResourceName(container);
+        var result = await RunAsync(BackupTimeout, "cp", hostPath, $"{container}:{containerPath}").ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            throw Failed(result);
+        }
+    }
+
+    /// <summary>Tars a volume's contents into <paramref name="fileName"/> under
+    /// <paramref name="hostBackupDir"/> (via a throwaway alpine container).</summary>
+    public async Task BackupVolumeAsync(string volume, string hostBackupDir, string fileName)
+    {
+        ValidateResourceName(volume);
+        string[] arguments =
+        [
+            "run", "--rm",
+            "-v", $"{volume}:/src:ro",
+            "-v", $"{hostBackupDir}:/dst",
+            "alpine", "tar", "czf", $"/dst/{fileName}", "-C", "/src", ".",
+        ];
+        var result = await RunAsync(BackupTimeout, arguments).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            throw Failed(result);
+        }
+    }
+
+    /// <summary>Clears a volume and extracts a snapshot tar back into it.</summary>
+    public async Task RestoreVolumeAsync(string volume, string hostBackupDir, string fileName)
+    {
+        ValidateResourceName(volume);
+        string[] arguments =
+        [
+            "run", "--rm",
+            "-v", $"{volume}:/dst",
+            "-v", $"{hostBackupDir}:/src:ro",
+            "alpine", "sh", "-c", $"find /dst -mindepth 1 -delete && tar xzf /src/{fileName} -C /dst",
+        ];
+        var result = await RunAsync(BackupTimeout, arguments).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            throw Failed(result);
+        }
+    }
+
     public async Task EnsureSharedNetworkAsync()
     {
         var inspect = await RunAsync("network", "inspect", AppCatalog.SharedNetwork).ConfigureAwait(false);

@@ -101,6 +101,9 @@ public sealed class SystemInfoService
         }
     }
 
+    /// <summary>Free bytes on the root filesystem, or null when unknown.</summary>
+    public long? RootFreeBytes() => ReadRootDisk().Free;
+
     private static (long? Total, long? Free) ReadRootDisk()
     {
         try

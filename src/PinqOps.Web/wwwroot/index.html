@@ -169,6 +169,34 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
 .progress-ind{height:7px;border-radius:6px;background:#111112;border:1px solid var(--line);overflow:hidden;position:relative}
 .progress-ind i{position:absolute;inset:0;width:35%;border-radius:6px;background:var(--primary);animation:slide 1.2s ease-in-out infinite}
 @keyframes slide{0%{left:-35%}100%{left:100%}}
+/* 3-step publish stepper */
+.stepper{display:flex;list-style:none;margin-bottom:16px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px}
+.stepper .st{flex:1;display:flex;align-items:center;gap:10px;cursor:default;color:var(--muted);font-size:13px;font-weight:600;min-width:0}
+.stepper .st+.st::before{content:"";flex:1;height:1px;background:var(--line2);margin:0 12px}
+.st-n{width:26px;height:26px;border-radius:50%;border:1px solid var(--line2);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;background:var(--panel2)}
+.st-l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stepper .st.active{color:var(--text)}
+.stepper .st.active .st-n{background:var(--primary);border-color:transparent;color:var(--bg)}
+.stepper .st.done{color:var(--ok);cursor:pointer}
+.stepper .st.done .st-n{background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.3);color:var(--ok)}
+.stepper .st.locked{opacity:.4}
+.wstep{animation:pop .18s ease-out}
+.wstep-foot{display:flex;gap:10px;align-items:center;margin-top:16px}
+.wstep-foot .spacer{flex:1}
+.port-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;margin:4px 0 6px}
+.port-hint{font-size:12px;margin-top:5px;min-height:16px}
+.port-hint.ok{color:var(--ok)}
+.port-hint.err{color:var(--err)}
+.live-card{display:flex;align-items:center;gap:14px;margin-top:16px;padding:16px 18px;border:1px solid rgba(52,211,153,.35);background:rgba(52,211,153,.06);border-radius:var(--radius);color:var(--text)}
+a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
+.live-card .lc-dot{width:10px;height:10px;border-radius:50%;background:var(--ok);flex:none;box-shadow:0 0 0 4px rgba(52,211,153,.15)}
+.live-card .lc-body{flex:1;min-width:0}
+.live-card .lc-title{font-weight:700;font-size:14px}
+.live-card .lc-url{font-family:var(--mono);font-size:12.5px;color:var(--ok);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.live-card .lc-open{flex:none;font-size:13px;font-weight:600;color:var(--ok)}
+.wait-card{display:flex;align-items:flex-start;gap:12px;margin-top:16px;padding:14px 16px;border:1px solid var(--line);background:var(--panel2);border-radius:var(--radius);font-size:13px}
+.wait-card.warn{border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.06)}
+@media(max-width:640px){.port-grid{grid-template-columns:1fr}.stepper{padding:10px 12px}.stepper .st .st-l{display:none}.stepper .st.active .st-l{display:inline}.stepper .st+.st::before{margin:0 8px}}
 .identity{display:flex;align-items:center;gap:12px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-top:8px}
 .identity img{width:34px;height:34px;border-radius:50%;border:1px solid var(--line2)}
 .identity .who b{font-size:13.5px}
@@ -224,6 +252,10 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
         <label for="lock-code"><span data-i18n="lk.code">Setup code</span> <span class="muted" data-i18n="lk.codeHint">(printed on the server console)</span></label>
         <input id="lock-code" autocomplete="off" spellcheck="false">
       </div>
+      <div id="lock-user-wrap" class="hidden">
+        <label for="lock-user" data-i18n="lk.user">Username</label>
+        <input id="lock-user" autocomplete="username" spellcheck="false">
+      </div>
       <label for="lock-pass" data-i18n="lk.pw">Password</label>
       <input id="lock-pass" type="password" autocomplete="current-password" required>
       <div id="lock-pass2-wrap" class="hidden">
@@ -249,6 +281,8 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
     <header class="topbar">
       <button class="icon nav-toggle" id="btn-nav-toggle" aria-label="Menu"></button>
       <h1 id="view-title"></h1>
+      <select id="app-switch" class="hidden" title=""></select>
+      <button class="small ghost hidden" id="btn-add-app" title="">+</button>
       <button class="icon" id="btn-refresh"></button>
       <button class="ghost" id="btn-logout"></button>
     </header>
@@ -288,6 +322,10 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
           <div class="section-head"><h2 data-i18n="dh.title">Deploy history</h2><div class="spacer"></div><span id="dep-current" class="muted"></span></div>
           <div id="dep-tagvar-hint" class="muted hidden" style="font-size:12px;margin-bottom:8px"></div>
           <div class="tablewrap"><table id="dep-history-table"></table></div>
+        </div>
+        <div class="section" style="margin-bottom:16px" id="previews-section">
+          <div class="section-head"><h2 data-i18n="pv.title">Preview environments</h2><div class="spacer"></div><span class="muted" style="font-size:12px" data-i18n="pv.perPr">one per open pull request</span></div>
+          <div class="tablewrap"><table id="previews-table"></table></div>
         </div>
         <div class="section" style="margin-bottom:16px">
           <div class="section-head"><h2 data-i18n="ev.title">Environment (.env)</h2><div class="spacer"></div><span class="muted mono" id="env-file" style="font-size:12px"></span></div>
@@ -402,9 +440,16 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
           <div class="card"><dl class="kv" id="sys-docker"></dl></div></div>
       </section>
 
-      <!-- github: connect + pick a repo + the install wizard -->
+      <!-- github: the 3-step publish wizard (connect → choose repo → publish) -->
       <section id="view-github" class="view hidden">
-        <div class="card">
+        <ol class="stepper" id="wiz-stepper">
+          <li class="st" data-step="1"><span class="st-n">1</span><span class="st-l" data-i18n="wz.s1">Connect GitHub</span></li>
+          <li class="st" data-step="2"><span class="st-n">2</span><span class="st-l" data-i18n="wz.s2">Choose repository</span></li>
+          <li class="st" data-step="3"><span class="st-n">3</span><span class="st-l" data-i18n="wz.s3">Publish</span></li>
+        </ol>
+
+        <!-- step 1: connect -->
+        <div class="card wstep hidden" id="wstep-1">
           <h3 data-i18n="se.gh">GitHub connection</h3>
 
           <!-- account -->
@@ -432,28 +477,64 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
             </div>
             <div style="margin-top:14px"><a href="#" id="link-no-gh" class="muted" style="font-size:12.5px" data-i18n="se.noGhLink">Continue without signing in with GitHub?</a></div>
           </div>
+          <div class="wstep-foot"><span class="spacer"></span>
+            <button class="primary hidden" id="btn-step1-next" data-i18n="wz.continue">Continue →</button></div>
         </div>
 
-        <!-- repo wizard: search, pick, install — like installing an app -->
-        <div class="card hidden" id="repo-card" style="margin-top:16px">
+        <!-- step 2: pick a repository -->
+        <div class="card wstep hidden" id="wstep-2">
           <h3 data-i18n="gh.pickTitle">Set up a repository</h3>
-          <p class="muted" style="font-size:13px;margin-bottom:10px" data-i18n="gh.pickHelp">Search your repositories, pick one, and Install — the wizard commits the deploy workflow, creates the compose project, and registers the runner automatically.</p>
-          <div class="inline-form">
-            <input id="repo-search" style="min-width:220px;flex:1" data-i18n-ph="se.repoSearch">
-            <button class="primary" id="btn-repo-install" disabled data-i18n="gh.installBtn">Install</button>
-          </div>
+          <p class="muted" style="font-size:13px;margin-bottom:10px" data-i18n="gh.pickHelp">Search your repositories and pick the one to publish — the next step readies everything (workflow, compose project, runner) automatically.</p>
+          <input id="repo-search" data-i18n-ph="se.repoSearch">
           <div id="repo-list" class="repolist"></div>
+          <div class="wstep-foot">
+            <button class="ghost" id="btn-step2-back" data-i18n="wz.back">← Back</button>
+            <span class="spacer"></span>
+            <button class="primary" id="btn-repo-install" disabled data-i18n="wz.continue">Continue →</button>
+          </div>
         </div>
 
-        <!-- readiness of the connected repo -->
-        <div class="card hidden" id="setup-card" style="margin-top:16px">
-          <h3 style="display:flex;align-items:center;gap:10px"><span data-i18n="su.title">Deployment readiness</span>
+        <!-- step 3: publish (ports + sub-step progress + live status) -->
+        <div class="card wstep hidden" id="wstep-3">
+          <h3 style="display:flex;align-items:center;gap:10px"><span data-i18n="wz.s3">Publish</span>
             <span style="flex:1"></span>
-            <span class="muted" style="font-weight:500;text-transform:none;letter-spacing:0" id="setup-repo-name"></span>
-            <button class="small" id="btn-wiz-rerun" data-i18n="gh.reinstall">Re-run the wizard</button></h3>
-          <div id="setup-summary" style="font-size:13px;margin-bottom:6px"></div>
-          <div id="setup-list"></div>
-          <div class="logbox hidden" id="setup-log" style="margin-top:12px;max-height:280px"></div>
+            <span class="muted" style="font-weight:500;text-transform:none;letter-spacing:0;font-family:var(--mono);font-size:12px" id="pub-repo-name"></span>
+            <a href="#" id="lnk-change-repo" style="font-size:12px;text-transform:none;letter-spacing:0;font-weight:500" data-i18n="wz.changeRepo">change repository</a></h3>
+
+          <div id="pub-ports">
+            <div class="port-grid">
+              <div><label for="pub-hostport" data-i18n="wz.hostPort">Host port (public, on this server)</label>
+                <input id="pub-hostport" type="number" min="1" max="65535" inputmode="numeric">
+                <div class="port-hint" id="pub-hostport-hint"></div></div>
+              <div><label for="pub-ctrport" data-i18n="wz.ctrPort">Container port (your app listens on)</label>
+                <input id="pub-ctrport" type="number" min="1" max="65535" inputmode="numeric">
+                <div class="port-hint" id="pub-ctrport-src"></div></div>
+            </div>
+            <div class="banner hidden" id="pub-ctr-fallback" style="margin-bottom:12px"></div>
+          </div>
+
+          <div id="pub-progress" class="hidden" style="margin-top:6px">
+            <div class="bar wiz-bar"><i id="wiz-bar" style="width:0%"></i></div>
+            <div class="wiz-step" id="wiz-connect"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.connect">Connecting the repository</b><div class="ws-detail" id="wiz-connect-d"></div></div></div>
+            <div class="wiz-step" id="wiz-dockerfile"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.dockerfile">Dockerfile</b><div class="ws-detail" id="wiz-dockerfile-d"></div></div></div>
+            <div class="wiz-step" id="wiz-workflow"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.workflow">Deploy workflow</b><div class="ws-detail" id="wiz-workflow-d"></div></div></div>
+            <div class="wiz-step" id="wiz-var"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.var">Repository variable</b><div class="ws-detail" id="wiz-var-d"></div></div></div>
+            <div class="wiz-step" id="wiz-compose"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.compose">Compose project</b><div class="ws-detail" id="wiz-compose-d"></div></div></div>
+            <div class="wiz-step" id="wiz-runner"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.runner">Self-hosted runner</b><div class="ws-detail" id="wiz-runner-d"></div></div></div>
+            <div class="wiz-step" id="wiz-verify"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.verify">Verification</b><div class="ws-detail" id="wiz-verify-d"></div></div></div>
+            <div class="wiz-step" id="wiz-deploy"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b data-i18n="wiz.deploy">First deploy</b><div class="ws-detail" id="wiz-deploy-d"></div></div></div>
+            <div id="wiz-summary" style="margin-top:12px;font-size:13px"></div>
+            <details style="margin-top:8px"><summary class="muted" style="cursor:pointer;font-size:12.5px" data-i18n="wiz.showLog">show log</summary>
+              <div class="logbox" id="wiz-log" style="margin-top:8px;max-height:220px"></div></details>
+          </div>
+
+          <div id="pub-live"></div>
+
+          <div class="wstep-foot">
+            <button class="ghost" id="btn-step3-back" data-i18n="wz.back">← Back</button>
+            <span class="spacer"></span>
+            <button class="primary" id="btn-publish" data-i18n="wz.publish">Publish</button>
+          </div>
         </div>
 
         <!-- manual fallback for repos outside the list + server paths -->
@@ -471,11 +552,54 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
               </div>
               <div style="display:flex;gap:10px;margin-top:14px">
                 <button type="submit" class="small" data-i18n="c.save">Save</button>
+                <span style="flex:1"></span>
+                <button type="button" class="small danger hidden" id="btn-app-remove" data-i18n="app.remove">Remove app</button>
               </div>
               <div class="stat-sub" id="settings-meta" style="margin-top:10px"></div>
             </form>
           </details>
         </div>
+      </section>
+
+      <!-- domains: managed reverse proxy + custom domains with auto-TLS -->
+      <section id="view-domains" class="view hidden">
+        <div class="card" id="proxy-card">
+          <h3 data-i18n="dm.title">Domains &amp; HTTPS</h3>
+          <div id="proxy-body"></div>
+        </div>
+        <div class="card hidden" id="domains-card" style="margin-top:16px">
+          <div class="section-head"><h2 data-i18n="dm.add">Add a domain</h2></div>
+          <div class="form-grid">
+            <div><label for="dm-domain" data-i18n="dm.domainLbl">Domain</label>
+              <input id="dm-domain" placeholder="app.example.com" spellcheck="false">
+              <div class="port-hint" id="dm-dns-hint"></div></div>
+            <div><label for="dm-target" data-i18n="dm.targetLbl">Routes to</label>
+              <select id="dm-target"></select>
+              <div class="port-hint muted" id="dm-target-note"></div></div>
+          </div>
+          <div style="margin-top:12px"><button class="primary" id="btn-dm-add" data-i18n="dm.addBtn">Add domain</button></div>
+          <div class="tablewrap" style="margin-top:16px"><table id="domains-table"></table></div>
+        </div>
+      </section>
+
+      <!-- backups: scheduled dumps of catalog DBs and docker volumes -->
+      <section id="view-backups" class="view hidden">
+        <div class="card">
+          <h3 data-i18n="bk.add">Schedule a backup</h3>
+          <p class="muted" style="font-size:13px;margin-bottom:8px" data-i18n="bk.help">Back up a database container or a docker volume on a schedule. Snapshots are kept under /opt/pinqops/backups; older ones are pruned to the retention count.</p>
+          <div class="form-grid">
+            <div class="full"><label for="bk-source" data-i18n="bk.source">Source</label>
+              <select id="bk-source"></select></div>
+            <div><label for="bk-schedule" data-i18n="bk.schedule">Schedule</label>
+              <select id="bk-schedule"><option value="hourly" data-i18n="bk.hourly">Hourly</option><option value="daily" selected data-i18n="bk.daily">Daily</option><option value="weekly" data-i18n="bk.weekly">Weekly</option></select></div>
+            <div><label for="bk-athour" data-i18n="bk.atHour">At hour (UTC)</label>
+              <input id="bk-athour" type="number" min="0" max="23" value="3"></div>
+            <div><label for="bk-retention" data-i18n="bk.retention">Keep last</label>
+              <input id="bk-retention" type="number" min="1" max="365" value="7"></div>
+          </div>
+          <div style="margin-top:12px"><button class="primary" id="btn-bk-add" data-i18n="bk.addBtn">Add schedule</button></div>
+        </div>
+        <div id="backups-list" style="margin-top:16px"></div>
       </section>
 
       <!-- settings: local dashboard preferences only -->
@@ -530,6 +654,47 @@ td.mono{font-family:var(--mono);font-size:12px;color:#b9bcc4}
             <div class="full" style="margin-top:14px"><button type="submit" data-i18n="se.pwChange">Change password</button></div>
           </form>
         </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3 data-i18n="tk.card">API tokens</h3>
+          <p class="muted" style="font-size:13px" data-i18n="tk.help">Tokens let AI agents and scripts drive the REST API — a Claude MCP server, an OpenAI function-calling tool, Codex, Cursor, or plain curl. Scope limits what a token can do.</p>
+          <div class="inline-form" style="margin-top:10px">
+            <input id="tk-name" style="min-width:180px;flex:1" data-i18n-ph="tk.namePh">
+            <select id="tk-scope" style="width:auto">
+              <option value="read" data-i18n="tk.read">read</option>
+              <option value="deploy" selected data-i18n="tk.deploy">deploy</option>
+              <option value="admin" data-i18n="tk.admin">admin</option>
+            </select>
+            <button class="primary" id="btn-tk-add" data-i18n="tk.createBtn">Create token</button>
+          </div>
+          <div class="tablewrap" style="margin-top:14px"><table id="tokens-table"></table></div>
+        </div>
+
+        <div class="card admin-only hidden" id="users-card" style="margin-top:16px">
+          <h3 data-i18n="us.card">Users &amp; roles</h3>
+          <p class="muted" style="font-size:13px" data-i18n="us.help">Each user has a role: viewer (read-only), deployer (deploy &amp; roll back), or admin (everything, including users). Roles map to the same permissions as API token scopes.</p>
+          <div class="inline-form" style="margin-top:10px">
+            <input id="us-name" style="min-width:150px;flex:1" data-i18n-ph="us.namePh">
+            <input id="us-pass" type="password" autocomplete="new-password" style="min-width:150px;flex:1" data-i18n-ph="us.passPh">
+            <select id="us-role" style="width:auto">
+              <option value="viewer" data-i18n="us.viewer">viewer</option>
+              <option value="deployer" selected data-i18n="us.deployer">deployer</option>
+              <option value="admin" data-i18n="us.admin">admin</option>
+            </select>
+            <button class="primary" id="btn-us-add" data-i18n="us.createBtn">Add user</button>
+          </div>
+          <div class="tablewrap" style="margin-top:14px"><table id="users-table"></table></div>
+        </div>
+      </section>
+
+      <!-- audit -->
+      <section id="view-audit" class="view hidden">
+        <div class="section-head"><h2 data-i18n="au.title">Audit log</h2><div class="spacer"></div>
+          <input id="au-user" data-i18n-ph="au.userPh" style="width:140px">
+          <input id="au-action" data-i18n-ph="au.actionPh" style="width:180px">
+          <button class="small" id="btn-au-filter" data-i18n="au.filter">Filter</button></div>
+        <p class="muted" style="font-size:13px" data-i18n="au.help">Every change made through the dashboard — who did what, and whether it succeeded.</p>
+        <div class="tablewrap"><table id="audit-table"></table></div>
       </section>
     </div>
   </main>
@@ -556,18 +721,77 @@ en:{
  "nav.grp.monitor":"Monitor","nav.grp.docker":"Docker","nav.grp.server":"Server","nav.grp.github":"Publishing",
  "nav.overview":"Overview","nav.deployments":"Deployments","nav.runner":"Runner","nav.containers":"Containers",
  "nav.images":"Images","nav.storage":"Storage","nav.networks":"Networks","nav.system":"System","nav.settings":"Settings",
- "nav.apps":"Apps","nav.github":"GitHub",
+ "nav.apps":"Apps","nav.github":"GitHub","nav.domains":"Domains","nav.backups":"Backups","nav.audit":"Audit",
+ "bk.add":"Schedule a backup","bk.help":"Back up a database container or a docker volume on a schedule. Snapshots are kept under /opt/pinqops/backups; older ones are pruned to the retention count.",
+ "bk.source":"Source","bk.schedule":"Schedule","bk.hourly":"Hourly","bk.daily":"Daily","bk.weekly":"Weekly",
+ "bk.atHour":"At hour (UTC)","bk.retention":"Keep last","bk.addBtn":"Add schedule","bk.added":"Backup schedule added",
+ "bk.db":"database","bk.volume":"volume","bk.noSources":"install a database or create a volume first",
+ "bk.none":"No backup schedules yet.","bk.noSnaps":"No snapshots yet — run one now or wait for the schedule.",
+ "bk.on":"on","bk.off":"off","bk.keepN":"keep {n}","bk.last":"last {a}",
+ "bk.runNow":"Run now","bk.ran":"Backup started","bk.enable":"Enable","bk.disable":"Disable","bk.rm":"Remove",
+ "bk.rmTitle":"Remove schedule","bk.rmConfirm":"Remove this backup schedule? Existing snapshots on disk are kept.",
+ "bk.download":"Download","bk.restore":"Restore",
+ "bk.restoreTitle":"Restore snapshot","bk.restoreConfirm":"Restore {s}? This overwrites the current data in the target — there is no undo.",
+ "bk.restored":"Restore started","bk.sourceReq":"Pick a source.",
+ "dm.title":"Domains & HTTPS","dm.installHelp":"Install a managed reverse proxy (Caddy) to give your apps real domains with automatic Let's Encrypt HTTPS. It publishes ports 80 and 443; your apps stay reachable on their host ports too.",
+ "dm.portBusy":"Port 80 or 443 is already in use on this server — free it (is another web server running?) before installing.",
+ "dm.probeUnreliable":"(pinqops may lack permission to bind these ports; you can install anyway.)",
+ "dm.email":"Let's Encrypt e-mail (recommended)","dm.staging":"Use staging CA (testing — untrusted certs, no rate limit)",
+ "dm.installBtn":"Install proxy","dm.installed":"Proxy installed","dm.running":"proxy running","dm.stopped":"proxy stopped",
+ "dm.noEmail":"no ACME e-mail set","dm.stagingOn":"staging CA","dm.domainsN":"{n} domain(s)",
+ "dm.add":"Add a domain","dm.domainLbl":"Domain","dm.targetLbl":"Routes to","dm.addBtn":"Add domain","dm.catalog":"catalog",
+ "dm.noTargets":"deploy an app first","dm.drift":"drifted","dm.driftHint":"The target's container or port changed — remove and re-add this domain.",
+ "dm.up":"up","dm.down":"down","dm.enabled":"enabled","dm.disabled":"disabled","dm.enable":"Enable","dm.disable":"Disable",
+ "dm.thDomain":"Domain","dm.thTarget":"Target","dm.thContainer":"Container","dm.thRunning":"Live","dm.thState":"State",
+ "dm.none":"No domains yet.","dm.rmTitle":"Remove domain","dm.rmConfirm":"Remove the route for {d}? Its certificate is kept by the proxy.",
+ "dm.domainReq":"Enter a domain.","dm.targetReq":"Pick a target.","dm.added":"{d} added — HTTPS will be issued shortly",
+ "dm.addedDnsWarn":"{d} added, but its DNS does not point here yet — the certificate will fail until it does",
+ "dm.dnsOk":"✓ resolves to this server ({ip})","dm.dnsMismatch":"resolves to {ips}, not this server ({srv}) — point DNS here first",
+ "dm.dnsNone":"does not resolve yet — add a DNS A record pointing here",
+ "wz.wantDomain":"Want a custom domain with HTTPS?","wz.addDomain":"add a domain →",
  "gh.locked":"Not connected — click to sign in","gh.pickTitle":"Set up a repository",
- "gh.pickHelp":"Search your repositories, pick one, and Install — the wizard commits the deploy workflow, creates the compose project, and registers the runner automatically.",
- "gh.installBtn":"Install","gh.moreRepos":"{n} more — keep typing to narrow down","gh.noRepos":"No repository matches.",
- "gh.reinstall":"Re-run the wizard","gh.connectedAs":"connected",
- "wiz.title":"Repository setup wizard","wiz.connect":"Connecting the repository","wiz.check":"Checking repo & server",
+ "gh.pickHelp":"Search your repositories and pick the one to publish — the next step readies everything (workflow, compose project, runner) automatically.",
+ "gh.moreRepos":"{n} more — keep typing to narrow down","gh.noRepos":"No repository matches.",
+ "gh.connectedAs":"connected",
+ "app.switch":"App","app.add":"Add app","app.remove":"Remove app",
+ "app.removeConfirm":"Remove “{n}” from the dashboard? Files on the server (compose project, runner) are kept and re-attach if you add the repository again.",
+ "app.removed":"{n} removed — kept on disk: {p}",
+ "wiz.var":"Repository variable","wiz.varDone":"APP_COMPOSE_PATH → {p}",
+ "wiz.varFail":"Could not set APP_COMPOSE_PATH — with a custom compose path the deploy would land on the wrong project. The token needs Variables: write.",
+ "sd.generateBtn":"Generate a Dockerfile →","sd.title":"Generate a Dockerfile",
+ "sd.detected":"detected — edit the Dockerfile below if anything is off","sd.subdirLbl":"Project directory (monorepo)",
+ "sd.editHint":"Review and edit — this exact content is committed to the repository as Dockerfile.",
+ "sd.commitBtn":"Commit to repository","sd.committed":"Dockerfile committed — re-checking the repository",
+ "sd.truncated":"This repository is too large to scan fully — detection may be incomplete. Pick the right directory or edit the Dockerfile below.",
+ "wz.s1":"Connect GitHub","wz.s2":"Add app repository","wz.s3":"Publish",
+ "wz.continue":"Continue →","wz.back":"← Back","wz.changeRepo":"change repository",
+ "wz.hostPort":"Host port (public, on this server)","wz.ctrPort":"Container port (your app listens on)",
+ "wz.ctrDetected":"detected from the Dockerfile's EXPOSE ({p})",
+ "wz.ctrFallback":"No EXPOSE found in the Dockerfile (or no Dockerfile yet) — assuming port {p}. Enter the port your app actually listens on.",
+ "wz.portFree":"port {p} is free","wz.portBusy":"port {p} is in use — pick another","wz.portInvalid":"enter a port between 1 and 65535",
+ "wz.publish":"Publish","wz.republish":"Publish again",
+ "wz.portsApplied":"Ports updated — publishing on {h} → {c}",
+ "wz.published":"Everything is ready — the deploy has been started.",
+ "wz.firstDeployStarted":"build & deploy started on {b}",
+ "wz.liveTitle":"Your app is live","wz.liveOpen":"Open ↗",
+ "wz.waitingDeploy":"Waiting for the deploy — GitHub Actions builds the image and the runner publishes it. This can take a few minutes.",
+ "wz.openActions":"open GitHub Actions ↗",
+ "wz.stopped":"The app container is not running ({s}).",
+ "wz.dockerDown":"Docker is unreachable — live status unknown.",
+ "wz.wfOutdated":"an update is available (adds PR preview environments)","wz.wfUpdateBtn":"update workflow","wz.wfUpdated":"Deploy workflow updated.",
+ "pv.title":"Preview environments","pv.perPr":"one per open pull request",
+ "pv.pr":"Pull request","pv.project":"Project","pv.status":"Status","pv.port":"Port",
+ "pv.running":"running","pv.stopped":"stopped","pv.teardown":"Tear down",
+ "pv.none":"No previews. Open a pull request and one is built automatically.",
+ "pv.tdConfirm":"Tear down the preview for PR #{pr}? Its containers and volumes are removed.","pv.tdDone":"Preview for PR #{pr} torn down.",
+ "wiz.deploy":"Deploy",
+ "wiz.connect":"Connecting the repository","wiz.check":"Checking repo & server",
  "wiz.dockerfile":"Dockerfile","wiz.workflow":"Deploy workflow","wiz.compose":"Compose project","wiz.runner":"Self-hosted runner","wiz.verify":"Verification",
  "wiz.ready":"already in place","wiz.done":"Everything is ready — merge to master and it deploys itself.",
  "wiz.failed":"Setup failed at: {x}","wiz.replacingRunner":"a runner registered to {r} will be replaced",
  "wiz.runnerVerified":"{n} runner(s) registered on GitHub","wiz.verifyUnknown":"runner installed; online state could not be checked (token lacks Administration: read)",
  "wiz.verifyFail":"the runner does not appear on GitHub — check the log below",
- "wiz.showLog":"show log","wiz.cancel":"Run in background",
+ "wiz.showLog":"show log",
  "su.title":"Deployment readiness","su.dockerfile":"Dockerfile","su.workflow":"Deploy workflow","su.runner":"Self-hosted runner","su.compose":"Compose project",
  "su.dockerfileMiss":"Missing — add a Dockerfile to the repo root. It's the only thing the pipeline expects from your code.",
  "su.workflowMiss":"Missing — can be created automatically (commits .github/workflows/deploy.yml to the repo).",
@@ -657,6 +881,11 @@ en:{
  "ev.saved":"{k} saved","ev.removed":"{k} removed","ev.none":"No variables in the compose project's .env yet.","ev.managed":"managed",
  "ap.credsTitle":"{n} — credentials","ap.noCreds":"No stored credentials for this app.","ap.reveal":"reveal","ap.copied":"copied",
  "ap.credsHint":"Generated at install and stored on this server (0600). A reinstall reuses the same password so existing data keeps working.",
+ "tk.card":"API tokens","tk.help":"Tokens let AI agents and scripts drive the REST API — a Claude MCP server, an OpenAI function-calling tool, Codex, Cursor, or plain curl. Scope limits what a token can do.",
+ "tk.namePh":"token name (e.g. codex-laptop)","tk.read":"read","tk.deploy":"deploy","tk.admin":"admin","tk.createBtn":"Create token",
+ "tk.thName":"Name","tk.thScope":"Scope","tk.thToken":"Token","tk.thUsed":"Last used","tk.never":"never","tk.none":"No tokens yet.",
+ "tk.createdTitle":"Copy your token now","tk.createdHelp":"This is shown once and cannot be retrieved again. Store it in your agent's config (PINQOPS_TOKEN).",
+ "tk.copy":"Copy","tk.copied":"Copied to clipboard",
  "nf.card":"Notifications","nf.test":"Test","nf.saved":"Notification settings saved",
  "nf.help":"Deploy results (success, failure, rollback) are sent to the enabled channels. Settings are stored next to the compose project, so CLI deploys on the runner send them too.",
  "nf.evOk":"deploy succeeded","nf.evFail":"deploy failed","nf.evHealth":"health check failed","nf.evRb":"rolled back",
@@ -665,6 +894,18 @@ en:{
  "lk.login":"Dashboard login","lk.setup":"First run — create the dashboard password.","lk.code":"Setup code",
  "lk.codeHint":"(printed on the server console)","lk.pw":"Password","lk.pw2":"Repeat password","lk.signIn":"Sign in",
  "lk.create":"Create password","lk.min8":"At least 8 characters.","lk.mismatch":"Passwords do not match.","lk.noApi":"Cannot reach the API: {e}",
+ "lk.user":"Username",
+ "us.card":"Users & roles","us.help":"Each user has a role: viewer (read-only), deployer (deploy & roll back), or admin (everything, including users). Roles map to the same permissions as API token scopes.",
+ "us.namePh":"username","us.passPh":"password (min 8)","us.createBtn":"Add user",
+ "us.viewer":"viewer","us.deployer":"deployer","us.admin":"admin",
+ "us.thName":"User","us.thRole":"Role","us.you":"you","us.none":"No users.",
+ "us.resetPw":"Reset password","us.created":"User '{u}' added.","us.removed":"User '{u}' removed.","us.roleChanged":"Role updated.",
+ "us.rmTitle":"Remove user","us.rmConfirm":"Remove user '{u}'? They are signed out everywhere.",
+ "us.pwTitle":"Reset password for '{u}'","us.pwReset":"Password reset for '{u}'.",
+ "us.nameReq":"Username must be at least 2 characters.",
+ "au.title":"Audit log","au.help":"Every change made through the dashboard — who did what, and whether it succeeded.",
+ "au.userPh":"filter by user","au.actionPh":"filter by action","au.filter":"Filter",
+ "au.thTime":"When","au.thUser":"User","au.thAction":"Action","au.thTarget":"Target","au.thResult":"Result","au.none":"No audit entries yet.",
  "err.network":"Can't reach the server — check that pinqops-ui is running and reachable on this network.",
  "err.session":"Your session expired — please sign in again.",
  "err.timeout":"The server took too long to respond — it may be busy or starting up.",
@@ -684,18 +925,77 @@ tr:{
  "nav.grp.monitor":"İzleme","nav.grp.docker":"Docker","nav.grp.server":"Sunucu","nav.grp.github":"Yayınlama",
  "nav.overview":"Genel Bakış","nav.deployments":"Dağıtımlar","nav.runner":"Runner","nav.containers":"Konteynerler",
  "nav.images":"İmajlar","nav.storage":"Depolama","nav.networks":"Ağlar","nav.system":"Sistem","nav.settings":"Ayarlar",
- "nav.apps":"Uygulamalar","nav.github":"GitHub",
+ "nav.apps":"Uygulamalar","nav.github":"GitHub","nav.domains":"Alan adları","nav.backups":"Yedekler",
+ "bk.add":"Yedek zamanla","bk.help":"Bir veritabanı konteynerini ya da docker volume'ünü zamanlanmış olarak yedekle. Snapshot'lar /opt/pinqops/backups altında tutulur; eskiler saklama sayısına göre budanır.",
+ "bk.source":"Kaynak","bk.schedule":"Zamanlama","bk.hourly":"Saatlik","bk.daily":"Günlük","bk.weekly":"Haftalık",
+ "bk.atHour":"Saat (UTC)","bk.retention":"Son N'yi tut","bk.addBtn":"Zamanlama ekle","bk.added":"Yedek zamanlaması eklendi",
+ "bk.db":"veritabanı","bk.volume":"volume","bk.noSources":"önce bir veritabanı kur ya da volume oluştur",
+ "bk.none":"Henüz yedek zamanlaması yok.","bk.noSnaps":"Henüz snapshot yok — şimdi bir tane çalıştır ya da zamanı bekle.",
+ "bk.on":"açık","bk.off":"kapalı","bk.keepN":"{n} tutulur","bk.last":"son {a}",
+ "bk.runNow":"Şimdi çalıştır","bk.ran":"Yedek başladı","bk.enable":"Etkinleştir","bk.disable":"Devre dışı bırak","bk.rm":"Kaldır",
+ "bk.rmTitle":"Zamanlamayı kaldır","bk.rmConfirm":"Bu yedek zamanlaması kaldırılsın mı? Diskteki mevcut snapshot'lar korunur.",
+ "bk.download":"İndir","bk.restore":"Geri yükle",
+ "bk.restoreTitle":"Snapshot'ı geri yükle","bk.restoreConfirm":"{s} geri yüklensin mi? Hedefteki mevcut veriyi üzerine yazar — geri alınamaz.",
+ "bk.restored":"Geri yükleme başladı","bk.sourceReq":"Bir kaynak seç.",
+ "dm.title":"Alan adları & HTTPS","dm.installHelp":"Uygulamalarına otomatik Let's Encrypt HTTPS ile gerçek alan adları vermek için yönetilen bir reverse proxy (Caddy) kur. 80 ve 443 portlarını yayınlar; uygulamaların host portlarından da erişilebilir kalır.",
+ "dm.portBusy":"Bu sunucuda 80 veya 443 portu zaten kullanımda — kurmadan önce boşalt (başka bir web sunucusu mu çalışıyor?).",
+ "dm.probeUnreliable":"(pinqops bu portları bağlama yetkisine sahip olmayabilir; yine de kurabilirsin.)",
+ "dm.email":"Let's Encrypt e-postası (önerilir)","dm.staging":"Staging CA kullan (test — güvenilmeyen sertifika, limitsiz)",
+ "dm.installBtn":"Proxy'yi kur","dm.installed":"Proxy kuruldu","dm.running":"proxy çalışıyor","dm.stopped":"proxy durdu",
+ "dm.noEmail":"ACME e-postası ayarlı değil","dm.stagingOn":"staging CA","dm.domainsN":"{n} alan adı",
+ "dm.add":"Alan adı ekle","dm.domainLbl":"Alan adı","dm.targetLbl":"Yönlendirilecek","dm.addBtn":"Alan adı ekle","dm.catalog":"katalog",
+ "dm.noTargets":"önce bir uygulama yayına al","dm.drift":"kaymış","dm.driftHint":"Hedefin konteyneri veya portu değişti — bu alan adını kaldırıp yeniden ekle.",
+ "dm.up":"ayakta","dm.down":"kapalı","dm.enabled":"etkin","dm.disabled":"devre dışı","dm.enable":"Etkinleştir","dm.disable":"Devre dışı bırak",
+ "dm.thDomain":"Alan adı","dm.thTarget":"Hedef","dm.thContainer":"Konteyner","dm.thRunning":"Çalışıyor","dm.thState":"Durum",
+ "dm.none":"Henüz alan adı yok.","dm.rmTitle":"Alan adını kaldır","dm.rmConfirm":"{d} yönlendirmesi kaldırılsın mı? Sertifikası proxy'de korunur.",
+ "dm.domainReq":"Bir alan adı gir.","dm.targetReq":"Bir hedef seç.","dm.added":"{d} eklendi — HTTPS birazdan verilecek",
+ "dm.addedDnsWarn":"{d} eklendi ama DNS henüz buraya işaret etmiyor — işaret edene kadar sertifika alınamaz",
+ "dm.dnsOk":"✓ bu sunucuya çözülüyor ({ip})","dm.dnsMismatch":"{ips} adresine çözülüyor, bu sunucuya değil ({srv}) — önce DNS'i buraya yönlendir",
+ "dm.dnsNone":"henüz çözülmüyor — buraya işaret eden bir DNS A kaydı ekle",
+ "wz.wantDomain":"HTTPS'li özel alan adı ister misin?","wz.addDomain":"alan adı ekle →",
  "gh.locked":"Bağlı değil — giriş için tıkla","gh.pickTitle":"Depo kur",
- "gh.pickHelp":"Depolarında ara, birini seç ve Kur'a bas — sihirbaz deploy workflow'unu commit'ler, compose projesini oluşturur ve runner'ı otomatik kaydeder.",
- "gh.installBtn":"Kur","gh.moreRepos":"{n} depo daha — daraltmak için yazmaya devam et","gh.noRepos":"Eşleşen depo yok.",
- "gh.reinstall":"Sihirbazı yeniden çalıştır","gh.connectedAs":"bağlı",
- "wiz.title":"Depo kurulum sihirbazı","wiz.connect":"Depo bağlanıyor","wiz.check":"Depo ve sunucu kontrol ediliyor",
+ "gh.pickHelp":"Depolarında ara ve yayınlayacağını seç — sonraki adım her şeyi (workflow, compose projesi, runner) otomatik hazırlar.",
+ "gh.moreRepos":"{n} depo daha — daraltmak için yazmaya devam et","gh.noRepos":"Eşleşen depo yok.",
+ "gh.connectedAs":"bağlı",
+ "app.switch":"Uygulama","app.add":"Uygulama ekle","app.remove":"Uygulamayı kaldır",
+ "app.removeConfirm":"“{n}” panelden kaldırılsın mı? Sunucudaki dosyalar (compose projesi, runner) korunur; depoyu yeniden eklersen aynı yollara bağlanır.",
+ "app.removed":"{n} kaldırıldı — diskte korunanlar: {p}",
+ "wiz.var":"Depo değişkeni","wiz.varDone":"APP_COMPOSE_PATH → {p}",
+ "wiz.varFail":"APP_COMPOSE_PATH ayarlanamadı — özel compose yolunda dağıtım yanlış projeye gider. Token'da Variables: write olmalı.",
+ "sd.generateBtn":"Dockerfile üret →","sd.title":"Dockerfile üret",
+ "sd.detected":"algılandı — bir şey yanlışsa aşağıdaki Dockerfile'ı düzenle","sd.subdirLbl":"Proje dizini (monorepo)",
+ "sd.editHint":"İncele ve düzenle — bu içerik aynen depoya Dockerfile olarak commit'lenir.",
+ "sd.commitBtn":"Depoya commit'le","sd.committed":"Dockerfile commit'lendi — depo yeniden kontrol ediliyor",
+ "sd.truncated":"Bu depo tam taranamayacak kadar büyük — tespit eksik olabilir. Doğru dizini seç ya da aşağıdaki Dockerfile'ı düzenle.",
+ "wz.s1":"GitHub'a bağlan","wz.s2":"Uygulama deposu ekle","wz.s3":"Yayına al",
+ "wz.continue":"Devam →","wz.back":"← Geri","wz.changeRepo":"depoyu değiştir",
+ "wz.hostPort":"Host portu (bu sunucuda, dışarı açık)","wz.ctrPort":"Konteyner portu (uygulamanın dinlediği)",
+ "wz.ctrDetected":"Dockerfile'daki EXPOSE'dan algılandı ({p})",
+ "wz.ctrFallback":"Dockerfile'da EXPOSE bulunamadı (ya da Dockerfile yok) — {p} varsayıldı. Uygulamanın gerçekten dinlediği portu gir.",
+ "wz.portFree":"{p} portu boş","wz.portBusy":"{p} portu kullanımda — başka bir port seç","wz.portInvalid":"1-65535 arası bir port gir",
+ "wz.publish":"Yayına al","wz.republish":"Yeniden yayına al",
+ "wz.portsApplied":"Portlar güncellendi — {h} → {c} üzerinden yayınlanıyor",
+ "wz.published":"Her şey hazır — dağıtım başlatıldı.",
+ "wz.firstDeployStarted":"{b} dalında build & deploy başladı",
+ "wz.liveTitle":"Uygulaman yayında","wz.liveOpen":"Aç ↗",
+ "wz.waitingDeploy":"Dağıtım bekleniyor — GitHub Actions imajı derliyor, runner yayına alıyor. Birkaç dakika sürebilir.",
+ "wz.openActions":"GitHub Actions'ı aç ↗",
+ "wz.stopped":"Uygulama konteyneri çalışmıyor ({s}).",
+ "wz.dockerDown":"Docker'a ulaşılamıyor — canlı durum bilinmiyor.",
+ "wz.wfOutdated":"güncelleme mevcut (PR önizleme ortamlarını ekler)","wz.wfUpdateBtn":"iş akışını güncelle","wz.wfUpdated":"Dağıtım iş akışı güncellendi.",
+ "pv.title":"Önizleme ortamları","pv.perPr":"her açık PR için bir tane",
+ "pv.pr":"Pull request","pv.project":"Proje","pv.status":"Durum","pv.port":"Port",
+ "pv.running":"çalışıyor","pv.stopped":"durdu","pv.teardown":"Kaldır",
+ "pv.none":"Önizleme yok. Bir pull request aç, otomatik olarak biri kurulur.",
+ "pv.tdConfirm":"PR #{pr} önizlemesi kaldırılsın mı? Konteynerleri ve volume'ları silinir.","pv.tdDone":"PR #{pr} önizlemesi kaldırıldı.",
+ "wiz.deploy":"Dağıtım",
+ "wiz.connect":"Depo bağlanıyor","wiz.check":"Depo ve sunucu kontrol ediliyor",
  "wiz.dockerfile":"Dockerfile","wiz.workflow":"Deploy workflow","wiz.compose":"Compose projesi","wiz.runner":"Self-hosted runner","wiz.verify":"Doğrulama",
  "wiz.ready":"zaten hazır","wiz.done":"Her şey hazır — master'a merge et, gerisi otomatik.",
  "wiz.failed":"Kurulum şu adımda başarısız oldu: {x}","wiz.replacingRunner":"{r} deposuna kayıtlı runner değiştirilecek",
  "wiz.runnerVerified":"GitHub'da {n} runner kayıtlı","wiz.verifyUnknown":"runner kuruldu; çevrimiçi durumu doğrulanamadı (token'da Administration: read yok)",
  "wiz.verifyFail":"runner GitHub'da görünmüyor — aşağıdaki loga bak",
- "wiz.showLog":"logu göster","wiz.cancel":"Arka planda sürdür",
+ "wiz.showLog":"logu göster",
  "su.title":"Dağıtım hazırlığı","su.dockerfile":"Dockerfile","su.workflow":"Deploy workflow","su.runner":"Self-hosted runner","su.compose":"Compose projesi",
  "su.dockerfileMiss":"Eksik — repo köküne bir Dockerfile ekle. Pipeline'ın kodundan beklediği tek şey bu.",
  "su.workflowMiss":"Eksik — otomatik oluşturulabilir (repoya .github/workflows/deploy.yml commit'lenir).",
@@ -785,6 +1085,11 @@ tr:{
  "ev.saved":"{k} kaydedildi","ev.removed":"{k} silindi","ev.none":"Compose projesinin .env dosyasında henüz değişken yok.","ev.managed":"yönetilen",
  "ap.credsTitle":"{n} — kimlik bilgileri","ap.noCreds":"Bu uygulama için kayıtlı kimlik bilgisi yok.","ap.reveal":"göster","ap.copied":"kopyalandı",
  "ap.credsHint":"Kurulumda üretildi ve bu sunucuda saklanıyor (0600). Yeniden kurulumda aynı şifre kullanılır, mevcut veriler çalışmaya devam eder.",
+ "tk.card":"API token'ları","tk.help":"Token'lar, AI ajanlarının ve scriptlerin REST API'yi sürmesini sağlar — Claude MCP sunucusu, OpenAI function-calling aracı, Codex, Cursor ya da düz curl. Scope, token'ın ne yapabileceğini sınırlar.",
+ "tk.namePh":"token adı (ör. codex-laptop)","tk.read":"okuma","tk.deploy":"dağıtım","tk.admin":"yönetici","tk.createBtn":"Token oluştur",
+ "tk.thName":"Ad","tk.thScope":"Scope","tk.thToken":"Token","tk.thUsed":"Son kullanım","tk.never":"hiç","tk.none":"Henüz token yok.",
+ "tk.createdTitle":"Token'ını şimdi kopyala","tk.createdHelp":"Bu yalnızca bir kez gösterilir ve tekrar alınamaz. Ajanının yapılandırmasına ekle (PINQOPS_TOKEN).",
+ "tk.copy":"Kopyala","tk.copied":"Panoya kopyalandı",
  "nf.card":"Bildirimler","nf.test":"Dene","nf.saved":"Bildirim ayarları kaydedildi",
  "nf.help":"Dağıtım sonuçları (başarı, hata, geri alma) etkin kanallara gönderilir. Ayarlar compose projesinin yanında saklanır; runner'daki CLI dağıtımları da bildirim yollar.",
  "nf.evOk":"dağıtım başarılı","nf.evFail":"dağıtım başarısız","nf.evHealth":"sağlık kontrolü başarısız","nf.evRb":"geri alındı",
@@ -793,6 +1098,18 @@ tr:{
  "lk.login":"Panel girişi","lk.setup":"İlk çalıştırma — panel şifresini oluştur.","lk.code":"Kurulum kodu",
  "lk.codeHint":"(sunucu konsolunda yazar)","lk.pw":"Şifre","lk.pw2":"Şifreyi tekrar gir","lk.signIn":"Giriş yap",
  "lk.create":"Şifre oluştur","lk.min8":"En az 8 karakter.","lk.mismatch":"Şifreler eşleşmiyor.","lk.noApi":"API'ye ulaşılamıyor: {e}",
+ "lk.user":"Kullanıcı adı",
+ "us.card":"Kullanıcılar & roller","us.help":"Her kullanıcının bir rolü var: viewer (salt-okunur), deployer (dağıtım & geri alma) ya da admin (kullanıcılar dahil her şey). Roller, API token scope'larıyla aynı izinlere karşılık gelir.",
+ "us.namePh":"kullanıcı adı","us.passPh":"şifre (min 8)","us.createBtn":"Kullanıcı ekle",
+ "us.viewer":"viewer","us.deployer":"deployer","us.admin":"admin",
+ "us.thName":"Kullanıcı","us.thRole":"Rol","us.you":"sen","us.none":"Kullanıcı yok.",
+ "us.resetPw":"Şifre sıfırla","us.created":"'{u}' kullanıcısı eklendi.","us.removed":"'{u}' kullanıcısı kaldırıldı.","us.roleChanged":"Rol güncellendi.",
+ "us.rmTitle":"Kullanıcıyı kaldır","us.rmConfirm":"'{u}' kullanıcısı kaldırılsın mı? Her yerde oturumu kapatılır.",
+ "us.pwTitle":"'{u}' için şifre sıfırla","us.pwReset":"'{u}' şifresi sıfırlandı.",
+ "us.nameReq":"Kullanıcı adı en az 2 karakter olmalı.",
+ "au.title":"Denetim kaydı","au.help":"Panelden yapılan her değişiklik — kim ne yaptı ve başarılı oldu mu.",
+ "au.userPh":"kullanıcıya göre","au.actionPh":"işleme göre","au.filter":"Filtrele",
+ "au.thTime":"Ne zaman","au.thUser":"Kullanıcı","au.thAction":"İşlem","au.thTarget":"Hedef","au.thResult":"Sonuç","au.none":"Henüz denetim kaydı yok.",
  "err.network":"Sunucuya ulaşılamıyor — pinqops-ui çalışıyor ve bu ağdan erişilebilir mi kontrol et.",
  "err.session":"Oturumun sona erdi — lütfen tekrar giriş yap.",
  "err.timeout":"Sunucu yanıt vermek için çok uzun sürdü — meşgul olabilir ya da yeni başlıyor olabilir.",
@@ -829,8 +1146,34 @@ const API_TR=[
  [/^Connect GitHub first\.$/,"Önce GitHub'ı bağla."],
  [/^(.+) already exists\.$/,(m)=>`${m[1]} zaten var.`],
  [/^A runner install is already in progress\.$/,"Zaten bir runner kurulumu sürüyor."],
+ [/^A runner install is already in progress \(app '(.+)'\)\.$/,(m)=>`Zaten bir runner kurulumu sürüyor ('${m[1]}' uygulaması).`],
+ [/^Unknown app '(.+)'\.$/,(m)=>`Bilinmeyen uygulama: '${m[1]}'.`],
+ [/^An app id is required\.$/,"Uygulama kimliği (id) gerekli."],
+ [/^This repository is already added as '(.+)'\.$/,(m)=>`Bu depo zaten '${m[1]}' olarak ekli.`],
+ [/^Dockerfile content is required\.$/,"Dockerfile içeriği gerekli."],
+ [/^Dockerfile is too large\.$/,"Dockerfile çok büyük."],
+ [/^(.+) already exists in the repository\.$/,(m)=>`${m[1]} depoda zaten var.`],
+ [/^Wildcard domains are not supported.*$/,"Joker (wildcard) alan adları desteklenmiyor — HTTP-01 sertifikası bunları kapsayamaz."],
+ [/^'(.+)' is not a valid domain name\.$/,(m)=>`'${m[1]}' geçerli bir alan adı değil.`],
+ [/^Enter a domain name.*$/,"Bir alan adı gir (en fazla 253 karakter)."],
+ [/^A target is required\.$/,"Bir hedef gerekli."],
+ [/^Port 80 or 443 is already in use.*$/,"Bu sunucuda 80 veya 443 portu zaten kullanımda — proxy'yi kurmadan önce boşalt."],
+ [/^The reverse proxy is not installed yet\.$/,"Reverse proxy henüz kurulu değil."],
+ [/^Unknown domain '(.+)'\.$/,(m)=>`Bilinmeyen alan adı: '${m[1]}'.`],
+ [/^This app exposes no port to route to\.$/,"Bu uygulamanın yönlendirilecek portu yok."],
+ [/^A backup for this target is already running\.$/,"Bu hedef için zaten bir yedek çalışıyor."],
+ [/^Unknown backup target '(.+)'\.$/,(m)=>`Bilinmeyen yedek hedefi: '${m[1]}'.`],
+ [/^A source and engine are required\.$/,"Kaynak ve motor gerekli."],
+ [/^That snapshot no longer exists\.$/,"O snapshot artık yok."],
+ [/^Only (\d+) MB free on disk.*$/,(m)=>`Diskte yalnızca ${m[1]} MB boş — yedeklemeden önce yer aç.`],
+ [/^Backups are not supported for engine '(.+)'\.$/,(m)=>`'${m[1]}' motoru için yedekleme desteklenmiyor.`],
+ [/^Compose file (.+) already belongs to app '(.+)'\.$/,(m)=>`${m[1]} compose dosyası zaten '${m[2]}' uygulamasına ait.`],
+ [/^Runner directory (.+) already belongs to app '(.+)'\.$/,(m)=>`${m[1]} runner dizini zaten '${m[2]}' uygulamasına ait.`],
  [/^Unknown app '(.*)'\.$/,(m)=>`Bilinmeyen uygulama: '${m[1]}'.`],
  [/^Host port must be between 1 and 65535\.$/,"Host portu 1-65535 arasında olmalı."],
+ [/^'(.+)' is not a valid host port \(1-65535\)\.$/,(m)=>`'${m[1]}' geçerli bir host portu değil (1-65535).`],
+ [/^'(.+)' is not a valid container port \(1-65535\)\.$/,(m)=>`'${m[1]}' geçerli bir konteyner portu değil (1-65535).`],
+ [/^Port (\d+) is already in use on this server\..*$/,(m)=>`${m[1]} portu bu sunucuda zaten kullanımda. Boş bir port seç — aksi halde dağıtım 'port is already allocated' hatasıyla düşer ve uygulama kapalı kalır.`],
  [/^An install for this app is already in progress\.$/,"Bu uygulama için zaten bir kurulum sürüyor."],
  [/^Unknown install job\.$/,"Bilinmeyen kurulum işi."],
  [/^Invalid request body\.$/,"Geçersiz istek gövdesi."],
@@ -850,6 +1193,7 @@ const IC={
  layers:'<svg class="ic" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
  db:'<svg class="ic" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
  activity:'<svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+ shield:'<svg class="ic" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
  sliders:'<svg class="ic" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>',
  refresh:'<svg class="ic" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
  logout:'<svg class="ic" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
@@ -857,6 +1201,7 @@ const IC={
  github:'<svg class="ic brand" viewBox="0 0 16 16" style="width:16px;height:16px"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>',
  lock:'<svg class="ic" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
  globe:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+ save:'<svg class="ic" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>',
  menu:'<svg class="ic" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
 };
 
@@ -866,8 +1211,12 @@ let view="overview", refreshMs=10000, timer=null, logTimer=null, needsSetup=fals
 let deviceTimer=null, deviceHandle=null, repoList=[];
 const NAV=[["nav.grp.monitor",[["overview",IC.grid],["deployments",IC.rocket],["runner",IC.cpu]]],
            ["nav.grp.docker",[["containers",IC.box],["apps",IC.zap],["images",IC.layers],["storage",IC.db],["networks",IC.globe]]],
-           ["nav.grp.github",[["github",IC.github]]],
-           ["nav.grp.server",[["system",IC.activity],["settings",IC.sliders]]]];
+           ["nav.grp.github",[["github",IC.github],["domains",IC.globe]]],
+           ["nav.grp.server",[["backups",IC.save],["system",IC.activity],["audit",IC.shield],["settings",IC.sliders]]]];
+// Views only an admin may open; the nav hides them for other roles.
+const ADMIN_VIEWS=["audit"];
+let currentScope="read";
+const isAdmin=()=>currentScope==="admin";
 
 /* ================= api ================= */
 // Descriptive fallback for status codes the backend didn't explain itself.
@@ -953,6 +1302,7 @@ function applyLang(){
   $("#banner-connect").innerHTML=t("banner.connect");
   $("#btn-logout").innerHTML=IC.logout+`<span class="btn-logout-txt">${t("tb.signout")}</span>`;
   $("#btn-refresh").innerHTML=IC.refresh;$("#btn-refresh").title=t("tb.refresh");
+  $("#app-switch").title=t("app.switch");$("#btn-add-app").title=t("app.add");
   $("#btn-nav-toggle").innerHTML=IC.menu;$("#btn-nav-toggle").title=t("tb.menu");
   $("#refresh-select").innerHTML=`<option value="5000">5s</option><option value="10000">10s</option><option value="30000">30s</option><option value="0">${t("tb.off")}</option>`;
   $("#refresh-select").value=String(refreshMs);
@@ -972,6 +1322,7 @@ function buildNav(){
   for(const[grp,items]of NAV){
     const cap=document.createElement("div");cap.className="nav-cap";cap.textContent=t(grp);nav.appendChild(cap);
     for(const[v,icon]of items){
+      if(ADMIN_VIEWS.includes(v)&&!isAdmin())continue; // admin-only views stay hidden for other roles
       const b=document.createElement("button");b.dataset.view=v;b.innerHTML=icon+`<span class="txt">${t("nav."+v)}</span>`;
       // The GitHub entry stays visible but carries a lock until connected —
       // clicking it lands on the sign-in flow either way.
@@ -988,18 +1339,22 @@ function updateGhUi(){
 $("#lang-select") .onchange=e=>{lang=e.target.value;localStorage.setItem("pinqops.lang",lang);applyLang();refresh(true);};
 
 /* ================= lock screen ================= */
+let multiUser=false;
 function renderLock(){
   $("#lock-sub").textContent=needsSetup?t("lk.setup"):t("lk.login");
   $("#lock-btn").textContent=needsSetup?t("lk.create"):t("lk.signIn");
   $("#lock-pass2-wrap").classList.toggle("hidden",!needsSetup);
   $("#lock-code-wrap").classList.toggle("hidden",!needsSetup);
+  // Only ask for a username once more than one user exists — a lone migrated
+  // admin still signs in with just a password.
+  $("#lock-user-wrap").classList.toggle("hidden",needsSetup||!multiUser);
 }
 function showLock(setup){
   needsSetup=setup;
   $("#app").classList.add("hidden");$("#lock").classList.remove("hidden");
   renderLock();
-  $("#lock-error").textContent="";$("#lock-pass").value="";$("#lock-pass2").value="";$("#lock-code").value="";
-  (setup?$("#lock-code"):$("#lock-pass")).focus();
+  $("#lock-error").textContent="";$("#lock-pass").value="";$("#lock-pass2").value="";$("#lock-code").value="";$("#lock-user").value="";
+  (setup?$("#lock-code"):(multiUser?$("#lock-user"):$("#lock-pass"))).focus();
 }
 $("#lock-form").addEventListener("submit",async e=>{
   e.preventDefault();const err=$("#lock-error");err.textContent="";
@@ -1011,7 +1366,7 @@ $("#lock-form").addEventListener("submit",async e=>{
       const r=await api("/api/auth/setup",{method:"POST",body:JSON.stringify({password:pass,setupCode:$("#lock-code").value.trim()})});
       token=r.token;
     }else{
-      const r=await api("/api/auth/login",{method:"POST",body:JSON.stringify({password:pass})});
+      const r=await api("/api/auth/login",{method:"POST",body:JSON.stringify({password:pass,username:$("#lock-user").value.trim()||undefined})});
       token=r.token;
     }
     localStorage.setItem("pinqops.token",token);
@@ -1022,6 +1377,9 @@ $("#lock-form").addEventListener("submit",async e=>{
 /* ================= shell ================= */
 async function enterApp(){
   $("#lock").classList.add("hidden");$("#app").classList.remove("hidden");
+  try{const me=await api("/api/me");currentScope=me.scope||"read";}catch{currentScope="read";}
+  $("#users-card").classList.toggle("hidden",!isAdmin());
+  buildNav();
   await loadGithubView();
   setView(ghConfigured?view:"github");
 }
@@ -1035,6 +1393,7 @@ function setView(v){
   // (the timer was cleared on the way out, but the panel and target survive).
   if(v==="containers"&&logTarget&&!$("#ct-logpanel").classList.contains("hidden")){fetchLogs();armLogTimer();}
   if(v!=="github"&&deviceTimer)stopDeviceFlow(); // don't keep polling GitHub after leaving the view
+  if(v!=="github")stopPubPoll(); // the app-status poll only runs while step 3 is on screen
   refresh();
 }
 /* mobile drawer: hamburger opens it, the scrim or picking a view closes it */
@@ -1064,11 +1423,15 @@ async function refresh(quiet){
     else if(view==="system")await loadSystem();
     // Settings holds form state the user may be editing; populate only on
     // view entry / manual refresh, never on the auto-refresh tick.
-    else if(view==="settings"&&!quiet)await loadNotifSettings();
+    else if(view==="settings"&&!quiet){await loadNotifSettings();await loadTokens();if(isAdmin())await loadUsers();}
+    else if(view==="audit"&&!quiet)await loadAudit();
     // The GitHub view talks to the GitHub API (identity, repos, readiness) —
     // refresh it only on view entry / manual refresh, never on the auto-refresh
     // tick, to protect the rate limit and the user's in-progress search.
     else if(view==="github"&&!quiet)await loadGithubView();
+    // Domains holds an add form; populate on view entry / manual refresh only.
+    else if(view==="domains"&&!quiet)await loadDomains();
+    else if(view==="backups"&&!quiet)await loadBackups();
   }catch(ex){if(!quiet&&ex.message!=="unauthorized")toast(ex.message,"err");}
 }
 
@@ -1156,12 +1519,12 @@ let runnerAutoStartTried=false;
 async function githubOverview(force){
   if(!ghConfigured)return null;
   if(!force&&ghCache&&Date.now()-ghCacheAt<8000)return ghCache;
-  ghCache=await api("/api/github/overview");ghCacheAt=Date.now();
+  ghCache=await api(withApp("/api/github/overview"));ghCacheAt=Date.now();
   return ghCache;
 }
 async function loadOverview(){
   const[containersR,composeR,systemR,ghR,statsR]=await Promise.allSettled([
-    api("/api/docker/containers"),api("/api/compose"),api("/api/system"),githubOverview(),api("/api/docker/stats")]);
+    api("/api/docker/containers"),api(withApp("/api/compose")),api("/api/system"),githubOverview(),api("/api/docker/stats")]);
   chartRes(statsR.status==="fulfilled"?statsR.value.items:null);
   if(containersR.status==="fulfilled"){
     const items=containersR.value.items;
@@ -1222,7 +1585,7 @@ function deployResultChip(r){
   const[k,l]=map[r]||["mut",r||"?"];return`<span class="chip ${k}">${esc(l)}</span>`;}
 async function loadDeployHistory(){
   try{
-    const[state,history]=await Promise.all([api("/api/deploy/state"),api("/api/deploy/history")]);
+    const[state,history]=await Promise.all([api(withApp("/api/deploy/state")),api(withApp("/api/deploy/history"))]);
     $("#dep-current").textContent=state.currentTag
       ?t("dh.current",{tag:shortTag(state.currentTag)})
       :"";
@@ -1251,7 +1614,7 @@ $("#dep-history-table").addEventListener("click",e=>{
     {label:t("dh.rollback"),danger:true,onClick:async()=>{
       closeModal();
       try{
-        const{jobId}=await api("/api/deploy/rollback",{method:"POST",body:JSON.stringify({tag})});
+        const{jobId}=await api(withApp("/api/deploy/rollback"),{method:"POST",body:JSON.stringify({tag})});
         toast(t("dh.rbStarted",{tag:shortTag(tag)}),"ok");
         const poll=setInterval(async()=>{
           try{
@@ -1265,10 +1628,39 @@ $("#dep-history-table").addEventListener("click",e=>{
       }catch(ex){toast(ex.message,"err");}
     }}]);
 });
+/* ---- preview environments (one per open PR) ---- */
+async function loadPreviews(){
+  try{
+    const{items}=await api("/api/previews");
+    const rows=currentAppId?items.filter(p=>p.appId===currentAppId):items;
+    $("#previews-section").classList.toggle("hidden",rows.length===0&&items.length===0);
+    table($("#previews-table"),
+      [t("pv.pr"),t("pv.project"),t("pv.status"),t("pv.port"),""],
+      rows.map(p=>[
+        {h:`<a href="${esc(p.prUrl)}" target="_blank" rel="noopener">#${p.pr} ↗</a>`},
+        {h:`<span class="mono">${esc(p.projectName)}</span>`},
+        {h:p.running?`<span class="chip ok">${t("pv.running")}</span>`:`<span class="chip mut">${t("pv.stopped")}</span>`},
+        p.hostPort?{h:`<a href="http://${location.hostname}:${p.hostPort}" target="_blank" rel="noopener">${p.hostPort} ↗</a>`}:"–",
+        {h:`<button class="small danger" data-preview-teardown="${esc(p.appId)}:${p.pr}">${t("pv.teardown")}</button>`}]),
+      t("pv.none"));
+  }catch(ex){table($("#previews-table"),[],[],esc(ex.message));}
+}
+$("#previews-table").addEventListener("click",e=>{
+  const b=e.target.closest("button[data-preview-teardown]");if(!b)return;
+  const[appId,pr]=b.dataset.previewTeardown.split(":");
+  openModal(t("pv.teardown"),t("pv.tdConfirm",{pr}),[
+    {label:t("c.cancel")},
+    {label:t("pv.teardown"),danger:true,onClick:async()=>{
+      closeModal();
+      try{await api(`/api/previews/${encodeURIComponent(appId)}/${pr}/teardown`,{method:"POST"});
+        toast(t("pv.tdDone",{pr}),"ok");await loadPreviews();}
+      catch(ex){toast(ex.message,"err");}
+    }}]);
+});
 /* ---- compose project .env editor ---- */
 async function loadComposeEnv(){
   try{
-    const env=await api("/api/compose/env");
+    const env=await api(withApp("/api/compose/env"));
     $("#env-file").textContent=env.envFile;
     table($("#env-table"),[t("th.name"),"",""],
       env.items.map(i=>[
@@ -1280,7 +1672,7 @@ async function loadComposeEnv(){
 }
 $("#env-table").addEventListener("click",async e=>{
   const b=e.target.closest("button[data-env-rm]");if(!b)return;
-  try{await api("/api/compose/env",{method:"POST",body:JSON.stringify({remove:[b.dataset.envRm]})});
+  try{await api(withApp("/api/compose/env"),{method:"POST",body:JSON.stringify({remove:[b.dataset.envRm]})});
     toast(t("ev.removed",{k:b.dataset.envRm}),"ok");await loadComposeEnv();}
   catch(ex){toast(ex.message,"err");}
 });
@@ -1288,7 +1680,7 @@ $("#env-add").addEventListener("submit",async e=>{
   e.preventDefault();
   const key=$("#env-key").value.trim(),val=$("#env-val").value;
   if(!key)return;
-  try{await api("/api/compose/env",{method:"POST",body:JSON.stringify({set:{[key]:val}})});
+  try{await api(withApp("/api/compose/env"),{method:"POST",body:JSON.stringify({set:{[key]:val}})});
     $("#env-key").value="";$("#env-val").value="";
     toast(t("ev.saved",{k:key}),"ok");await loadComposeEnv();}
   catch(ex){toast(ex.message,"err");}
@@ -1298,12 +1690,13 @@ $("#env-apply").addEventListener("click",()=>{
     {label:t("c.cancel")},
     {label:t("ev.apply"),primary:true,onClick:async()=>{
       closeModal();
-      try{await api("/api/compose/apply",{method:"POST"});toast(t("ev.applied"),"ok");}
+      try{await api(withApp("/api/compose/apply"),{method:"POST"});toast(t("ev.applied"),"ok");}
       catch(ex){toast(ex.message,"err");}
     }}]);
 });
 async function loadDeployments(){
   await loadDeployHistory();
+  await loadPreviews();
   await loadComposeEnv();
   const gh=await githubOverview();
   if(!gh){table($("#runs-table"),[],[],t("dp.connectFirst"));return;}
@@ -1335,7 +1728,7 @@ async function loadRunner(){
       <div>${(r.labels||[]).map(l=>`<span class="lbl">${esc(l)}</span>`).join("")}</div></div>`).join("");
   }catch(ex){cards.innerHTML=`<div class="card muted">${esc(ex.message)}</div>`;}
   try{
-    const l=await api("/api/runner/local");
+    const l=await api(withApp("/api/runner/local"));
     const svc=l.service
       ?`${esc(l.service.unit)} — <span class="chip ${l.service.activeState==="active"?"ok":"err"}">${esc(l.service.activeState||"?")}/${esc(l.service.subState||"?")}</span>${l.service.since?` · ${t("rn.since")}: ${esc(l.service.since)}`:""}`
       :t("rn.svcMissing");
@@ -1797,108 +2190,53 @@ async function loadSystem(){
   }catch(ex){$("#sys-docker").innerHTML=`<dt>Docker</dt><dd>${esc(ex.message)}</dd>`;}
 }
 
-/* ================= github view ================= */
+/* ================= github view / multi-app state ================= */
 let settingsCache=null;
+let apps=[],currentAppId=localStorage.getItem("pinqops.app")||null;
+const currentApp=()=>apps.find(a=>a.id===currentAppId)||null;
+// Per-app endpoints take ?appId=…; without it the server falls back to the
+// first app, so pre-upgrade tabs keep working.
+const withApp=p=>currentAppId?p+(p.includes("?")?"&":"?")+"appId="+encodeURIComponent(currentAppId):p;
+function renderAppSwitch(){
+  const sel=$("#app-switch");
+  sel.classList.toggle("hidden",apps.length<2);
+  $("#btn-add-app").classList.toggle("hidden",!(settingsCache&&settingsCache.patMasked));
+  sel.innerHTML=apps.map(a=>`<option value="${esc(a.id)}"${a.id===currentAppId?" selected":""}>${esc(a.fullName||a.id)}</option>`).join("");
+}
+function setCurrentApp(id,opts){
+  if(id===currentAppId&&!(opts&&opts.force))return;
+  currentAppId=id;
+  if(id)localStorage.setItem("pinqops.app",id);else localStorage.removeItem("pinqops.app");
+  ghCache=null;pubPortsSeededFor=null;stopPubPoll();
+  renderAppSwitch();
+  if(!(opts&&opts.quiet))refresh();
+}
+function applySettings(s){
+  settingsCache=s;
+  apps=s.apps||[];
+  if(!apps.some(a=>a.id===currentAppId))currentAppId=apps[0]?apps[0].id:null;
+  if(currentAppId)localStorage.setItem("pinqops.app",currentAppId);
+  renderAppSwitch();
+  const app=currentApp();
+  $("#set-repo").value=app?app.repoUrl:"";
+  $("#set-compose").value=app?app.composeFile:"";
+  $("#set-runnerdir").value=app?app.runnerDirectory:"";
+  $("#set-clientid").value=s.githubClientId||"";
+  $("#btn-app-remove").classList.toggle("hidden",!app);
+  if(s.version)$("#side-foot").textContent=`pinqops web ui v${s.version}`;
+  $("#settings-meta").textContent=`${t("se.configFile")}: ${s.configPath}`;
+  ghConfigured=!!(s.patMasked&&apps.length);
+  updateGhUi();
+}
+async function reloadSettings(){applySettings(await api("/api/settings"));}
 async function loadGithubView(){
   try{
-    const s=await api("/api/settings");
-    settingsCache=s;
-    $("#set-repo").value=s.repoUrl||"";
-    $("#set-compose").value=s.composeFile||"";
-    $("#set-runnerdir").value=s.runnerDirectory||"";
-    $("#set-clientid").value=s.githubClientId||"";
-    if(s.version)$("#side-foot").textContent=`pinqops web ui v${s.version}`;
-    $("#settings-meta").textContent=`${t("se.configFile")}: ${s.configPath}`;
-    ghConfigured=!!(s.repoUrl&&s.patMasked);
-    updateGhUi();
-    // The repo picker needs a token (the repo list comes from the account);
-    // the readiness card needs a connected repo.
-    $("#repo-card").classList.toggle("hidden",!s.patMasked);
-    if(s.patMasked)loadIdentityAndRepos();
+    await reloadSettings();
+    // The repo picker needs a token (the repo list comes from the account).
+    if(settingsCache.patMasked)loadIdentityAndRepos();
     else{$("#gh-identity").classList.add("hidden");renderRepoList([]);}
-    if(ghConfigured)loadSetupStatus();else $("#setup-card").classList.add("hidden");
+    syncWizard();
   }catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
-}
-
-/* --- deployment readiness: check the repo + server, fix what we can --- */
-async function loadSetupStatus(){
-  const card=$("#setup-card");
-  // The server parses the URL (works for GHES hosts too) — no client regex.
-  $("#setup-repo-name").textContent=(settingsCache&&(settingsCache.fullName||settingsCache.repoUrl))||"";
-  try{
-    const s=await api("/api/setup/status");
-    if(!s.configured){card.classList.add("hidden");return;}
-    card.classList.remove("hidden");
-    // Auto-heal: a stopped-but-installed runner is started automatically, so the
-    // only thing a user ever runs is the GitHub wizard — never a "start" button.
-    if(s.runnerInstalled&&s.runnerServiceActive===false&&!runnerAutoStartTried){
-      runnerAutoStartTried=true;
-      const log=$("#setup-log");if(log){log.classList.remove("hidden");log.textContent=t("su.autoStarting");}
-      try{await api("/api/setup/start-runner",{method:"POST"});}catch{}
-      return loadSetupStatus();
-    }
-    if(s.runnerServiceActive===true)runnerAutoStartTried=false;
-    const row=(ok,label,detail,btn)=>`<div style="display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line)">
-      <span class="chip ${ok?"ok":"warn"}">${ok?"✓":"!"}</span>
-      <div style="flex:1"><b style="font-size:13px">${label}</b><div class="muted" style="font-size:12px">${detail||""}</div></div>${btn||""}</div>`;
-    // A token without Administration:read can't list runners — degrade the
-    // runner row to "installed locally, online state unknown", never the card.
-    const runnerOk=s.runnerInstalled&&(s.runnersOnline>0||!!s.runnersError);
-    // The runner action is a last-resort fallback: normally the service is
-    // auto-started (stopped case) or the row just points at logs (running but
-    // not reaching GitHub — a restart would not help).
-    let runnerDetail,runnerAction="";
-    if(!s.runnerInstalled){
-      runnerDetail=s.runnerMismatch?t("su.runnerMismatch",{r:esc(s.runnerRegisteredTo||"?")}):t("su.runnerMiss");
-      runnerAction=`<button class="small primary" id="btn-fix-runner">${t("su.installBtn")}</button>`;
-    }else if(s.runnersError){
-      runnerDetail=t("su.runnerUnknown");
-    }else if(s.runnersOnline>0){
-      runnerDetail=t("su.runnerOnline",{n:s.runnersOnline});
-    }else if(s.runnerServiceActive===false){
-      runnerDetail=t("su.runnerStartFailed");
-      runnerAction=`<button class="small primary" id="btn-start-runner">${t("su.startBtn")}</button>`;
-    }else if(s.runnerServiceActive===true){
-      runnerDetail=t("su.runnerNotConnecting");
-      runnerAction=`<button class="small" id="btn-runner-logs">${t("su.viewLogs")}</button>`;
-    }else{
-      runnerDetail=t("su.runnerOffline");
-    }
-    $("#setup-list").innerHTML=[
-      row(s.repo.hasDockerfile,t("su.dockerfile"),s.repo.hasDockerfile?"":t("su.dockerfileMiss")),
-      row(s.repo.hasWorkflow,t("su.workflow"),s.repo.hasWorkflow?".github/workflows/deploy.yml":t("su.workflowMiss"),
-        s.repo.hasWorkflow?"":`<button class="small primary" id="btn-fix-workflow">${t("su.createBtn")}</button>`),
-      row(runnerOk,t("su.runner"),runnerDetail,runnerAction),
-      row(s.composeExists,t("su.compose"),s.composeExists?esc(s.composeFile):t("su.composeMiss",{p:esc(s.composeFile)}),
-        s.composeExists?"":`<button class="small primary" id="btn-fix-compose">${t("su.createBtn")}</button>`),
-    ].join("");
-    const missing=[!s.repo.hasDockerfile&&t("su.dockerfile"),!s.repo.hasWorkflow&&t("su.workflow"),
-      !runnerOk&&t("su.runner"),!s.composeExists&&t("su.compose")].filter(Boolean);
-    $("#setup-summary").innerHTML=missing.length===0
-      ?`<span class="chip ok">✓</span> <span style="color:var(--ok)">${t("su.allReady")}</span>`
-      :`<span class="chip warn">!</span> <span style="color:var(--warn)">${missing.length===1?t("su.onlyMissing",{x:missing[0]}):t("su.missingList",{x:missing.join(", ")})}</span>`;
-    const fw=$("#btn-fix-workflow");if(fw)fw.onclick=async()=>{fw.disabled=true;
-      try{await api("/api/setup/create-workflow",{method:"POST"});toast(t("su.workflowDone"),"ok");ghCache=null;loadSetupStatus();}
-      catch(ex){toast(ex.message,"err");fw.disabled=false;}};
-    const fc=$("#btn-fix-compose");if(fc)fc.onclick=async()=>{fc.disabled=true;
-      try{await api("/api/setup/create-compose",{method:"POST"});toast(t("su.composeDone"),"ok");loadSetupStatus();}
-      catch(ex){toast(ex.message,"err");fc.disabled=false;}};
-    const fr=$("#btn-fix-runner");if(fr)fr.onclick=async()=>{fr.disabled=true;
-      const log=$("#setup-log");log.classList.remove("hidden");log.textContent=t("su.installing");
-      try{const r=await api("/api/setup/install-runner",{method:"POST"});
-        log.textContent=r.log||"";
-        toast(r.succeeded?t("su.runnerDone"):t("c.failed"),r.succeeded?"ok":"err");
-        if(r.succeeded)loadSetupStatus();else fr.disabled=false;}
-      catch(ex){log.textContent=ex.message;toast(ex.message,"err");fr.disabled=false;}};
-    const sr=$("#btn-start-runner");if(sr)sr.onclick=async()=>{sr.disabled=true;
-      const log=$("#setup-log");log.classList.remove("hidden");
-      try{const r=await api("/api/setup/start-runner",{method:"POST"});
-        log.textContent=r.log||"";
-        toast(r.succeeded?t("su.started"):t("c.failed"),r.succeeded?"ok":"err");
-        loadSetupStatus();}
-      catch(ex){log.textContent=ex.message;toast(ex.message,"err");sr.disabled=false;}};
-    const rl=$("#btn-runner-logs");if(rl)rl.onclick=()=>setView("runner");
-  }catch(ex){card.classList.remove("hidden");$("#setup-summary").textContent=ex.message;$("#setup-list").innerHTML="";}
 }
 
 async function loadIdentityAndRepos(){
@@ -1928,7 +2266,7 @@ function renderRepoList(items,filter){
   list.innerHTML=visible.map(r=>{
     const url=`https://github.com/${r.fullName}`;
     const role=r.admin?t("se.admin"):r.push?t("se.write"):t("se.read");
-    const connected=!!(settingsCache&&(settingsCache.fullName===r.fullName||settingsCache.repoUrl===url));
+    const connected=apps.some(a=>a.fullName===r.fullName||a.repoUrl===url);
     return`<div class="repo-row${url===selectedRepoUrl?" sel":""}" data-repo="${esc(url)}">
       <span class="rname">${esc(r.fullName)}</span>
       ${r.isPrivate?`<span class="chip mut">🔒 ${t("se.private")}</span>`:""}
@@ -1943,12 +2281,264 @@ $("#repo-list").addEventListener("click",e=>{
   renderRepoList(repoList,$("#repo-search").value);
 });
 $("#repo-search").addEventListener("input",e=>renderRepoList(repoList,e.target.value));
-$("#btn-repo-install").onclick=()=>{if(selectedRepoUrl)runInstallWizard(selectedRepoUrl);};
-$("#btn-wiz-rerun").onclick=()=>{if(settingsCache&&settingsCache.repoUrl)runInstallWizard(settingsCache.repoUrl);};
 
-/* --- repo install wizard: connect → check → fix each piece → verify.
-       The modal is sticky (no accidental backdrop close); "run in background"
-       just hides it — the steps keep running server-side. --- */
+/* ================= 3-step publish wizard =================
+   1 Connect → 2 Choose repository → 3 Publish. Step 3 owns the port form,
+   the sub-step progress (formerly a modal) and the live "your app is
+   running" card. The server state decides the landing step on reload. */
+let wizStep=1,pendingRepoUrl=null,pubTimer=null,pubBusy=false;
+let pubInfoCache=null,pubPortsSeededFor=null,portCheckTimer=null,hostPortOk=true;
+
+function stopPubPoll(){if(pubTimer){clearInterval(pubTimer);pubTimer=null;}}
+function gotoStep(n){
+  wizStep=n;
+  if(n!==3)stopPubPoll();
+  for(const i of[1,2,3])$("#wstep-"+i).classList.toggle("hidden",i!==n);
+  document.querySelectorAll("#wiz-stepper .st").forEach(el=>{
+    const s=+el.dataset.step;
+    el.className="st "+(s<n?"done":s===n?"active":"locked");
+    el.querySelector(".st-n").textContent=s<n?"✓":s;
+  });
+  if(n===3)initPublishPanel();
+}
+// completed steps are clickable to go back; future steps stay locked
+$("#wiz-stepper").addEventListener("click",e=>{
+  const el=e.target.closest(".st.done");
+  if(el&&!pubBusy)gotoStep(+el.dataset.step);
+});
+function syncWizard(){
+  const connected=!!(settingsCache&&settingsCache.patMasked);
+  $("#btn-step1-next").classList.toggle("hidden",!connected);
+  const hasApp=!!(pendingRepoUrl||currentApp());
+  // Never park the user on a step that lost its prerequisite; only
+  // auto-advance out of step 1 (sign-in just completed), so a refresh never
+  // yanks someone away from the repo list they are browsing.
+  if(!connected)gotoStep(1);
+  else if(wizStep===1)gotoStep(hasApp?3:2);
+  else if(wizStep===3&&!hasApp)gotoStep(2);
+  else gotoStep(wizStep);
+}
+$("#btn-step1-next").onclick=()=>gotoStep((pendingRepoUrl||currentApp())?3:2);
+$("#app-switch").onchange=e=>setCurrentApp(e.target.value);
+$("#btn-add-app").onclick=()=>{pendingRepoUrl=null;setView("github");gotoStep(2);};
+$("#btn-step2-back").onclick=()=>gotoStep(1);
+$("#btn-step3-back").onclick=()=>{if(!pubBusy)gotoStep(2);};
+$("#lnk-change-repo").addEventListener("click",e=>{e.preventDefault();if(!pubBusy)gotoStep(2);});
+$("#btn-repo-install").onclick=()=>{if(selectedRepoUrl){pendingRepoUrl=selectedRepoUrl;gotoStep(3);}};
+$("#btn-publish").onclick=()=>runPublish();
+
+/* --- step 3: sub-step plumbing (shared by pre-seed and the publish run) --- */
+const WIZ_KEYS=["connect","dockerfile","workflow","compose","runner","verify","deploy"];
+const wizSay=m=>{const log=$("#wiz-log");if(log){log.textContent+=m+"\n";log.scrollTop=log.scrollHeight;}};
+// The bar is derived from the step states, so no counter can drift from
+// what the list shows.
+const wizMark=(k,state,detail,spin)=>{
+  const el=$("#wiz-"+k);if(!el)return;
+  el.className="wiz-step "+(state||"");
+  const ic=el.querySelector(".ws-ic");
+  if(ic)ic.innerHTML=spin?`<span class="spin"></span>`:state==="ok"?"✓":state==="err"?"✕":state==="warn"?"!":"•";
+  const d=$("#wiz-"+k+"-d");if(d&&detail!==undefined)d.innerHTML=detail;
+  const bar=$("#wiz-bar");
+  if(bar){const fin=document.querySelectorAll("#pub-progress .wiz-step.ok,#pub-progress .wiz-step.warn").length;
+    bar.style.width=Math.round(fin/WIZ_KEYS.length*100)+"%";}
+};
+
+/* --- step 3: pre-publish panel — ports form + readiness pre-seed --- */
+async function initPublishPanel(){
+  if(pubBusy)return;
+  // A repo picked in step 2 becomes an app connection first (idempotent: an
+  // already-added repo just gets selected).
+  if(pendingRepoUrl){
+    const url=pendingRepoUrl;
+    const existing=apps.find(a=>a.repoUrl===url);
+    if(existing){pendingRepoUrl=null;setCurrentApp(existing.id,{quiet:true});}
+    else{
+      try{
+        const r=await api("/api/settings",{method:"POST",body:JSON.stringify({repoUrl:url})});
+        ghCache=null;pendingRepoUrl=null;
+        await reloadSettings();
+        setCurrentApp(r.appId,{quiet:true,force:true});
+        renderRepoList(repoList,$("#repo-search").value);
+      }catch(ex){toast(ex.message,"err");return gotoStep(2);}
+    }
+  }
+  const app=currentApp();
+  if(!app)return gotoStep(2);
+  $("#pub-repo-name").textContent=app.fullName||app.repoUrl.replace(/^https?:\/\/[^/]+\//,"");
+  $("#pub-live").innerHTML="";
+  $("#wiz-summary").innerHTML="";$("#wiz-log").textContent=""; // a previous app's run must not linger
+  let info=null,s=null;
+  try{[info,s]=await Promise.all([api(withApp("/api/setup/publish-info")),api(withApp("/api/setup/status"))]);}
+  catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
+  if(info){
+    pubInfoCache=info;
+    if(pubPortsSeededFor!==app.id){ // don't clobber values the user typed
+      pubPortsSeededFor=app.id;
+      $("#pub-hostport").value=info.currentHostPort??info.suggestedHostPort;
+      $("#pub-ctrport").value=info.currentContainerPort??info.detectedContainerPort??info.fallbackContainerPort;
+    }
+    const src=$("#pub-ctrport-src"),fb=$("#pub-ctr-fallback");
+    if(info.detectedContainerPort!=null){
+      src.textContent="✓ "+t("wz.ctrDetected",{p:info.detectedContainerPort});src.className="port-hint ok";
+      fb.classList.add("hidden");
+    }else if(info.currentContainerPort==null){
+      // nothing detected and nothing stored yet — the user must tell us
+      src.textContent="";src.className="port-hint";
+      fb.textContent=t("wz.ctrFallback",{p:info.fallbackContainerPort});
+      fb.classList.remove("hidden");
+    }else{
+      src.textContent="";src.className="port-hint";
+      fb.classList.add("hidden");
+    }
+    checkHostPort();
+  }
+  if(s&&s.configured){
+    // Auto-heal: a stopped-but-installed runner is started automatically, so
+    // the only thing a user ever runs is Publish — never a "start" button.
+    if(s.runnerInstalled&&s.runnerServiceActive===false&&!runnerAutoStartTried){
+      runnerAutoStartTried=true;
+      try{await api(withApp("/api/setup/start-runner"),{method:"POST"});}catch{}
+    }
+    if(s.runnerServiceActive===true)runnerAutoStartTried=false;
+    // A token without Administration:read can't list runners — degrade the
+    // runner row to "installed locally, online state unknown".
+    const runnerOk=s.runnerInstalled&&(s.runnersOnline>0||!!s.runnersError);
+    $("#pub-progress").classList.remove("hidden");
+    wizMark("connect","ok",esc((s.repo&&s.repo.fullName)||""));
+    if(s.repo.hasDockerfile){
+      wizMark("dockerfile","ok",t("wiz.ready"));
+    }else{
+      // No Dockerfile: offer to generate one from the detected stack.
+      wizMark("dockerfile","warn",`${t("su.dockerfileMiss")} <a href="#" id="lnk-gen-dockerfile">${esc(t("sd.generateBtn"))}</a>`);
+      const g=$("#lnk-gen-dockerfile");if(g)g.onclick=e=>{e.preventDefault();openDockerfileModal();};
+    }
+    if(s.repo.hasWorkflow&&s.repo.workflowVersion<s.repo.currentWorkflowVersion){
+      // The workflow is committed but on an older shape (e.g. before preview
+      // environments) — offer an in-place update.
+      wizMark("workflow","warn",`${t("wz.wfOutdated")} <a href="#" id="lnk-update-workflow">${esc(t("wz.wfUpdateBtn"))}</a>`);
+      const u=$("#lnk-update-workflow");if(u)u.onclick=async e=>{
+        e.preventDefault();u.textContent="…";
+        try{await api(withApp("/api/setup/update-workflow"),{method:"POST"});toast(t("wz.wfUpdated"),"ok");await initPublishPanel();}
+        catch(ex){toast(ex.message,"err");u.textContent=t("wz.wfUpdateBtn");}
+      };
+    }else{
+      wizMark("workflow",s.repo.hasWorkflow?"ok":"",s.repo.hasWorkflow?t("wiz.ready"):t("su.workflowMiss"));
+    }
+    wizMark("var","","");
+    wizMark("compose",s.composeExists?"ok":"",s.composeExists?esc(s.composeFile):t("su.composeMiss",{p:esc(s.composeFile)}));
+    wizMark("runner",runnerOk?"ok":"",runnerOk?t("wiz.ready"):"");
+    wizMark("verify","","");wizMark("deploy","","");
+    const ready=s.repo.hasWorkflow&&s.composeExists&&runnerOk;
+    $("#btn-publish").textContent=ready?t("wz.republish"):t("wz.publish");
+    if(ready)startPubPoll();
+  }else{
+    $("#pub-progress").classList.add("hidden");
+    $("#btn-publish").textContent=t("wz.publish");
+  }
+}
+
+/* --- Dockerfile generator: detect the stack, let the user edit, then commit.
+       The committed EXPOSE flows straight back into the port form. --- */
+async function openDockerfileModal(){
+  let data;
+  try{data=await api(withApp("/api/setup/detect-stack"));}
+  catch(ex){toast(ex.message,"err");return;}
+  const cands=(data.candidates||[]);
+  if(!cands.length)cands.push({kind:"unknown",suggestedPort:8080,dir:"",dockerfile:"# EXPOSE 8080\nFROM alpine\nEXPOSE 8080"});
+  const opts=cands.map((c,i)=>`<option value="${i}">${c.dir?esc(c.dir):"/"} — ${esc(c.kind)}</option>`).join("");
+  openModal(t("sd.title"),
+    `${data.truncated?`<div class="banner">${esc(t("sd.truncated"))}</div>`:""}
+     ${cands.length>1?`<label for="dockerfile-cand">${esc(t("sd.subdirLbl"))}</label><select id="dockerfile-cand">${opts}</select>`:""}
+     <div class="muted" id="dockerfile-detected" style="font-size:12.5px;margin:8px 0"></div>
+     <div class="muted" style="font-size:12px;margin-bottom:6px">${esc(t("sd.editHint"))}</div>
+     <textarea id="dockerfile-content" spellcheck="false" style="width:100%;height:300px;font-family:var(--mono);font-size:12px;resize:vertical;line-height:1.5"></textarea>`,
+    [{label:t("c.cancel")},{label:t("sd.commitBtn"),primary:true,onClick:async()=>{
+      const idx=+(($("#dockerfile-cand")||{}).value||0);
+      const content=$("#dockerfile-content").value;
+      try{
+        await api(withApp("/api/setup/create-dockerfile"),{method:"POST",body:JSON.stringify({content,dir:cands[idx].dir||""})});
+        closeModal();
+        toast(t("sd.committed"),"ok");
+        pubPortsSeededFor=null; // the new EXPOSE re-seeds the container port
+        initPublishPanel();
+      }catch(ex){toast(ex.message,"err");}
+    }}]);
+  const sync=idx=>{
+    $("#dockerfile-content").value=cands[idx].dockerfile;
+    $("#dockerfile-detected").innerHTML=`<span class="chip ok">${esc(cands[idx].kind)}</span> ${esc(t("sd.detected",{k:cands[idx].kind}))}`;
+  };
+  const sel=$("#dockerfile-cand");if(sel)sel.onchange=e=>sync(+e.target.value);
+  sync(0);
+}
+
+/* --- host-port availability, checked live while typing (debounced) --- */
+function checkHostPort(){
+  const hint=$("#pub-hostport-hint");
+  const v=+$("#pub-hostport").value;
+  if(!Number.isInteger(v)||v<1||v>65535){
+    hint.textContent=t("wz.portInvalid");hint.className="port-hint err";
+    hostPortOk=false;$("#btn-publish").disabled=true;return;
+  }
+  hint.textContent="…";hint.className="port-hint";
+  clearTimeout(portCheckTimer);
+  portCheckTimer=setTimeout(async()=>{
+    try{
+      const r=await api(withApp("/api/setup/port-check?port="+v));
+      if(+$("#pub-hostport").value!==v)return; // the user typed on — stale answer
+      hostPortOk=!!(r.valid&&r.available);
+      hint.textContent=hostPortOk?"✓ "+t("wz.portFree",{p:v}):t("wz.portBusy",{p:v});
+      hint.className="port-hint "+(hostPortOk?"ok":"err");
+      $("#btn-publish").disabled=!hostPortOk||!ctrPortValid();
+    }catch{hint.textContent="";hostPortOk=true;}
+  },400);
+}
+const ctrPortValid=()=>{const v=+$("#pub-ctrport").value;return Number.isInteger(v)&&v>=1&&v<=65535;};
+$("#pub-hostport").addEventListener("input",checkHostPort);
+$("#pub-ctrport").addEventListener("input",()=>{
+  const ok=ctrPortValid();
+  const src=$("#pub-ctrport-src");
+  if(!ok){src.textContent=t("wz.portInvalid");src.className="port-hint err";}
+  else if(src.className.includes("err")){src.textContent="";src.className="port-hint";}
+  $("#btn-publish").disabled=!ok||!hostPortOk;
+});
+
+/* --- live status: poll the app container while step 3 is on screen --- */
+function startPubPoll(){
+  stopPubPoll();
+  const tick=async()=>{
+    if(view!=="github"||wizStep!==3||pubBusy)return;
+    try{renderLive(await api(withApp("/api/setup/app-status")));}catch{}
+  };
+  tick();
+  pubTimer=setInterval(tick,5000);
+}
+function renderLive(st){
+  const el=$("#pub-live");
+  if(!st||!st.composeExists){el.innerHTML="";return;}
+  if(st.dockerOk===false){
+    el.innerHTML=`<div class="wait-card"><span class="chip mut">?</span><div>${esc(t("wz.dockerDown"))}</div></div>`;return;
+  }
+  if(st.running&&st.hostPort){
+    const url=`http://${location.hostname}:${st.hostPort}`;
+    el.innerHTML=`<a class="live-card" href="${esc(url)}" target="_blank" rel="noopener">
+      <span class="lc-dot"></span>
+      <div class="lc-body"><div class="lc-title">${esc(t("wz.liveTitle"))}</div>
+        <div class="lc-url">${esc(url)}${st.currentTag?` · ${esc(st.currentTag)}`:""}</div></div>
+      <span class="lc-open">${esc(t("wz.liveOpen"))}</span></a>
+      <div class="muted" style="font-size:12px;margin-top:8px">${esc(t("wz.wantDomain"))} <a href="#" data-goto="domains">${esc(t("wz.addDomain"))}</a></div>`;
+    return;
+  }
+  if(st.state&&!st.running){
+    el.innerHTML=`<div class="wait-card warn"><span class="chip warn">!</span>
+      <div>${esc(t("wz.stopped",{s:st.state}))} <a href="#" data-goto="containers">${esc(t("nav.containers"))} →</a></div></div>`;
+    return;
+  }
+  const repo=((currentApp()||{}).repoUrl||"").replace(/\/$/,"");
+  el.innerHTML=`<div class="wait-card"><span class="spin" style="margin-top:3px"></span>
+    <div>${esc(t("wz.waitingDeploy"))}${repo?` <a href="${esc(repo)}/actions" target="_blank" rel="noopener">${esc(t("wz.openActions"))}</a>`:""}</div></div>`;
+}
+
+/* --- runner install progress (unchanged mechanics, shared log buffer) --- */
 async function installRunnerWithProgress(say){
   // The buffer is shared across installs; remember the previous run's
   // generation so a stale (or concurrent) run's result is never adopted as
@@ -1958,7 +2548,8 @@ async function installRunnerWithProgress(say){
   let seen=0;
   const poll=async()=>{try{
     const p=await api("/api/setup/install-runner/progress");
-    if((p.generation||0)>gen0){
+    // Skip lines that belong to ANOTHER app's install (the buffer is shared).
+    if((p.generation||0)>gen0&&(!p.appId||p.appId===currentAppId)){
       const lines=(p.log||"").split("\n").filter(Boolean);
       for(;seen<lines.length;seen++)say(lines[seen]);
     }
@@ -1966,7 +2557,7 @@ async function installRunnerWithProgress(say){
   }catch{return null;}};
   const timer=setInterval(poll,2000);
   try{
-    const r=await api("/api/setup/install-runner",{method:"POST"});
+    const r=await api(withApp("/api/setup/install-runner"),{method:"POST"});
     await poll();
     return r;
   }catch(ex){
@@ -1980,125 +2571,142 @@ async function installRunnerWithProgress(say){
     for(let i=0;i<600;i++){ // up to 20 minutes — a runner install includes a large download
       await new Promise(res=>setTimeout(res,2000));
       const p=await poll();
-      if(p&&(p.generation||0)>gen0&&!p.active)return{succeeded:!!p.succeeded,log:p.log};
+      if(p&&(p.generation||0)>gen0&&(!p.appId||p.appId===currentAppId)&&!p.active)return{succeeded:!!p.succeeded,log:p.log};
       if(p&&(p.generation||0)<=gen0&&++stale>=3)break;
     }
     throw ex;
   }finally{clearInterval(timer);}
 }
-async function runInstallWizard(repoUrl){
-  const steps=[["connect",t("wiz.connect")],["dockerfile",t("wiz.dockerfile")],["workflow",t("wiz.workflow")],
-               ["compose",t("wiz.compose")],["runner",t("wiz.runner")],["verify",t("wiz.verify")]];
-  openModal(t("wiz.title"),
-    `<div class="muted" style="font-family:var(--mono);font-size:12px;margin-bottom:10px">${esc(repoUrl)}</div>
-     <div class="bar wiz-bar"><i id="wiz-bar" style="width:0%"></i></div>
-     ${steps.map(([k,label])=>`<div class="wiz-step" id="wiz-${k}"><span class="ws-ic">•</span><div style="flex:1;min-width:0"><b>${esc(label)}</b><div class="ws-detail" id="wiz-${k}-d"></div></div></div>`).join("")}
-     <div id="wiz-summary" style="margin-top:12px;font-size:13px"></div>
-     <details style="margin-top:8px"><summary class="muted" style="cursor:pointer;font-size:12.5px">${t("wiz.showLog")}</summary>
-       <div class="logbox" id="wiz-log" style="margin-top:8px;max-height:220px"></div></details>`,
-    [{label:t("wiz.cancel"),onClick:()=>closeModal()}],
-    {sticky:true});
-  const say=m=>{const log=$("#wiz-log");if(log){log.textContent+=m+"\n";log.scrollTop=log.scrollHeight;}};
-  // The bar is derived from the step states, so no counter can drift from
-  // what the list shows.
-  const mark=(k,state,detail,spin)=>{
-    const el=$("#wiz-"+k);if(!el)return;
-    el.className="wiz-step "+(state||"");
-    const ic=el.querySelector(".ws-ic");
-    if(ic)ic.innerHTML=spin?`<span class="spin"></span>`:state==="ok"?"✓":state==="err"?"✕":state==="warn"?"!":"•";
-    const d=$("#wiz-"+k+"-d");if(d&&detail!==undefined)d.innerHTML=detail;
-    const bar=$("#wiz-bar");
-    if(bar){const fin=document.querySelectorAll("#modal-body .wiz-step.ok,#modal-body .wiz-step.warn").length;
-      bar.style.width=Math.round(fin/steps.length*100)+"%";}
-  };
+/* --- the publish run: connect → check → fix each piece → verify → deploy.
+       Runs inline in step 3 (no modal); the chosen ports ride along. --- */
+async function runPublish(){
+  if(pubBusy)return;
+  const app=currentApp();
+  const repoUrl=pendingRepoUrl||(app&&app.repoUrl);
+  if(!repoUrl)return gotoStep(2);
+  const hostPort=+$("#pub-hostport").value,ctrPort=+$("#pub-ctrport").value;
+  pubBusy=true;stopPubPoll();
+  $("#btn-publish").disabled=true;
+  $("#pub-live").innerHTML="";
+  $("#pub-progress").classList.remove("hidden");
+  $("#wiz-log").textContent="";$("#wiz-summary").innerHTML="";
+  WIZ_KEYS.forEach(k=>wizMark(k,"",""));
   const step=async(k,fn)=>{
-    mark(k,"run",undefined,true);
-    try{const detail=await fn();mark(k,"ok",detail);return true;}
-    catch(ex){mark(k,"err",esc(ex.message));say("✗ "+ex.message);return false;}
+    wizMark(k,"run",undefined,true);
+    try{const detail=await fn();wizMark(k,"ok",detail);return true;}
+    catch(ex){wizMark(k,"err",esc(ex.message));wizSay("✗ "+ex.message);return false;}
   };
 
   let failedAt=null;
   if(!await step("connect",async()=>{
+    // Idempotent upsert: same URL returns the existing app connection.
     const r=await api("/api/settings",{method:"POST",body:JSON.stringify({repoUrl})});
-    // The connected repository just changed. Everything derived from the old
-    // one — the readiness card's title, the ✓ marker in the repo list, and the
-    // "Re-run the wizard" button — reads settingsCache, so leaving it stale
-    // makes the UI keep pointing at the previous repo (and re-run against it).
     ghCache=null;
-    settingsCache={...(settingsCache||{}),repoUrl,fullName:r.fullName};
+    await reloadSettings();
+    setCurrentApp(r.appId,{quiet:true,force:true});
     selectedRepoUrl=repoUrl;
-    $("#set-repo").value=repoUrl;
     renderRepoList(repoList,$("#repo-search").value);
-    say("✓ "+t("se.connected",{r:r.fullName}));
+    wizSay("✓ "+t("se.connected",{r:r.fullName}));
     return esc(r.fullName)+(r.isPrivate?" 🔒":"");
   }))failedAt=t("wiz.connect");
 
   let s=null;
   if(!failedAt){
-    try{s=await api("/api/setup/status");}
-    catch(ex){mark("dockerfile","err",esc(ex.message));say("✗ "+ex.message);failedAt=t("wiz.check");}
+    try{s=await api(withApp("/api/setup/status"));}
+    catch(ex){wizMark("dockerfile","err",esc(ex.message));wizSay("✗ "+ex.message);failedAt=t("wiz.check");}
   }
   if(s){
-    if(s.repo.hasDockerfile)mark("dockerfile","ok",t("wiz.ready"));
-    else mark("dockerfile","warn",t("su.dockerfileMiss")); // warn only — the wizard can't write app code
+    if(s.repo.hasDockerfile)wizMark("dockerfile","ok",t("wiz.ready"));
+    else wizMark("dockerfile","warn",t("su.dockerfileMiss")); // warn only — the wizard can't write app code
 
-    if(s.repo.hasWorkflow)mark("workflow","ok",t("wiz.ready"));
+    if(s.repo.hasWorkflow)wizMark("workflow","ok",t("wiz.ready"));
     else if(!await step("workflow",async()=>{
-      await api("/api/setup/create-workflow",{method:"POST"});ghCache=null;
-      say("✓ "+t("su.workflowDone"));return t("su.workflowDone");
+      await api(withApp("/api/setup/create-workflow"),{method:"POST"});ghCache=null;
+      wizSay("✓ "+t("su.workflowDone"));return t("su.workflowDone");
     }))failedAt=failedAt||t("wiz.workflow");
 
-    if(s.composeExists)mark("compose","ok",t("wiz.ready"));
-    else if(!await step("compose",async()=>{
-      await api("/api/setup/create-compose",{method:"POST"});
-      say("✓ "+t("su.composeDone"));return t("su.composeDone");
-    }))failedAt=failedAt||t("wiz.compose");
+    // Pin APP_COMPOSE_PATH every publish (idempotent) — with a non-default
+    // compose path the deploy would otherwise land on the wrong project.
+    if(!failedAt){
+      if(!await step("var",async()=>{
+        const r=await api(withApp("/api/setup/app-var"),{method:"POST"});
+        wizSay(`✓ ${r.name} = ${r.value}`);
+        return t("wiz.varDone",{p:esc(r.value)});
+      })){wizMark("var","err",t("wiz.varFail"));failedAt=failedAt||t("wiz.var");}
+    }else wizMark("var","warn");
 
-    if(s.runnerInstalled&&(s.runnersError||s.runnersOnline>0))mark("runner","ok",t("wiz.ready"));
+    if(failedAt){wizMark("compose","warn");wizMark("runner","warn");}
+    else if(!s.composeExists){
+      if(!await step("compose",async()=>{
+        const r=await api(withApp("/api/setup/create-compose"),{method:"POST",
+          body:JSON.stringify({hostPort,containerPort:ctrPort})});
+        wizSay("✓ "+t("su.composeDone"));
+        return t("su.composeDone")+` — ${r.hostPort} → ${r.containerPort}`;
+      }))failedAt=failedAt||t("wiz.compose");
+    }else if(pubInfoCache&&(pubInfoCache.currentHostPort!==hostPort||pubInfoCache.currentContainerPort!==ctrPort)){
+      // The project exists but the user changed a port: write the .env (the
+      // server re-validates) and recreate the container if one is running.
+      if(!await step("compose",async()=>{
+        await api(withApp("/api/compose/env"),{method:"POST",body:JSON.stringify({
+          set:{PINQOPS_HOST_PORT:String(hostPort),PINQOPS_CONTAINER_PORT:String(ctrPort)}})});
+        wizSay(`✓ .env → ${hostPort}:${ctrPort}`);
+        try{
+          const st=await api(withApp("/api/setup/app-status"));
+          if(st.state){await api(withApp("/api/compose/apply"),{method:"POST"});wizSay("✓ "+t("ev.applied"));}
+        }catch(ex){wizSay("! "+ex.message);}
+        pubInfoCache={...pubInfoCache,currentHostPort:hostPort,currentContainerPort:ctrPort};
+        return t("wz.portsApplied",{h:hostPort,c:ctrPort});
+      }))failedAt=failedAt||t("wiz.compose");
+    }else wizMark("compose","ok",t("wiz.ready"));
+
+    if(failedAt&&!s.runnerInstalled)wizMark("runner","warn");
+    else if(s.runnerInstalled&&(s.runnersError||s.runnersOnline>0))wizMark("runner","ok",t("wiz.ready"));
     else if(!await step("runner",async()=>{
       if(!s.runnerInstalled){
-        if(s.runnerMismatch)say("! "+t("wiz.replacingRunner",{r:s.runnerRegisteredTo||"?"}));
-        const r=await installRunnerWithProgress(say);
+        if(s.runnerMismatch)wizSay("! "+t("wiz.replacingRunner",{r:s.runnerRegisteredTo||"?"}));
+        const r=await installRunnerWithProgress(wizSay);
         if(!r.succeeded)throw new Error(t("su.installBtn")+": "+t("c.failed"));
         return t("su.runnerDone");
       }
-      const r=await api("/api/setup/start-runner",{method:"POST"});
-      if(r.log)say(r.log);
+      const r=await api(withApp("/api/setup/start-runner"),{method:"POST"});
+      if(r.log)wizSay(r.log);
       if(!r.succeeded)throw new Error(t("su.startBtn")+": "+t("c.failed"));
       return t("su.started");
     }))failedAt=failedAt||t("wiz.runner");
 
     if(!failedAt){
       if(!await step("verify",async()=>{
-        const v=await api("/api/setup/status");
+        const v=await api(withApp("/api/setup/status"));
         if(!v.runnerInstalled)throw new Error(t("wiz.verifyFail"));
         if(v.runnersError)return t("wiz.verifyUnknown");
         if(v.runnersTotal>0)return t("wiz.runnerVerified",{n:v.runnersTotal});
         throw new Error(t("wiz.verifyFail"));
       }))failedAt=t("wiz.verify");
-    }else mark("verify","warn");
+    }else wizMark("verify","warn");
+
+    // Kick off the deploy via workflow_dispatch. A failure here is a warning,
+    // not a dead end — a push to the default branch deploys just the same.
+    if(!failedAt){
+      wizMark("deploy","run",undefined,true);
+      try{
+        const r=await api(withApp("/api/setup/trigger-deploy"),{method:"POST"});
+        wizMark("deploy","ok",t("wz.firstDeployStarted",{b:esc(r.branch)}));
+        wizSay("✓ workflow_dispatch @ "+r.branch);
+      }catch(ex){
+        wizMark("deploy","warn",esc(ex.message));
+        wizSay("! "+ex.message);
+      }
+    }else wizMark("deploy","warn");
   }
 
-  // Finish up — but only touch the modal if its body is still the wizard's
-  // and it is still visible: the user may have hidden it ("run in background")
-  // or opened a different dialog meanwhile, and that dialog's buttons must
-  // not be clobbered.
-  const owns=!!$("#wiz-bar");
-  const visible=!$("#modal").classList.contains("hidden");
-  if(owns){
-    const sum=$("#wiz-summary");
-    if(sum)sum.innerHTML=failedAt
-      ?`<span class="chip err">✕</span> <span style="color:var(--err)">${esc(t("wiz.failed",{x:failedAt}))}</span>`
-      :`<span class="chip ok">✓</span> <span style="color:var(--ok)">${esc(t("wiz.done"))}</span>`;
-  }
-  if(owns&&visible){
-    modalSticky=false;
-    setModalButtons([{label:t("c.close"),primary:!failedAt}]);
-  }else{
-    toast(failedAt?t("wiz.failed",{x:failedAt}):t("wiz.done"),failedAt?"err":"ok");
-  }
+  $("#wiz-summary").innerHTML=failedAt
+    ?`<span class="chip err">✕</span> <span style="color:var(--err)">${esc(t("wiz.failed",{x:failedAt}))}</span>`
+    :`<span class="chip ok">✓</span> <span style="color:var(--ok)">${esc(t("wz.published"))}</span>`;
   ghCache=null;
-  await loadGithubView();
+  pubBusy=false;
+  $("#btn-publish").disabled=false;
+  $("#btn-publish").textContent=failedAt?t("wz.publish"):t("wz.republish");
+  if(!failedAt)startPubPoll();
 }
 
 /* --- "continue without GitHub sign-in" popup: token (PAT) entry lives here --- */
@@ -2176,20 +2784,285 @@ $("#settings-form").addEventListener("submit",async e=>{
   e.preventDefault();
   if(!$("#set-repo").value.trim()){toast(t("se.pickFirst"),"err");return;}
   try{
+    const app=currentApp();
+    const url=$("#set-repo").value.trim();
     const r=await api("/api/settings",{method:"POST",body:JSON.stringify({
-      repoUrl:$("#set-repo").value.trim(),
+      // Editing the selected app's paths goes through its id; a different URL
+      // upserts by URL (existing app or a brand-new one).
+      appId:app&&app.repoUrl===url?app.id:null,
+      repoUrl:url,
       composeFile:$("#set-compose").value.trim()||null,
       runnerDirectory:$("#set-runnerdir").value.trim()||null,
       githubClientId:$("#set-clientid").value.trim()})});
     ghCache=null;
+    setCurrentApp(r.appId,{quiet:true,force:true});
     toast(t("se.connected",{r:r.fullName+(r.isPrivate?" ("+t("se.private")+")":"")}),"ok");
     await loadGithubView();
   }catch(ex){toast(ex.message,"err");}
 });
+$("#btn-app-remove").onclick=()=>{
+  const app=currentApp();if(!app)return;
+  openModal(t("app.remove"),esc(t("app.removeConfirm",{n:app.fullName||app.id})),[
+    {label:t("c.cancel")},{label:t("c.remove"),danger:true,onClick:async()=>{closeModal();
+      try{
+        const r=await api("/api/settings/apps/remove",{method:"POST",body:JSON.stringify({id:app.id})});
+        toast(t("app.removed",{n:app.fullName||app.id,p:(r.kept||[]).join(", ")}),"ok");
+        setCurrentApp(null,{quiet:true,force:true});
+        await loadGithubView();
+      }catch(ex){toast(ex.message,"err");}}}]);
+};
+
+/* ================= domains / reverse proxy ================= */
+async function loadDomains(){
+  let st;
+  try{st=await api("/api/proxy/status");}
+  catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");return;}
+  renderProxyBody(st);
+  $("#domains-card").classList.toggle("hidden",!st.installed);
+  if(st.installed){await populateDomainTargets();await renderDomainsTable();}
+}
+function renderProxyBody(st){
+  const body=$("#proxy-body");
+  if(!st.installed){
+    body.innerHTML=`<p class="muted" style="font-size:13px">${esc(t("dm.installHelp"))}</p>
+      ${!st.ports80443Free?`<div class="banner">${esc(t("dm.portBusy"))}${st.probeUnreliable?" "+esc(t("dm.probeUnreliable")):""}</div>`:""}
+      <div class="form-grid" style="margin-top:8px">
+        <div><label for="proxy-email">${esc(t("dm.email"))}</label><input id="proxy-email" placeholder="ops@example.com" spellcheck="false"></div>
+        <div><label style="margin:0 0 5px">&nbsp;</label><label style="display:flex;align-items:center;gap:6px;font-size:13px;margin:9px 0"><input type="checkbox" id="proxy-staging" style="width:auto"> ${esc(t("dm.staging"))}</label></div>
+      </div>
+      <div style="margin-top:12px"><button class="primary" id="btn-proxy-install">${esc(t("dm.installBtn"))}</button></div>`;
+    $("#btn-proxy-install").onclick=()=>installProxy(!st.ports80443Free);
+    return;
+  }
+  const chip=st.running?`<span class="chip ok">${t("dm.running")}</span>`:`<span class="chip warn">${t("dm.stopped")}</span>`;
+  body.innerHTML=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${chip}
+    <span class="muted" style="font-size:13px">${st.acmeEmail?esc(st.acmeEmail):t("dm.noEmail")}${st.staging?` · ${t("dm.stagingOn")}`:""} · ${t("dm.domainsN",{n:st.domainsCount})}</span></div>`;
+}
+async function installProxy(force){
+  const email=$("#proxy-email").value.trim(),staging=$("#proxy-staging").checked;
+  const btn=$("#btn-proxy-install");btn.disabled=true;
+  try{await api("/api/proxy/install",{method:"POST",body:JSON.stringify({acmeEmail:email,staging,force})});
+    toast(t("dm.installed"),"ok");await loadDomains();}
+  catch(ex){toast(ex.message,"err");btn.disabled=false;}
+}
+async function populateDomainTargets(){
+  let catalog=[];
+  try{const r=await api("/api/apps");catalog=(r.items||[]).filter(a=>a.installed);}catch{}
+  const appOpts=apps.map(a=>`<option value="${esc(a.id)}">${esc(a.fullName||a.id)}</option>`).join("");
+  const catOpts=catalog.map(a=>`<option value="catalog:${esc(a.id)}">${esc(a.name)} (${t("dm.catalog")})</option>`).join("");
+  $("#dm-target").innerHTML=(appOpts+catOpts)||`<option value="">${t("dm.noTargets")}</option>`;
+}
+async function renderDomainsTable(){
+  let d;
+  try{d=await api("/api/domains");}catch(ex){toast(ex.message,"err");return;}
+  const rows=(d.items||[]).map(x=>[
+    {h:`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.domain)}</a>`},
+    {h:esc(x.target)+(x.drift?` <span class="chip warn" title="${esc(t("dm.driftHint"))}">${t("dm.drift")}</span>`:"")},
+    {h:`${esc(x.targetContainer)}:${x.targetPort}`,cls:"mono"},
+    {h:x.running?`<span class="chip ok">${t("dm.up")}</span>`:`<span class="chip mut">${t("dm.down")}</span>`},
+    {h:`<span class="chip ${x.enabled?"ok":"mut"}">${x.enabled?t("dm.enabled"):t("dm.disabled")}</span>`},
+    {h:`<div class="actions-cell"><button class="small" data-dm-toggle="${esc(x.domain)}">${x.enabled?t("dm.disable"):t("dm.enable")}</button><button class="small danger" data-dm-del="${esc(x.domain)}">${t("c.remove")}</button></div>`},
+  ]);
+  table($("#domains-table"),[t("dm.thDomain"),t("dm.thTarget"),t("dm.thContainer"),t("dm.thRunning"),t("dm.thState"),t("th.actions")],rows,t("dm.none"));
+}
+$("#domains-table").addEventListener("click",async e=>{
+  const tg=e.target.closest("[data-dm-toggle]"),dl=e.target.closest("[data-dm-del]");
+  if(tg){try{await api(`/api/domains/${encodeURIComponent(tg.dataset.dmToggle)}/toggle`,{method:"POST"});await renderDomainsTable();}catch(ex){toast(ex.message,"err");}}
+  if(dl){openModal(t("dm.rmTitle"),esc(t("dm.rmConfirm",{d:dl.dataset.dmDel})),[{label:t("c.cancel")},{label:t("c.remove"),danger:true,onClick:async()=>{closeModal();
+    try{await api(`/api/domains/${encodeURIComponent(dl.dataset.dmDel)}/delete`,{method:"POST"});await renderDomainsTable();await loadDomains();}catch(ex){toast(ex.message,"err");}}}]);}
+});
+$("#btn-dm-add").onclick=async()=>{
+  const domain=$("#dm-domain").value.trim(),target=$("#dm-target").value;
+  if(!domain){toast(t("dm.domainReq"),"err");return;}
+  if(!target){toast(t("dm.targetReq"),"err");return;}
+  const btn=$("#btn-dm-add");btn.disabled=true;
+  try{const r=await api("/api/domains",{method:"POST",body:JSON.stringify({domain,target})});
+    $("#dm-domain").value="";$("#dm-dns-hint").textContent="";
+    toast(r.dnsMatches?t("dm.added",{d:r.domain}):t("dm.addedDnsWarn",{d:r.domain}),r.dnsMatches?"ok":"warn");
+    await renderDomainsTable();await loadDomains();}
+  catch(ex){toast(ex.message,"err");}
+  btn.disabled=false;
+};
+let dmDnsTimer=null;
+$("#dm-domain").addEventListener("input",()=>{
+  const hint=$("#dm-dns-hint"),v=$("#dm-domain").value.trim();
+  if(!v){hint.textContent="";return;}
+  hint.textContent="…";hint.className="port-hint";
+  clearTimeout(dmDnsTimer);
+  dmDnsTimer=setTimeout(async()=>{
+    try{const r=await api("/api/domains/check?domain="+encodeURIComponent(v));
+      if($("#dm-domain").value.trim()!==v)return;
+      hint.textContent=r.matches?t("dm.dnsOk",{ip:r.resolvedIps[0]||""})
+        :(r.resolvedIps.length?t("dm.dnsMismatch",{ips:r.resolvedIps.join(", "),srv:r.serverIps.join(", ")}):t("dm.dnsNone"));
+      hint.className="port-hint "+(r.matches?"ok":"err");
+    }catch{hint.textContent="";}
+  },500);
+});
+/* ================= backups ================= */
+const BK_ENGINES={postgres:1,mysql:1,mariadb:1,mongo:1,redis:1};
+async function loadBackups(){await populateBackupSources();await renderBackupsList();}
+async function populateBackupSources(){
+  let dbs=[],vols=[];
+  try{const r=await api("/api/apps");dbs=(r.items||[]).filter(a=>a.installed&&BK_ENGINES[a.id]);}catch{}
+  try{const r=await api("/api/docker/volumes");vols=(r.items||[]).map(v=>v.Name).filter(Boolean);}catch{}
+  const dbOpts=dbs.map(a=>`<option value="db|pinqops-${esc(a.id)}|${esc(a.id)}">${esc(a.name)} (${t("bk.db")})</option>`).join("");
+  const volOpts=vols.map(v=>`<option value="volume|${esc(v)}|volume">${esc(v)} (${t("bk.volume")})</option>`).join("");
+  $("#bk-source").innerHTML=(dbOpts+volOpts)||`<option value="">${t("bk.noSources")}</option>`;
+}
+async function renderBackupsList(){
+  let d;try{d=await api("/api/backups");}catch(ex){toast(ex.message,"err");return;}
+  const el=$("#backups-list");
+  if(!d.items||!d.items.length){el.innerHTML=`<div class="card"><div class="empty">${t("bk.none")}</div></div>`;return;}
+  el.innerHTML=d.items.map(tg=>{
+    const snaps=(tg.snapshots||[]).map(s=>`<div class="app-row">
+      <span class="aname aports" style="font-family:var(--mono)">${esc(s.name)}</span>
+      <span class="aports">${fmtBytes(s.sizeBytes)} · ${timeAgo(s.at)}</span>
+      <span class="aact">
+        <button class="small" data-bk-dl="${esc(tg.id)}|${esc(s.name)}">${t("bk.download")}</button>
+        <button class="small" data-bk-restore="${esc(tg.id)}|${esc(s.name)}">${t("bk.restore")}</button>
+        <button class="small danger" data-bk-delsnap="${esc(tg.id)}|${esc(s.name)}">${t("c.remove")}</button>
+      </span></div>`).join("")||`<div class="empty" style="padding:14px 16px">${t("bk.noSnaps")}</div>`;
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="section-head" style="margin-bottom:12px">
+        <span class="chip ${tg.enabled?"ok":"mut"}">${tg.enabled?t("bk.on"):t("bk.off")}</span>
+        <b>${esc(tg.name)}</b><span class="chip mut">${esc(tg.engine)}</span>
+        <span class="muted" style="font-size:12px">${t("bk."+tg.schedule)}${tg.schedule!=="hourly"?` @${tg.atHour}:00 UTC`:""} · ${t("bk.keepN",{n:tg.retentionCount})}${tg.lastRun?` · ${t("bk.last",{a:timeAgo(tg.lastRun)})}`:""}</span>
+        <span class="spacer"></span>
+        <button class="small primary" data-bk-run="${esc(tg.id)}">${t("bk.runNow")}</button>
+        <button class="small" data-bk-toggle="${esc(tg.id)}">${tg.enabled?t("bk.disable"):t("bk.enable")}</button>
+        <button class="small danger" data-bk-del="${esc(tg.id)}">${t("bk.rm")}</button>
+      </div>
+      <div class="applist">${snaps}</div></div>`;
+  }).join("");
+}
+async function downloadBackup(target,snapshot){
+  try{
+    const res=await fetch(`/api/backups/download?target=${encodeURIComponent(target)}&snapshot=${encodeURIComponent(snapshot)}`,{headers:{Authorization:"Bearer "+token}});
+    if(!res.ok)throw new Error("HTTP "+res.status);
+    const url=URL.createObjectURL(await res.blob());
+    const a=document.createElement("a");a.href=url;a.download=snapshot;a.click();URL.revokeObjectURL(url);
+  }catch(ex){toast(ex.message,"err");}
+}
+$("#backups-list").addEventListener("click",async e=>{
+  const run=e.target.closest("[data-bk-run]"),tog=e.target.closest("[data-bk-toggle]"),del=e.target.closest("[data-bk-del]"),
+        rst=e.target.closest("[data-bk-restore]"),dls=e.target.closest("[data-bk-delsnap]"),dl=e.target.closest("[data-bk-dl]");
+  if(run){run.disabled=true;try{await api(`/api/backups/run/${encodeURIComponent(run.dataset.bkRun)}`,{method:"POST"});toast(t("bk.ran"),"ok");await renderBackupsList();}catch(ex){toast(ex.message,"err");run.disabled=false;}}
+  if(tog){try{await api(`/api/backups/targets/${encodeURIComponent(tog.dataset.bkToggle)}/toggle`,{method:"POST"});await renderBackupsList();}catch(ex){toast(ex.message,"err");}}
+  if(del){openModal(t("bk.rmTitle"),esc(t("bk.rmConfirm")),[{label:t("c.cancel")},{label:t("bk.rm"),danger:true,onClick:async()=>{closeModal();
+    try{await api(`/api/backups/targets/${encodeURIComponent(del.dataset.bkDel)}`,{method:"DELETE"});await renderBackupsList();}catch(ex){toast(ex.message,"err");}}}]);}
+  if(rst){const[tid,snap]=rst.dataset.bkRestore.split("|");openModal(t("bk.restoreTitle"),esc(t("bk.restoreConfirm",{s:snap})),[{label:t("c.cancel")},{label:t("bk.restore"),danger:true,onClick:async()=>{closeModal();
+    try{await api("/api/backups/restore",{method:"POST",body:JSON.stringify({targetId:tid,snapshot:snap})});toast(t("bk.restored"),"ok");}catch(ex){toast(ex.message,"err");}}}]);}
+  if(dls){const[tid,snap]=dls.dataset.bkDelsnap.split("|");try{await api(`/api/backups/${encodeURIComponent(tid)}/snapshots/${encodeURIComponent(snap)}`,{method:"DELETE"});await renderBackupsList();}catch(ex){toast(ex.message,"err");}}
+  if(dl){const[tid,snap]=dl.dataset.bkDl.split("|");downloadBackup(tid,snap);}
+});
+$("#btn-bk-add").onclick=async()=>{
+  const src=$("#bk-source").value;if(!src){toast(t("bk.sourceReq"),"err");return;}
+  const[kind,name,engine]=src.split("|");
+  const btn=$("#btn-bk-add");btn.disabled=true;
+  try{await api("/api/backups/targets",{method:"POST",body:JSON.stringify({kind,name,engine,
+    schedule:$("#bk-schedule").value,atHour:+$("#bk-athour").value,retentionCount:+$("#bk-retention").value})});
+    toast(t("bk.added"),"ok");await renderBackupsList();}
+  catch(ex){toast(ex.message,"err");}
+  btn.disabled=false;
+};
+/* ================= api tokens ================= */
+async function loadTokens(){
+  let d;try{d=await api("/api/tokens");}catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");return;}
+  const rows=(d.items||[]).map(x=>[
+    esc(x.name),
+    {h:`<span class="chip ${x.scope==="admin"?"warn":x.scope==="deploy"?"info":"mut"}">${esc(x.scope)}</span>`},
+    {h:`pot_…${esc(x.last4)}`,cls:"mono"},
+    x.lastUsedAt?timeAgo(x.lastUsedAt):t("tk.never"),
+    {h:`<button class="small danger" data-tk-del="${esc(x.id)}">${t("c.remove")}</button>`},
+  ]);
+  table($("#tokens-table"),[t("tk.thName"),t("tk.thScope"),t("tk.thToken"),t("tk.thUsed"),t("th.actions")],rows,t("tk.none"));
+}
+$("#tokens-table").addEventListener("click",async e=>{
+  const del=e.target.closest("[data-tk-del]");if(!del)return;
+  try{await api(`/api/tokens/${encodeURIComponent(del.dataset.tkDel)}`,{method:"DELETE"});await loadTokens();}
+  catch(ex){toast(ex.message,"err");}
+});
+$("#btn-tk-add").onclick=async()=>{
+  const name=$("#tk-name").value.trim()||"token",scope=$("#tk-scope").value;
+  const btn=$("#btn-tk-add");btn.disabled=true;
+  try{
+    const r=await api("/api/tokens",{method:"POST",body:JSON.stringify({name,scope})});
+    $("#tk-name").value="";
+    // Shown once — the plaintext is never retrievable again.
+    openModal(t("tk.createdTitle"),
+      `<p class="muted" style="font-size:13px">${esc(t("tk.createdHelp"))}</p>
+       <div class="device-code" style="font-size:14px;letter-spacing:0;word-break:break-all;user-select:all">${esc(r.token)}</div>
+       <button class="small" id="btn-tk-copy">${esc(t("tk.copy"))}</button>`,
+      [{label:t("c.close"),primary:true}]);
+    $("#btn-tk-copy").onclick=()=>{navigator.clipboard.writeText(r.token).then(()=>toast(t("tk.copied"),"ok"),()=>{});};
+    await loadTokens();
+  }catch(ex){toast(ex.message,"err");}
+  btn.disabled=false;
+};
+/* ================= users & roles (admin) ================= */
+const ROLE_CHIP={admin:"warn",deployer:"info",viewer:"mut"};
+async function loadUsers(){
+  let d;try{d=await api("/api/users");}catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");return;}
+  const rows=(d.items||[]).map(u=>[
+    {h:esc(u.username)+(u.isSelf?` <span class="chip mut">${t("us.you")}</span>`:"")},
+    {h:`<select class="small" data-us-role="${esc(u.username)}" ${u.isSelf?"disabled":""}>`+
+       ["viewer","deployer","admin"].map(r=>`<option value="${r}" ${r===u.role?"selected":""}>${esc(t("us."+r))}</option>`).join("")+`</select>`},
+    {h:u.isSelf?"":`<button class="small" data-us-pw="${esc(u.username)}">${t("us.resetPw")}</button> `+
+       `<button class="small danger" data-us-del="${esc(u.username)}">${t("c.remove")}</button>`},
+  ]);
+  table($("#users-table"),[t("us.thName"),t("us.thRole"),t("th.actions")],rows,t("us.none"));
+}
+$("#users-table").addEventListener("change",async e=>{
+  const sel=e.target.closest("select[data-us-role]");if(!sel)return;
+  try{await api(`/api/users/${encodeURIComponent(sel.dataset.usRole)}/role`,{method:"POST",body:JSON.stringify({role:sel.value})});
+    toast(t("us.roleChanged"),"ok");await loadUsers();}
+  catch(ex){toast(ex.message,"err");await loadUsers();}
+});
+$("#users-table").addEventListener("click",e=>{
+  const del=e.target.closest("[data-us-del]"),pw=e.target.closest("[data-us-pw]");
+  if(del){const name=del.dataset.usDel;openModal(t("us.rmTitle"),esc(t("us.rmConfirm",{u:name})),[{label:t("c.cancel")},
+    {label:t("c.remove"),danger:true,onClick:async()=>{closeModal();
+      try{await api(`/api/users/${encodeURIComponent(name)}`,{method:"DELETE"});toast(t("us.removed",{u:name}),"ok");await loadUsers();}
+      catch(ex){toast(ex.message,"err");}}}]);}
+  if(pw){const name=pw.dataset.usPw;
+    openModal(t("us.pwTitle",{u:name}),
+      `<label for="us-newpw" data-i18n="us.passPh">New password (min 8)</label><input id="us-newpw" type="password" autocomplete="new-password" style="width:100%">`,
+      [{label:t("c.cancel")},{label:t("us.resetPw"),primary:true,onClick:async()=>{
+        const val=$("#us-newpw").value;if(val.length<8){toast(t("lk.min8"),"err");return;}
+        closeModal();
+        try{await api(`/api/users/${encodeURIComponent(name)}/password`,{method:"POST",body:JSON.stringify({password:val})});toast(t("us.pwReset",{u:name}),"ok");}
+        catch(ex){toast(ex.message,"err");}}}]);}
+});
+$("#btn-us-add").onclick=async()=>{
+  const username=$("#us-name").value.trim(),password=$("#us-pass").value,role=$("#us-role").value;
+  if(username.length<2){toast(t("us.nameReq"),"err");return;}
+  if(password.length<8){toast(t("lk.min8"),"err");return;}
+  const btn=$("#btn-us-add");btn.disabled=true;
+  try{await api("/api/users",{method:"POST",body:JSON.stringify({username,password,role})});
+    $("#us-name").value="";$("#us-pass").value="";
+    toast(t("us.created",{u:username}),"ok");await loadUsers();}
+  catch(ex){toast(ex.message,"err");}
+  btn.disabled=false;
+};
+/* ================= audit log (admin) ================= */
+async function loadAudit(){
+  const q=[];const u=$("#au-user").value.trim(),a=$("#au-action").value.trim();
+  if(u)q.push("user="+encodeURIComponent(u));if(a)q.push("action="+encodeURIComponent(a));
+  let d;try{d=await api("/api/audit"+(q.length?"?"+q.join("&"):""));}catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");table($("#audit-table"),[],[],esc(ex.message));return;}
+  const rows=(d.items||[]).map(e=>[
+    {h:`<span title="${fullTime(e.ts)}">${timeAgo(e.ts)}</span>`},
+    esc(e.user),
+    {h:`<span class="mono">${esc(e.action)}</span>`},
+    esc(e.target||"–"),
+    {h:e.result==="ok"?`<span class="chip ok">${e.status}</span>`:`<span class="chip err">${e.status}</span>`},
+  ]);
+  table($("#audit-table"),[t("au.thTime"),t("au.thUser"),t("au.thAction"),t("au.thTarget"),t("au.thResult")],rows,t("au.none"));
+}
+$("#btn-au-filter").onclick=()=>loadAudit();
 /* ================= notifications settings ================= */
 async function loadNotifSettings(){
   try{
-    const n=await api("/api/notifications");
+    const n=await api(withApp("/api/notifications"));
     $("#nf-ev-ok").checked=n.events.deploySucceeded;$("#nf-ev-fail").checked=n.events.deployFailed;
     $("#nf-ev-health").checked=n.events.healthCheckFailed;$("#nf-ev-rb").checked=n.events.rolledBack;
     $("#nf-webhook-on").checked=n.webhook.enabled;$("#nf-webhook-url").value=n.webhook.url||"";
@@ -2200,7 +3073,7 @@ async function loadNotifSettings(){
   }catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
 }
 async function saveNotifSettings(){
-  await api("/api/notifications",{method:"POST",body:JSON.stringify({
+  await api(withApp("/api/notifications"),{method:"POST",body:JSON.stringify({
     events:{deploySucceeded:$("#nf-ev-ok").checked,deployFailed:$("#nf-ev-fail").checked,
             healthCheckFailed:$("#nf-ev-health").checked,rolledBack:$("#nf-ev-rb").checked},
     webhook:{enabled:$("#nf-webhook-on").checked,url:$("#nf-webhook-url").value.trim()},
@@ -2216,7 +3089,7 @@ for(const ch of["webhook","slack","telegram"]){
   $(`#nf-test-${ch}`).addEventListener("click",async()=>{
     try{
       await saveNotifSettings(); // test what's on screen, not stale disk state
-      const r=await api("/api/notifications/test",{method:"POST",body:JSON.stringify({channel:ch})});
+      const r=await api(withApp("/api/notifications/test"),{method:"POST",body:JSON.stringify({channel:ch})});
       toast(r.delivered?t("nf.testOk",{c:ch}):t("nf.testFail",{c:ch}),r.delivered?"ok":"err");
     }catch(ex){toast(ex.message,"err");}
   });
@@ -2236,6 +3109,7 @@ applyLang();
 (async function boot(){
   try{
     const s=await api("/api/auth/state");
+    multiUser=!!s.multiUser;
     if(s.needsSetup){showLock(true);return;}
     if(!token){showLock(false);return;}
     try{await enterApp();}catch{showLock(false);}

@@ -40,13 +40,63 @@ A minimal dashboard for the server — containers (with inline logs), images,
 volumes, network management with a visual map, workflow runs, runner status
 (down to when it last ran a job), and system health. English + Turkish.
 
-The **GitHub** menu is the whole onboarding: sign in with GitHub (OAuth
-device flow) or paste a token, search and pick your repository from the
-list — no URLs — and hit **Install**. A step-by-step wizard commits the
-deploy workflow, generates the compose file, **registers the self-hosted
-runner** (replacing a leftover runner from another repository if it finds
-one), streams the install log live, and verifies on GitHub that the runner
-actually appeared. Deploys then happen the intended way: merge to your default branch.
+The **GitHub** menu is the whole onboarding, as a three-step wizard:
+**1 Connect** (OAuth device flow or paste a token) → **2 Choose repository**
+(search and pick from the list — no URLs) → **3 Publish**. If the repository
+has no Dockerfile, the publish step **detects the stack** (Node, Python, Go,
+.NET, Rust, PHP, Ruby, or a static site) and offers a generated, editable
+Dockerfile to commit — monorepos included. It then shows the ports up front —
+the container side read from your Dockerfile's `EXPOSE` (with a clear warning
+and an editable field when there is none), the host side pre-filled with a free
+port and validated live as you type — then
+commits the deploy workflow, generates the compose file, **registers the
+self-hosted runner** (replacing a leftover runner from another repository if
+it finds one), streams the install log live, verifies on GitHub that the
+runner actually appeared, sets the `APP_COMPOSE_PATH` repository variable, and
+kicks off the first build & deploy via `workflow_dispatch`. Once the container
+is up, the wizard shows a live "your app is running" card that opens the app.
+Subsequent deploys happen the intended way: merge to your default branch.
+
+One server hosts **as many apps as you like**: repeat step 2 for each
+repository (the topbar's app switcher jumps between them) — every app gets its
+own compose project under `/opt/pinqops/apps/<app>/`, its own deploy history,
+`.env`, notifications, and its own runner.
+
+**Real domains with automatic HTTPS** are one click away: the **Domains** page
+installs a managed Caddy reverse proxy and points `app.example.com` at your
+container with an auto-renewing Let's Encrypt certificate (HTTP/3 included) —
+apps stay reachable on their host ports too, and the plain port access keeps
+working for anything without a domain.
+
+**Preview environments** give every pull request its own throwaway copy of the
+app: open a PR and GitHub builds its image, the runner brings it up as a
+separate compose project (`<repo>-pr-<n>`) on a free host port next to
+production — reusing production's `.env` minus the pinned image/tag/host-port —
+and, when the app has a domain, routes `pr-<n>.<domain>` to it. Closing the PR
+tears it down. Only the repository's own PRs are ever built and deployed (a
+fork's PR never reaches your server), and a concurrency cap bounds how many run
+at once. The Deployments page lists live previews with a manual teardown; repos
+on the older workflow get a one-click "update workflow" in the wizard.
+
+**Scheduled backups** cover your data services: the **Backups** page dumps a
+database container (PostgreSQL, MySQL, MariaDB, MongoDB, Redis) or any docker
+volume on a schedule, with retention, one-click restore, and download — a
+background worker runs whatever is due.
+
+**Teams & audit**: invite more users (Settings → Users) with a role —
+**viewer** (read-only), **deployer** (deploy & roll back), or **admin**
+(everything, including user management) — the same permission levels the API
+tokens use. Every change made through the dashboard is written to an
+append-only audit log (who, what, result), browsable and filterable on the
+**Audit** page. Your existing single password migrates to the first admin
+automatically.
+
+**AI agents & the API**: create a scoped API token (Settings → API tokens) and
+drive deploys, rollbacks, status, logs, and metrics from any agent. `pinqops
+mcp` is a Model Context Protocol server that works with Claude Code/Desktop,
+Cursor, and the OpenAI Agents SDK / Codex; the token-authed REST API also works
+with plain OpenAI function calling or curl. See
+[docs/API-AND-AGENTS.md](docs/API-AND-AGENTS.md).
 
 There is also a curated catalog of ~50 one-click apps (Redis, PostgreSQL,
 Grafana, MinIO, …) — installed with generated passwords (retrievable in the
@@ -72,7 +122,7 @@ sudo journalctl -u pinqops-ui | grep "setup code"   # then open http://<server>:
 On first visit, enter the **setup code** (from the journalctl line above, or
 the console when running in the foreground) and create a dashboard password.
 Then open the **GitHub** menu (it carries a lock icon until connected), sign
-in, pick your repository, and run the install wizard. Use `--port <n>` /
+in, pick your repository, and hit Publish. Use `--port <n>` /
 `--host <addr>` to change where it listens, and `--cert <pfx>` to serve
 HTTPS.
 

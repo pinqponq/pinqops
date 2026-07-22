@@ -11,8 +11,38 @@ itself. This page lists the knobs that exist.
 | `<compose-dir>/.env` | `pinqops deploy`/`rollback`, dashboard env editor | 0600 | `PINQOPS_IMAGE`, `PINQOPS_TAG`, `PINQOPS_HOST_PORT`, `PINQOPS_CONTAINER_PORT` + your app env |
 | `<compose-dir>/.pinqops/history.json` | deploy engine | 0600 | Deploy history (newest first, capped at 100) |
 | `<compose-dir>/.pinqops/notify.json` | dashboard (read by the CLI) | 0600 | Notification channels + event toggles |
-| `~/.config/pinqops/ui.json` | dashboard | 0600 | Dashboard password hash, GitHub connection (PAT) |
+| `~/.config/pinqops/ui.json` | dashboard | 0600 | Dashboard password hash, GitHub token (PAT), and the list of connected apps (`apps: [{id, repoUrl, composeFile, runnerDirectory}]`). A pre-multi-app config (single top-level `RepoUrl`) is migrated automatically on first load — the existing app keeps its paths; don't downgrade the binary after adding more apps. |
 | `~/.config/pinqops/app-credentials.json` | dashboard | 0600 | Generated catalog app credentials |
+| `/opt/pinqops/proxy/domains.json` | dashboard (read by the runner CLI) | 0600 | Managed-proxy domain routes + ACME settings |
+| `/opt/pinqops/proxy/Caddyfile` | dashboard | 0644 | Generated from `domains.json`; mounted read-only into the `pinqops-proxy` container |
+| `~/.config/pinqops/backups.json` | dashboard | 0600 | Scheduled backup targets |
+| `/opt/pinqops/backups/<target>/<ts>.<ext>` | dashboard | — | Backup snapshots (pruned to each target's retention) |
+
+## Scheduled backups (optional)
+
+The **Backups** page schedules dumps of a database container or a docker volume
+(hourly / daily / weekly, with a retention count). A per-minute background
+worker runs whatever is due; **Run now** triggers one immediately. Database
+dumps use the container's own tools and read the password from the container's
+environment (`sh -c` inside the container), so no credential is ever passed on
+the command line: `pg_dumpall` for PostgreSQL, `mysqldump` / `mariadb-dump`,
+`mongodump`, and `redis-cli SAVE`; volumes are tarred through a throwaway
+`alpine` container. Restore overwrites the target in place (a Redis restore
+stops the container, swaps the RDB, and starts it). Snapshots can be downloaded
+or deleted from the UI. A run refuses to start under 500 MB of free disk.
+
+## Domains & HTTPS (optional reverse proxy)
+
+The **Domains** page installs a managed Caddy container (`pinqops-proxy`) that
+publishes ports 80/443 and gives your apps real domains with automatic Let's
+Encrypt certificates (HTTP/3 included). It forwards to each app by container
+name over the shared `pinqops-apps` network — `reverse_proxy <repo>-app-1:<port>`
+— so domain access and the plain `host:port` publish coexist. A DNS preflight
+warns when a domain does not yet point at this server, and a staging-CA toggle
+lets you validate the setup without hitting Let's Encrypt's rate limits.
+Catalog apps (Grafana, etc.) can take domains the same way. The dashboard's own
+port (7467) stays direct, so the control plane is reachable even if the proxy is
+down.
 
 ## The compose project pinqops generates
 
@@ -20,7 +50,7 @@ itself. This page lists the knobs that exist.
 |---|---|
 | Project name | Your repository name, so containers read `<repo>-app-1` |
 | Image | `${PINQOPS_IMAGE}:${PINQOPS_TAG}` — both pinned by `pinqops deploy`, so the image follows the repository even after a rename |
-| Published port | `${PINQOPS_HOST_PORT:-8080}:${PINQOPS_CONTAINER_PORT}` — the container side is read from your Dockerfile's `EXPOSE`, the host side is the first free port from `8080` |
+| Published port | `${PINQOPS_HOST_PORT:-8080}:${PINQOPS_CONTAINER_PORT}` — the container side is read from your Dockerfile's `EXPOSE` (`80` when there is none), the host side is the first free port from `8080`. The dashboard's publish wizard shows both up front and lets you override them before (or after) going live |
 
 ### Changing the port
 

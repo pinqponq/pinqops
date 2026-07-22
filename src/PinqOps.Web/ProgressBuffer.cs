@@ -19,13 +19,17 @@ public sealed class ProgressBuffer
 
     public int Generation { get; private set; }
 
-    public void Start()
+    /// <summary>Which app the current (or last) run belongs to.</summary>
+    public string? AppId { get; private set; }
+
+    public void Start(string? appId = null)
     {
         lock (_gate)
         {
             _lines.Clear();
             Active = true;
             Succeeded = null;
+            AppId = appId;
             Generation++;
         }
     }
@@ -51,7 +55,7 @@ public sealed class ProgressBuffer
     {
         lock (_gate)
         {
-            return new { active = Active, succeeded = Succeeded, generation = Generation, log = Text() };
+            return new { active = Active, succeeded = Succeeded, generation = Generation, appId = AppId, log = Text() };
         }
     }
 
