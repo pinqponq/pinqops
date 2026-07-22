@@ -93,17 +93,11 @@ public sealed class NotificationConfigStore
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        var directory = System.IO.Path.GetDirectoryName(_path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        var isNew = !File.Exists(_path);
-        File.WriteAllText(_path, JsonSerializer.Serialize(config, SerializerOptions));
-        if (isNew && !OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(_path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
+        // Atomic + owner-only (0600 from the first byte): this file can hold a
+        // Telegram bot token, and File.WriteAllText would both expose it during
+        // the create-then-chmod window and — on any save after the first — leave
+        // the mode unfixed, as well as risk a torn write that Load reads as
+        // corrupt and silently turns notifications off.
+        SecureFile.WriteAllText(_path, JsonSerializer.Serialize(config, SerializerOptions));
     }
 }

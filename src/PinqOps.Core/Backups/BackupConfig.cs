@@ -114,17 +114,10 @@ public sealed class BackupConfigStore
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        var directory = System.IO.Path.GetDirectoryName(_path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        var isNew = !File.Exists(_path);
-        File.WriteAllText(_path, JsonSerializer.Serialize(config, SerializerOptions));
-        if (isNew && !OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(_path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
+        // Atomic + owner-only (0600 from the first byte): the previous
+        // File.WriteAllText left the mode unfixed on every save after the first,
+        // and a torn write would be read back as corrupt and silently reset the
+        // schedule.
+        SecureFile.WriteAllText(_path, JsonSerializer.Serialize(config, SerializerOptions));
     }
 }
