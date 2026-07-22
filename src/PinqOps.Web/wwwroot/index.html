@@ -252,6 +252,10 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
         <label for="lock-code"><span data-i18n="lk.code">Setup code</span> <span class="muted" data-i18n="lk.codeHint">(printed on the server console)</span></label>
         <input id="lock-code" autocomplete="off" spellcheck="false">
       </div>
+      <div id="lock-user-wrap" class="hidden">
+        <label for="lock-user" data-i18n="lk.user">Username</label>
+        <input id="lock-user" autocomplete="username" spellcheck="false">
+      </div>
       <label for="lock-pass" data-i18n="lk.pw">Password</label>
       <input id="lock-pass" type="password" autocomplete="current-password" required>
       <div id="lock-pass2-wrap" class="hidden">
@@ -665,6 +669,32 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
           </div>
           <div class="tablewrap" style="margin-top:14px"><table id="tokens-table"></table></div>
         </div>
+
+        <div class="card admin-only hidden" id="users-card" style="margin-top:16px">
+          <h3 data-i18n="us.card">Users &amp; roles</h3>
+          <p class="muted" style="font-size:13px" data-i18n="us.help">Each user has a role: viewer (read-only), deployer (deploy &amp; roll back), or admin (everything, including users). Roles map to the same permissions as API token scopes.</p>
+          <div class="inline-form" style="margin-top:10px">
+            <input id="us-name" style="min-width:150px;flex:1" data-i18n-ph="us.namePh">
+            <input id="us-pass" type="password" autocomplete="new-password" style="min-width:150px;flex:1" data-i18n-ph="us.passPh">
+            <select id="us-role" style="width:auto">
+              <option value="viewer" data-i18n="us.viewer">viewer</option>
+              <option value="deployer" selected data-i18n="us.deployer">deployer</option>
+              <option value="admin" data-i18n="us.admin">admin</option>
+            </select>
+            <button class="primary" id="btn-us-add" data-i18n="us.createBtn">Add user</button>
+          </div>
+          <div class="tablewrap" style="margin-top:14px"><table id="users-table"></table></div>
+        </div>
+      </section>
+
+      <!-- audit -->
+      <section id="view-audit" class="view hidden">
+        <div class="section-head"><h2 data-i18n="au.title">Audit log</h2><div class="spacer"></div>
+          <input id="au-user" data-i18n-ph="au.userPh" style="width:140px">
+          <input id="au-action" data-i18n-ph="au.actionPh" style="width:180px">
+          <button class="small" id="btn-au-filter" data-i18n="au.filter">Filter</button></div>
+        <p class="muted" style="font-size:13px" data-i18n="au.help">Every change made through the dashboard — who did what, and whether it succeeded.</p>
+        <div class="tablewrap"><table id="audit-table"></table></div>
       </section>
     </div>
   </main>
@@ -691,7 +721,7 @@ en:{
  "nav.grp.monitor":"Monitor","nav.grp.docker":"Docker","nav.grp.server":"Server","nav.grp.github":"Publishing",
  "nav.overview":"Overview","nav.deployments":"Deployments","nav.runner":"Runner","nav.containers":"Containers",
  "nav.images":"Images","nav.storage":"Storage","nav.networks":"Networks","nav.system":"System","nav.settings":"Settings",
- "nav.apps":"Apps","nav.github":"GitHub","nav.domains":"Domains","nav.backups":"Backups",
+ "nav.apps":"Apps","nav.github":"GitHub","nav.domains":"Domains","nav.backups":"Backups","nav.audit":"Audit",
  "bk.add":"Schedule a backup","bk.help":"Back up a database container or a docker volume on a schedule. Snapshots are kept under /opt/pinqops/backups; older ones are pruned to the retention count.",
  "bk.source":"Source","bk.schedule":"Schedule","bk.hourly":"Hourly","bk.daily":"Daily","bk.weekly":"Weekly",
  "bk.atHour":"At hour (UTC)","bk.retention":"Keep last","bk.addBtn":"Add schedule","bk.added":"Backup schedule added",
@@ -864,6 +894,18 @@ en:{
  "lk.login":"Dashboard login","lk.setup":"First run — create the dashboard password.","lk.code":"Setup code",
  "lk.codeHint":"(printed on the server console)","lk.pw":"Password","lk.pw2":"Repeat password","lk.signIn":"Sign in",
  "lk.create":"Create password","lk.min8":"At least 8 characters.","lk.mismatch":"Passwords do not match.","lk.noApi":"Cannot reach the API: {e}",
+ "lk.user":"Username",
+ "us.card":"Users & roles","us.help":"Each user has a role: viewer (read-only), deployer (deploy & roll back), or admin (everything, including users). Roles map to the same permissions as API token scopes.",
+ "us.namePh":"username","us.passPh":"password (min 8)","us.createBtn":"Add user",
+ "us.viewer":"viewer","us.deployer":"deployer","us.admin":"admin",
+ "us.thName":"User","us.thRole":"Role","us.you":"you","us.none":"No users.",
+ "us.resetPw":"Reset password","us.created":"User '{u}' added.","us.removed":"User '{u}' removed.","us.roleChanged":"Role updated.",
+ "us.rmTitle":"Remove user","us.rmConfirm":"Remove user '{u}'? They are signed out everywhere.",
+ "us.pwTitle":"Reset password for '{u}'","us.pwReset":"Password reset for '{u}'.",
+ "us.nameReq":"Username must be at least 2 characters.",
+ "au.title":"Audit log","au.help":"Every change made through the dashboard — who did what, and whether it succeeded.",
+ "au.userPh":"filter by user","au.actionPh":"filter by action","au.filter":"Filter",
+ "au.thTime":"When","au.thUser":"User","au.thAction":"Action","au.thTarget":"Target","au.thResult":"Result","au.none":"No audit entries yet.",
  "err.network":"Can't reach the server — check that pinqops-ui is running and reachable on this network.",
  "err.session":"Your session expired — please sign in again.",
  "err.timeout":"The server took too long to respond — it may be busy or starting up.",
@@ -1056,6 +1098,18 @@ tr:{
  "lk.login":"Panel girişi","lk.setup":"İlk çalıştırma — panel şifresini oluştur.","lk.code":"Kurulum kodu",
  "lk.codeHint":"(sunucu konsolunda yazar)","lk.pw":"Şifre","lk.pw2":"Şifreyi tekrar gir","lk.signIn":"Giriş yap",
  "lk.create":"Şifre oluştur","lk.min8":"En az 8 karakter.","lk.mismatch":"Şifreler eşleşmiyor.","lk.noApi":"API'ye ulaşılamıyor: {e}",
+ "lk.user":"Kullanıcı adı",
+ "us.card":"Kullanıcılar & roller","us.help":"Her kullanıcının bir rolü var: viewer (salt-okunur), deployer (dağıtım & geri alma) ya da admin (kullanıcılar dahil her şey). Roller, API token scope'larıyla aynı izinlere karşılık gelir.",
+ "us.namePh":"kullanıcı adı","us.passPh":"şifre (min 8)","us.createBtn":"Kullanıcı ekle",
+ "us.viewer":"viewer","us.deployer":"deployer","us.admin":"admin",
+ "us.thName":"Kullanıcı","us.thRole":"Rol","us.you":"sen","us.none":"Kullanıcı yok.",
+ "us.resetPw":"Şifre sıfırla","us.created":"'{u}' kullanıcısı eklendi.","us.removed":"'{u}' kullanıcısı kaldırıldı.","us.roleChanged":"Rol güncellendi.",
+ "us.rmTitle":"Kullanıcıyı kaldır","us.rmConfirm":"'{u}' kullanıcısı kaldırılsın mı? Her yerde oturumu kapatılır.",
+ "us.pwTitle":"'{u}' için şifre sıfırla","us.pwReset":"'{u}' şifresi sıfırlandı.",
+ "us.nameReq":"Kullanıcı adı en az 2 karakter olmalı.",
+ "au.title":"Denetim kaydı","au.help":"Panelden yapılan her değişiklik — kim ne yaptı ve başarılı oldu mu.",
+ "au.userPh":"kullanıcıya göre","au.actionPh":"işleme göre","au.filter":"Filtrele",
+ "au.thTime":"Ne zaman","au.thUser":"Kullanıcı","au.thAction":"İşlem","au.thTarget":"Hedef","au.thResult":"Sonuç","au.none":"Henüz denetim kaydı yok.",
  "err.network":"Sunucuya ulaşılamıyor — pinqops-ui çalışıyor ve bu ağdan erişilebilir mi kontrol et.",
  "err.session":"Oturumun sona erdi — lütfen tekrar giriş yap.",
  "err.timeout":"Sunucu yanıt vermek için çok uzun sürdü — meşgul olabilir ya da yeni başlıyor olabilir.",
@@ -1139,6 +1193,7 @@ const IC={
  layers:'<svg class="ic" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
  db:'<svg class="ic" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
  activity:'<svg class="ic" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+ shield:'<svg class="ic" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
  sliders:'<svg class="ic" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>',
  refresh:'<svg class="ic" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
  logout:'<svg class="ic" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
@@ -1157,7 +1212,11 @@ let deviceTimer=null, deviceHandle=null, repoList=[];
 const NAV=[["nav.grp.monitor",[["overview",IC.grid],["deployments",IC.rocket],["runner",IC.cpu]]],
            ["nav.grp.docker",[["containers",IC.box],["apps",IC.zap],["images",IC.layers],["storage",IC.db],["networks",IC.globe]]],
            ["nav.grp.github",[["github",IC.github],["domains",IC.globe]]],
-           ["nav.grp.server",[["backups",IC.save],["system",IC.activity],["settings",IC.sliders]]]];
+           ["nav.grp.server",[["backups",IC.save],["system",IC.activity],["audit",IC.shield],["settings",IC.sliders]]]];
+// Views only an admin may open; the nav hides them for other roles.
+const ADMIN_VIEWS=["audit"];
+let currentScope="read";
+const isAdmin=()=>currentScope==="admin";
 
 /* ================= api ================= */
 // Descriptive fallback for status codes the backend didn't explain itself.
@@ -1263,6 +1322,7 @@ function buildNav(){
   for(const[grp,items]of NAV){
     const cap=document.createElement("div");cap.className="nav-cap";cap.textContent=t(grp);nav.appendChild(cap);
     for(const[v,icon]of items){
+      if(ADMIN_VIEWS.includes(v)&&!isAdmin())continue; // admin-only views stay hidden for other roles
       const b=document.createElement("button");b.dataset.view=v;b.innerHTML=icon+`<span class="txt">${t("nav."+v)}</span>`;
       // The GitHub entry stays visible but carries a lock until connected —
       // clicking it lands on the sign-in flow either way.
@@ -1279,18 +1339,22 @@ function updateGhUi(){
 $("#lang-select") .onchange=e=>{lang=e.target.value;localStorage.setItem("pinqops.lang",lang);applyLang();refresh(true);};
 
 /* ================= lock screen ================= */
+let multiUser=false;
 function renderLock(){
   $("#lock-sub").textContent=needsSetup?t("lk.setup"):t("lk.login");
   $("#lock-btn").textContent=needsSetup?t("lk.create"):t("lk.signIn");
   $("#lock-pass2-wrap").classList.toggle("hidden",!needsSetup);
   $("#lock-code-wrap").classList.toggle("hidden",!needsSetup);
+  // Only ask for a username once more than one user exists — a lone migrated
+  // admin still signs in with just a password.
+  $("#lock-user-wrap").classList.toggle("hidden",needsSetup||!multiUser);
 }
 function showLock(setup){
   needsSetup=setup;
   $("#app").classList.add("hidden");$("#lock").classList.remove("hidden");
   renderLock();
-  $("#lock-error").textContent="";$("#lock-pass").value="";$("#lock-pass2").value="";$("#lock-code").value="";
-  (setup?$("#lock-code"):$("#lock-pass")).focus();
+  $("#lock-error").textContent="";$("#lock-pass").value="";$("#lock-pass2").value="";$("#lock-code").value="";$("#lock-user").value="";
+  (setup?$("#lock-code"):(multiUser?$("#lock-user"):$("#lock-pass"))).focus();
 }
 $("#lock-form").addEventListener("submit",async e=>{
   e.preventDefault();const err=$("#lock-error");err.textContent="";
@@ -1302,7 +1366,7 @@ $("#lock-form").addEventListener("submit",async e=>{
       const r=await api("/api/auth/setup",{method:"POST",body:JSON.stringify({password:pass,setupCode:$("#lock-code").value.trim()})});
       token=r.token;
     }else{
-      const r=await api("/api/auth/login",{method:"POST",body:JSON.stringify({password:pass})});
+      const r=await api("/api/auth/login",{method:"POST",body:JSON.stringify({password:pass,username:$("#lock-user").value.trim()||undefined})});
       token=r.token;
     }
     localStorage.setItem("pinqops.token",token);
@@ -1313,6 +1377,9 @@ $("#lock-form").addEventListener("submit",async e=>{
 /* ================= shell ================= */
 async function enterApp(){
   $("#lock").classList.add("hidden");$("#app").classList.remove("hidden");
+  try{const me=await api("/api/me");currentScope=me.scope||"read";}catch{currentScope="read";}
+  $("#users-card").classList.toggle("hidden",!isAdmin());
+  buildNav();
   await loadGithubView();
   setView(ghConfigured?view:"github");
 }
@@ -1356,7 +1423,8 @@ async function refresh(quiet){
     else if(view==="system")await loadSystem();
     // Settings holds form state the user may be editing; populate only on
     // view entry / manual refresh, never on the auto-refresh tick.
-    else if(view==="settings"&&!quiet){await loadNotifSettings();await loadTokens();}
+    else if(view==="settings"&&!quiet){await loadNotifSettings();await loadTokens();if(isAdmin())await loadUsers();}
+    else if(view==="audit"&&!quiet)await loadAudit();
     // The GitHub view talks to the GitHub API (identity, repos, readiness) —
     // refresh it only on view entry / manual refresh, never on the auto-refresh
     // tick, to protect the rate limit and the user's in-progress search.
@@ -2931,6 +2999,66 @@ $("#btn-tk-add").onclick=async()=>{
   }catch(ex){toast(ex.message,"err");}
   btn.disabled=false;
 };
+/* ================= users & roles (admin) ================= */
+const ROLE_CHIP={admin:"warn",deployer:"info",viewer:"mut"};
+async function loadUsers(){
+  let d;try{d=await api("/api/users");}catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");return;}
+  const rows=(d.items||[]).map(u=>[
+    {h:esc(u.username)+(u.isSelf?` <span class="chip mut">${t("us.you")}</span>`:"")},
+    {h:`<select class="small" data-us-role="${esc(u.username)}" ${u.isSelf?"disabled":""}>`+
+       ["viewer","deployer","admin"].map(r=>`<option value="${r}" ${r===u.role?"selected":""}>${esc(t("us."+r))}</option>`).join("")+`</select>`},
+    {h:u.isSelf?"":`<button class="small" data-us-pw="${esc(u.username)}">${t("us.resetPw")}</button> `+
+       `<button class="small danger" data-us-del="${esc(u.username)}">${t("c.remove")}</button>`},
+  ]);
+  table($("#users-table"),[t("us.thName"),t("us.thRole"),t("th.actions")],rows,t("us.none"));
+}
+$("#users-table").addEventListener("change",async e=>{
+  const sel=e.target.closest("select[data-us-role]");if(!sel)return;
+  try{await api(`/api/users/${encodeURIComponent(sel.dataset.usRole)}/role`,{method:"POST",body:JSON.stringify({role:sel.value})});
+    toast(t("us.roleChanged"),"ok");await loadUsers();}
+  catch(ex){toast(ex.message,"err");await loadUsers();}
+});
+$("#users-table").addEventListener("click",e=>{
+  const del=e.target.closest("[data-us-del]"),pw=e.target.closest("[data-us-pw]");
+  if(del){const name=del.dataset.usDel;openModal(t("us.rmTitle"),esc(t("us.rmConfirm",{u:name})),[{label:t("c.cancel")},
+    {label:t("c.remove"),danger:true,onClick:async()=>{closeModal();
+      try{await api(`/api/users/${encodeURIComponent(name)}`,{method:"DELETE"});toast(t("us.removed",{u:name}),"ok");await loadUsers();}
+      catch(ex){toast(ex.message,"err");}}}]);}
+  if(pw){const name=pw.dataset.usPw;
+    openModal(t("us.pwTitle",{u:name}),
+      `<label for="us-newpw" data-i18n="us.passPh">New password (min 8)</label><input id="us-newpw" type="password" autocomplete="new-password" style="width:100%">`,
+      [{label:t("c.cancel")},{label:t("us.resetPw"),primary:true,onClick:async()=>{
+        const val=$("#us-newpw").value;if(val.length<8){toast(t("lk.min8"),"err");return;}
+        closeModal();
+        try{await api(`/api/users/${encodeURIComponent(name)}/password`,{method:"POST",body:JSON.stringify({password:val})});toast(t("us.pwReset",{u:name}),"ok");}
+        catch(ex){toast(ex.message,"err");}}}]);}
+});
+$("#btn-us-add").onclick=async()=>{
+  const username=$("#us-name").value.trim(),password=$("#us-pass").value,role=$("#us-role").value;
+  if(username.length<2){toast(t("us.nameReq"),"err");return;}
+  if(password.length<8){toast(t("lk.min8"),"err");return;}
+  const btn=$("#btn-us-add");btn.disabled=true;
+  try{await api("/api/users",{method:"POST",body:JSON.stringify({username,password,role})});
+    $("#us-name").value="";$("#us-pass").value="";
+    toast(t("us.created",{u:username}),"ok");await loadUsers();}
+  catch(ex){toast(ex.message,"err");}
+  btn.disabled=false;
+};
+/* ================= audit log (admin) ================= */
+async function loadAudit(){
+  const q=[];const u=$("#au-user").value.trim(),a=$("#au-action").value.trim();
+  if(u)q.push("user="+encodeURIComponent(u));if(a)q.push("action="+encodeURIComponent(a));
+  let d;try{d=await api("/api/audit"+(q.length?"?"+q.join("&"):""));}catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");table($("#audit-table"),[],[],esc(ex.message));return;}
+  const rows=(d.items||[]).map(e=>[
+    {h:`<span title="${fullTime(e.ts)}">${timeAgo(e.ts)}</span>`},
+    esc(e.user),
+    {h:`<span class="mono">${esc(e.action)}</span>`},
+    esc(e.target||"–"),
+    {h:e.result==="ok"?`<span class="chip ok">${e.status}</span>`:`<span class="chip err">${e.status}</span>`},
+  ]);
+  table($("#audit-table"),[t("au.thTime"),t("au.thUser"),t("au.thAction"),t("au.thTarget"),t("au.thResult")],rows,t("au.none"));
+}
+$("#btn-au-filter").onclick=()=>loadAudit();
 /* ================= notifications settings ================= */
 async function loadNotifSettings(){
   try{
@@ -2981,6 +3109,7 @@ applyLang();
 (async function boot(){
   try{
     const s=await api("/api/auth/state");
+    multiUser=!!s.multiUser;
     if(s.needsSetup){showLock(true);return;}
     if(!token){showLock(false);return;}
     try{await enterApp();}catch{showLock(false);}

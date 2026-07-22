@@ -346,6 +346,14 @@ app.MapPost("/api/auth/login", async (HttpContext context, UiConfigStore store, 
     return Results.Json(new { token = sessions.Create(account.Username, account.Role), username = account.Username, role = account.Role });
 });
 
+// Who the current session/token is, so the UI can gate admin-only views. Runs
+// after the auth middleware, so the identity is already resolved.
+app.MapGet("/api/me", (HttpContext context) => Results.Json(new
+{
+    user = context.Items["user"] as string ?? "",
+    scope = context.Items["scope"] as string ?? "read",
+}));
+
 app.MapPost("/api/auth/logout", (HttpContext context, SessionStore sessions) =>
 {
     if (ReadBearerToken(context) is { } token)
