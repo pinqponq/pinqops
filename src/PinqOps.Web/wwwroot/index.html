@@ -66,7 +66,8 @@ code{font-family:var(--mono);font-size:12px;background:var(--panel2);border:1px 
 .sidebar .logo{padding:20px 20px 10px;font-size:17px}
 .nav{flex:1;overflow-y:auto;padding:4px 12px 12px}
 .nav-cap{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);font-weight:700;margin:16px 10px 6px}
-.nav button{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:none;border:1px solid transparent;padding:8px 11px;border-radius:var(--radius);color:var(--muted);font-weight:500;margin-bottom:1px;font-size:13.5px}
+.nav button{display:flex;align-items:center;justify-content:flex-start;gap:11px;width:100%;text-align:left;background:none;border:1px solid transparent;padding:8px 11px;border-radius:var(--radius);color:var(--muted);font-weight:500;margin-bottom:1px;font-size:13.5px}
+.nav button svg{flex:none}
 .nav button:hover{background:var(--panel2);color:var(--text)}
 .nav button.active{background:rgba(255,255,255,.06);color:var(--text);border-color:transparent}
 .nav button.active svg{color:var(--text)}
@@ -206,6 +207,42 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
 .gh-btn{background:var(--panel2);border-color:var(--line2)}
 .inline-form{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .inline-form input,.inline-form select{width:auto}
+/* ---------- github view: single-screen repo picker + danger zone ---------- */
+.card-head{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.card-head h3{margin:0}
+.card-head svg{color:var(--muted)}
+.gh-repo-row{display:flex;gap:9px;align-items:center}
+.gh-repo-row select{flex:1;min-width:0}
+.gh-danger{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px;padding:13px 15px;border:1px solid rgba(248,113,113,.28);border-radius:var(--radius);background:rgba(248,113,113,.04)}
+.gh-danger .spacer{flex:1;min-width:0}
+.gh-danger b{font-size:13px}
+.gh-danger .muted{font-size:12px}
+/* ---------- notifications: event pills + channel rows with brand logos ---------- */
+.nf-events{display:flex;gap:8px;flex-wrap:wrap}
+.nf-ev{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:6px 13px;cursor:pointer;color:var(--muted);user-select:none;transition:border-color .15s,color .15s,background .15s}
+.nf-ev:hover{border-color:var(--line2);color:var(--text)}
+.nf-ev input{position:absolute;opacity:0;width:0;height:0;margin:0}
+.nf-ev .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);transition:background .15s}
+.nf-ev:has(input:checked){border-color:var(--line2);color:var(--text);background:rgba(255,255,255,.045)}
+.nf-ev:has(input:checked) .dot{background:var(--ok)}
+.nf-sub{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:700;margin:20px 0 10px}
+.nf-ch{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel2);transition:border-color .15s}
+.nf-ch+.nf-ch{margin-top:10px}
+.nf-ch:has(input.nf-toggle:checked){border-color:var(--line2)}
+.nf-ch-head{display:flex;align-items:center;gap:11px;min-width:158px}
+.nf-logo{width:36px;height:36px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--line)}
+.nf-logo svg{width:21px;height:21px}
+.nf-ch-name{font-weight:650;font-size:13.5px}
+.nf-inputs{display:flex;gap:8px;flex:1;min-width:220px;flex-wrap:wrap;align-items:center;transition:opacity .15s}
+.nf-inputs input{flex:1;min-width:140px}
+.nf-ch:not(:has(input.nf-toggle:checked)) .nf-inputs{opacity:.4}
+.nf-switch{position:relative;width:38px;height:22px;flex:none;display:inline-block}
+.nf-switch input{position:absolute;inset:0;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:1}
+.nf-switch .track{position:absolute;inset:0;border-radius:999px;background:var(--line2);transition:background .15s}
+.nf-switch .track::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--faint);transition:transform .18s,background .15s}
+.nf-switch input:checked+.track{background:rgba(52,211,153,.3)}
+.nf-switch input:checked+.track::after{transform:translateX(16px);background:var(--ok)}
+@media(max-width:640px){.nf-ch-head{min-width:0;width:100%}.nf-inputs{min-width:0}}
 /* hamburger toggle + drawer scrim — desktop hides both */
 .nav-toggle{display:none}
 .nav-scrim{display:none}
@@ -441,19 +478,17 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
           <div class="card"><dl class="kv" id="sys-docker"></dl></div></div>
       </section>
 
-      <!-- github: the 3-step publish wizard (connect → choose repo → publish) -->
+      <!-- github: single screen — connect, pick a repository (dropdown), publish -->
       <section id="view-github" class="view hidden">
-        <ol class="stepper" id="wiz-stepper">
-          <li class="st" data-step="1"><span class="st-n">1</span><span class="st-l" data-i18n="wz.s1">Connect GitHub</span></li>
-          <li class="st" data-step="2"><span class="st-n">2</span><span class="st-l" data-i18n="wz.s2">Choose repository</span></li>
-          <li class="st" data-step="3"><span class="st-n">3</span><span class="st-l" data-i18n="wz.s3">Publish</span></li>
-        </ol>
 
-        <!-- step 1: connect -->
-        <div class="card wstep hidden" id="wstep-1">
-          <h3 data-i18n="se.gh">GitHub connection</h3>
+        <!-- connection -->
+        <div class="card">
+          <div class="card-head">
+            <svg class="ic brand" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+            <h3 data-i18n="se.gh">GitHub connection</h3>
+          </div>
 
-          <!-- account -->
+          <!-- account (visible once connected) -->
           <div id="gh-identity" class="hidden identity">
             <img id="gh-avatar" alt="">
             <div class="who"><b id="gh-login"></b><div id="gh-name"></div></div>
@@ -478,29 +513,22 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
             </div>
             <div style="margin-top:14px"><a href="#" id="link-no-gh" class="muted" style="font-size:12.5px" data-i18n="se.noGhLink">Continue without signing in with GitHub?</a></div>
           </div>
-          <div class="wstep-foot"><span class="spacer"></span>
-            <button class="primary hidden" id="btn-step1-next" data-i18n="wz.continue">Continue →</button></div>
         </div>
 
-        <!-- step 2: pick a repository -->
-        <div class="card wstep hidden" id="wstep-2">
-          <h3 data-i18n="gh.pickTitle">Set up a repository</h3>
-          <p class="muted" style="font-size:13px;margin-bottom:10px" data-i18n="gh.pickHelp">Search your repositories and pick the one to publish — the next step readies everything (workflow, compose project, runner) automatically.</p>
-          <input id="repo-search" data-i18n-ph="se.repoSearch">
-          <div id="repo-list" class="repolist"></div>
-          <div class="wstep-foot">
-            <button class="ghost" id="btn-step2-back" data-i18n="wz.back">← Back</button>
-            <span class="spacer"></span>
-            <button class="primary" id="btn-repo-install" disabled data-i18n="wz.continue">Continue →</button>
+        <!-- repository: a dropdown that lists connected apps + your repositories;
+             everything below (ports, publish, remove) acts on the chosen one -->
+        <div class="card hidden" id="gh-repo-card" style="margin-top:16px">
+          <div class="card-head"><h3 data-i18n="gh.repoTitle">Repository</h3></div>
+          <p class="muted" style="font-size:13px;margin-bottom:12px" data-i18n="gh.repoHelp">Pick a repository to publish or manage. Connected apps deploy right away; choosing a new repository sets everything up automatically. Publishing is optional — connecting GitHub alone is fine.</p>
+          <div class="gh-repo-row">
+            <select id="repo-select" aria-label="Repository"></select>
+            <button type="button" class="icon" id="btn-repo-refresh" title=""></button>
           </div>
-        </div>
 
-        <!-- step 3: publish (ports + sub-step progress + live status) -->
-        <div class="card wstep hidden" id="wstep-3">
-          <h3 style="display:flex;align-items:center;gap:10px"><span data-i18n="wz.s3">Publish</span>
-            <span style="flex:1"></span>
-            <span class="muted" style="font-weight:500;text-transform:none;letter-spacing:0;font-family:var(--mono);font-size:12px" id="pub-repo-name"></span>
-            <a href="#" id="lnk-change-repo" style="font-size:12px;text-transform:none;letter-spacing:0;font-weight:500" data-i18n="wz.changeRepo">change repository</a></h3>
+          <div id="gh-no-repo" class="muted hidden" style="font-size:13px;margin-top:14px" data-i18n="gh.noRepoSel">Choose a repository above to set it up and publish it.</div>
+
+          <!-- publish (ports + sub-step progress + live status) for the chosen repo -->
+          <div id="gh-publish" class="hidden" style="margin-top:16px">
 
           <div id="pub-ports">
             <div class="port-grid">
@@ -531,12 +559,20 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
 
           <div id="pub-live"></div>
 
-          <div class="wstep-foot">
-            <button class="ghost" id="btn-step3-back" data-i18n="wz.back">← Back</button>
-            <span class="spacer"></span>
+          <div class="wstep-foot"><span class="spacer"></span>
             <button class="primary" id="btn-publish" data-i18n="wz.publish">Publish</button>
           </div>
-        </div>
+          </div><!-- /#gh-publish -->
+
+          <!-- danger zone: two-step app removal (confirm, then type the name) -->
+          <div id="gh-danger" class="hidden gh-danger">
+            <div class="spacer">
+              <b data-i18n="app.removeTitle">Remove this app</b>
+              <div class="muted" data-i18n="app.removeHint">Detach it from the dashboard. Files on the server (compose project, runner) are kept and re-attach if you add the repository again.</div>
+            </div>
+            <button type="button" class="small danger" id="btn-app-remove" data-i18n="app.remove">Remove app</button>
+          </div>
+        </div><!-- /#gh-repo-card -->
 
         <!-- manual fallback for repos outside the list + server paths -->
         <div class="card" style="margin-top:16px">
@@ -553,8 +589,6 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
               </div>
               <div style="display:flex;gap:10px;margin-top:14px">
                 <button type="submit" class="small" data-i18n="c.save">Save</button>
-                <span style="flex:1"></span>
-                <button type="button" class="small danger hidden" id="btn-app-remove" data-i18n="app.remove">Remove app</button>
               </div>
               <div class="stat-sub" id="settings-meta" style="margin-top:10px"></div>
             </form>
@@ -616,34 +650,60 @@ a.live-card:hover{background:rgba(52,211,153,.1);text-decoration:none}
         </div>
 
         <div class="card" style="margin-top:16px">
-          <h3 data-i18n="nf.card">Notifications</h3>
+          <div class="card-head">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <h3 data-i18n="nf.card">Notifications</h3>
+          </div>
           <p class="muted" style="font-size:13px" data-i18n="nf.help">Deploy results (success, failure, rollback) are sent to the enabled channels. Settings are stored next to the compose project, so CLI deploys on the runner send them too.</p>
           <form id="notif-form">
-            <div class="form-grid">
-              <div class="full" style="display:flex;gap:16px;flex-wrap:wrap">
-                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="nf-ev-ok" style="width:auto" checked> <span data-i18n="nf.evOk">deploy succeeded</span></label>
-                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="nf-ev-fail" style="width:auto" checked> <span data-i18n="nf.evFail">deploy failed</span></label>
-                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="nf-ev-health" style="width:auto" checked> <span data-i18n="nf.evHealth">health check failed</span></label>
-                <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="nf-ev-rb" style="width:auto" checked> <span data-i18n="nf.evRb">rolled back</span></label>
+            <div class="nf-sub" data-i18n="nf.eventsLbl">Notify on</div>
+            <div class="nf-events">
+              <label class="nf-ev"><input type="checkbox" id="nf-ev-ok" checked><span class="dot"></span><span data-i18n="nf.evOk">deploy succeeded</span></label>
+              <label class="nf-ev"><input type="checkbox" id="nf-ev-fail" checked><span class="dot"></span><span data-i18n="nf.evFail">deploy failed</span></label>
+              <label class="nf-ev"><input type="checkbox" id="nf-ev-health" checked><span class="dot"></span><span data-i18n="nf.evHealth">health check failed</span></label>
+              <label class="nf-ev"><input type="checkbox" id="nf-ev-rb" checked><span class="dot"></span><span data-i18n="nf.evRb">rolled back</span></label>
+            </div>
+
+            <div class="nf-sub" data-i18n="nf.channelsLbl">Channels</div>
+
+            <div class="nf-ch">
+              <div class="nf-ch-head">
+                <span class="nf-logo"><svg class="ic" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+                <span class="nf-ch-name">Webhook</span>
               </div>
-              <div class="full" style="display:flex;gap:8px;align-items:center">
-                <label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="nf-webhook-on" style="width:auto"> Webhook</label>
-                <input id="nf-webhook-url" placeholder="https://example.com/hook" style="flex:1">
+              <label class="nf-switch" title="Webhook"><input type="checkbox" class="nf-toggle" id="nf-webhook-on"><span class="track"></span></label>
+              <div class="nf-inputs">
+                <input id="nf-webhook-url" placeholder="https://example.com/hook">
                 <button type="button" class="small" id="nf-test-webhook" data-i18n="nf.test">Test</button>
               </div>
-              <div class="full" style="display:flex;gap:8px;align-items:center">
-                <label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="nf-slack-on" style="width:auto"> Slack</label>
-                <input id="nf-slack-url" placeholder="https://hooks.slack.com/services/…" style="flex:1">
+            </div>
+
+            <div class="nf-ch">
+              <div class="nf-ch-head">
+                <span class="nf-logo"><svg class="ic brand" viewBox="0 0 122.8 122.8"><path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#e01e5a"/><path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36c5f0"/><path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2eb67d"/><path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ecb22e"/></svg></span>
+                <span class="nf-ch-name">Slack</span>
+              </div>
+              <label class="nf-switch" title="Slack"><input type="checkbox" class="nf-toggle" id="nf-slack-on"><span class="track"></span></label>
+              <div class="nf-inputs">
+                <input id="nf-slack-url" placeholder="https://hooks.slack.com/services/…">
                 <button type="button" class="small" id="nf-test-slack" data-i18n="nf.test">Test</button>
               </div>
-              <div class="full" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                <label style="margin:0;display:flex;align-items:center;gap:6px"><input type="checkbox" id="nf-tg-on" style="width:auto"> Telegram</label>
-                <input id="nf-tg-token" data-i18n-ph="nf.tgToken" style="flex:1;min-width:160px">
-                <input id="nf-tg-chat" data-i18n-ph="nf.tgChat" style="width:140px">
+            </div>
+
+            <div class="nf-ch">
+              <div class="nf-ch-head">
+                <span class="nf-logo"><svg class="ic brand" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#229ED9"/><path fill="#fff" d="M5.5 11.8l11-4.24c.51-.185.96.124.79.897l-1.87 8.82c-.14.62-.51.775-1.04.482l-2.88-2.124-1.39 1.338c-.153.153-.282.282-.578.282l.205-2.93 5.34-4.823c.232-.204-.05-.32-.36-.116l-6.6 4.156-2.844-.888c-.618-.194-.63-.618.13-.914z"/></svg></span>
+                <span class="nf-ch-name">Telegram</span>
+              </div>
+              <label class="nf-switch" title="Telegram"><input type="checkbox" class="nf-toggle" id="nf-tg-on"><span class="track"></span></label>
+              <div class="nf-inputs">
+                <input id="nf-tg-token" data-i18n-ph="nf.tgToken" style="flex:3;min-width:150px">
+                <input id="nf-tg-chat" data-i18n-ph="nf.tgChat" style="flex:1;min-width:110px;max-width:180px">
                 <button type="button" class="small" id="nf-test-telegram" data-i18n="nf.test">Test</button>
               </div>
-              <div class="full" style="margin-top:6px"><button type="submit" data-i18n="c.save">Save</button></div>
             </div>
+
+            <div style="margin-top:16px"><button type="submit" class="primary" data-i18n="c.save">Save</button></div>
           </form>
         </div>
 
@@ -754,8 +814,14 @@ en:{
  "gh.pickHelp":"Search your repositories and pick the one to publish — the next step readies everything (workflow, compose project, runner) automatically.",
  "gh.moreRepos":"{n} more — keep typing to narrow down","gh.noRepos":"No repository matches.",
  "gh.connectedAs":"connected",
+ "gh.repoTitle":"Repository","gh.refresh":"Refresh repositories",
+ "gh.repoHelp":"Pick a repository to publish or manage. Connected apps deploy right away; choosing a new repository sets everything up automatically. Publishing is optional — connecting GitHub alone is fine.",
+ "gh.selectRepo":"Select a repository…","gh.grpApps":"Connected apps","gh.grpRepos":"Your repositories",
+ "gh.noRepoSel":"Choose a repository above to set it up and publish it.",
  "app.switch":"App","app.add":"Add app","app.remove":"Remove app",
+ "app.removeTitle":"Remove this app","app.removeHint":"Detach it from the dashboard. Files on the server (compose project, runner) are kept and re-attach if you add the repository again.",
  "app.removeConfirm":"Remove “{n}” from the dashboard? Files on the server (compose project, runner) are kept and re-attach if you add the repository again.",
+ "app.removeTypePrompt":"Type {n} to confirm.",
  "app.removed":"{n} removed — kept on disk: {p}",
  "wiz.var":"Repository variable","wiz.varDone":"APP_COMPOSE_PATH → {p}",
  "wiz.varFail":"Could not set APP_COMPOSE_PATH — with a custom compose path the deploy would land on the wrong project. The token needs Variables: write.",
@@ -889,6 +955,7 @@ en:{
  "tk.copy":"Copy","tk.copied":"Copied to clipboard",
  "nf.card":"Notifications","nf.test":"Test","nf.saved":"Notification settings saved",
  "nf.help":"Deploy results (success, failure, rollback) are sent to the enabled channels. Settings are stored next to the compose project, so CLI deploys on the runner send them too.",
+ "nf.eventsLbl":"Notify on","nf.channelsLbl":"Channels",
  "nf.evOk":"deploy succeeded","nf.evFail":"deploy failed","nf.evHealth":"health check failed","nf.evRb":"rolled back",
  "nf.tgToken":"bot token","nf.tgChat":"chat id","nf.tgTokenKeep":"saved: {m} (leave empty to keep)",
  "nf.testOk":"{c}: test notification delivered","nf.testFail":"{c}: delivery failed — check the settings",
@@ -958,8 +1025,14 @@ tr:{
  "gh.pickHelp":"Depolarında ara ve yayınlayacağını seç — sonraki adım her şeyi (workflow, compose projesi, runner) otomatik hazırlar.",
  "gh.moreRepos":"{n} depo daha — daraltmak için yazmaya devam et","gh.noRepos":"Eşleşen depo yok.",
  "gh.connectedAs":"bağlı",
+ "gh.repoTitle":"Depo","gh.refresh":"Depoları yenile",
+ "gh.repoHelp":"Yayınlamak veya yönetmek için bir depo seç. Bağlı uygulamalar hemen dağıtılır; yeni bir depo seçmek her şeyi otomatik hazırlar. Yayınlamak zorunlu değil — sadece GitHub'a bağlanman da yeterli.",
+ "gh.selectRepo":"Bir depo seç…","gh.grpApps":"Bağlı uygulamalar","gh.grpRepos":"Depoların",
+ "gh.noRepoSel":"Kurup yayınlamak için yukarıdan bir depo seç.",
  "app.switch":"Uygulama","app.add":"Uygulama ekle","app.remove":"Uygulamayı kaldır",
+ "app.removeTitle":"Bu uygulamayı kaldır","app.removeHint":"Panelden ayırır. Sunucudaki dosyalar (compose projesi, runner) korunur; depoyu yeniden eklersen aynı yollara bağlanır.",
  "app.removeConfirm":"“{n}” panelden kaldırılsın mı? Sunucudaki dosyalar (compose projesi, runner) korunur; depoyu yeniden eklersen aynı yollara bağlanır.",
+ "app.removeTypePrompt":"Onaylamak için {n} yaz.",
  "app.removed":"{n} kaldırıldı — diskte korunanlar: {p}",
  "wiz.var":"Depo değişkeni","wiz.varDone":"APP_COMPOSE_PATH → {p}",
  "wiz.varFail":"APP_COMPOSE_PATH ayarlanamadı — özel compose yolunda dağıtım yanlış projeye gider. Token'da Variables: write olmalı.",
@@ -1093,6 +1166,7 @@ tr:{
  "tk.copy":"Kopyala","tk.copied":"Panoya kopyalandı",
  "nf.card":"Bildirimler","nf.test":"Dene","nf.saved":"Bildirim ayarları kaydedildi",
  "nf.help":"Dağıtım sonuçları (başarı, hata, geri alma) etkin kanallara gönderilir. Ayarlar compose projesinin yanında saklanır; runner'daki CLI dağıtımları da bildirim yollar.",
+ "nf.eventsLbl":"Şu durumlarda bildir","nf.channelsLbl":"Kanallar",
  "nf.evOk":"dağıtım başarılı","nf.evFail":"dağıtım başarısız","nf.evHealth":"sağlık kontrolü başarısız","nf.evRb":"geri alındı",
  "nf.tgToken":"bot token","nf.tgChat":"chat id","nf.tgTokenKeep":"kayıtlı: {m} (korumak için boş bırak)",
  "nf.testOk":"{c}: test bildirimi ulaştı","nf.testFail":"{c}: gönderilemedi — ayarları kontrol et",
@@ -1204,6 +1278,13 @@ const IC={
  globe:'<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
  save:'<svg class="ic" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>',
  menu:'<svg class="ic" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
+ bell:'<svg class="ic" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
+ // Webhook — a generic outbound HTTP hook (feather "link"), monochrome.
+ webhook:'<svg class="ic" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+ // Slack — the official 4-colour hashtag mark (fill, not stroke).
+ slack:'<svg class="ic brand" viewBox="0 0 122.8 122.8"><path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#e01e5a"/><path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36c5f0"/><path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2eb67d"/><path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ecb22e"/></svg>',
+ // Telegram — white paper plane on the brand-blue disc.
+ telegram:'<svg class="ic brand" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#229ED9"/><path fill="#fff" d="M5.5 11.8l11-4.24c.51-.185.96.124.79.897l-1.87 8.82c-.14.62-.51.775-1.04.482l-2.88-2.124-1.39 1.338c-.153.153-.282.282-.578.282l.205-2.93 5.34-4.823c.232-.204-.05-.32-.36-.116l-6.6 4.156-2.844-.888c-.618-.194-.63-.618.13-.914z"/></svg>',
 };
 
 /* ================= state ================= */
@@ -1313,9 +1394,11 @@ function applyLang(){
   $("#ov-h-runchart").textContent=t("ov.hRunchart");$("#ov-h-reschart").textContent=t("ov.hReschart");
   $("#ov-h-loadspark").textContent=t("ov.hLoadspark");$("#ov-h-memspark").textContent=t("ov.hMemspark");
   $("#net-name").placeholder=t("st.netName");
-  $("#repo-search").placeholder=t("se.repoSearch");
+  $("#btn-repo-refresh").title=t("gh.refresh");
   $("#view-title").textContent=t("nav."+view);
   buildNav();
+  // re-render the repo dropdown (its option/optgroup labels are localised)
+  if(settingsCache&&view==="github")renderGithubView();
   if(!$("#lock").classList.contains("hidden"))renderLock();
 }
 function buildNav(){
@@ -2223,7 +2306,6 @@ function applySettings(s){
   $("#set-compose").value=app?app.composeFile:"";
   $("#set-runnerdir").value=app?app.runnerDirectory:"";
   $("#set-clientid").value=s.githubClientId||"";
-  $("#btn-app-remove").classList.toggle("hidden",!app);
   if(s.version)$("#side-foot").textContent=`pinqops web ui v${s.version}`;
   $("#settings-meta").textContent=`${t("se.configFile")}: ${s.configPath}`;
   ghConfigured=!!(s.patMasked&&apps.length);
@@ -2233,10 +2315,11 @@ async function reloadSettings(){applySettings(await api("/api/settings"));}
 async function loadGithubView(){
   try{
     await reloadSettings();
-    // The repo picker needs a token (the repo list comes from the account).
-    if(settingsCache.patMasked)loadIdentityAndRepos();
-    else{$("#gh-identity").classList.add("hidden");renderRepoList([]);}
-    syncWizard();
+    // The repo dropdown needs a token (the repo list comes from the account).
+    if(settingsCache.patMasked)await loadIdentityAndRepos();
+    else{$("#gh-identity").classList.add("hidden");repoList=[];}
+    renderGithubView();
+    if(currentApp()||pendingRepoUrl)initPublishPanel();
   }catch(ex){if(ex.message!=="unauthorized")toast(ex.message,"err");}
 }
 
@@ -2251,81 +2334,71 @@ async function loadIdentityAndRepos(){
   try{
     const r=await api("/api/github/repos");
     repoList=r.items||[];
-    renderRepoList(repoList,$("#repo-search").value);
-  }catch{ renderRepoList([]); }
+  }catch{ repoList=[]; }
 }
 
-/* --- repo picker: searchable list capped at 30 rows, click to select --- */
-let selectedRepoUrl=null;
-function renderRepoList(items,filter){
-  const list=$("#repo-list");
-  const q=(filter||"").toLowerCase();
-  const shown=items.filter(r=>!q||(r.fullName||"").toLowerCase().includes(q));
-  const cap=30,visible=shown.slice(0,cap);
-  if(selectedRepoUrl&&!visible.some(r=>`https://github.com/${r.fullName}`===selectedRepoUrl))selectedRepoUrl=null;
-  $("#btn-repo-install").disabled=!selectedRepoUrl;
-  list.innerHTML=visible.map(r=>{
-    const url=`https://github.com/${r.fullName}`;
-    const role=r.admin?t("se.admin"):r.push?t("se.write"):t("se.read");
-    const connected=apps.some(a=>a.fullName===r.fullName||a.repoUrl===url);
-    return`<div class="repo-row${url===selectedRepoUrl?" sel":""}" data-repo="${esc(url)}">
-      <span class="rname">${esc(r.fullName)}</span>
-      ${r.isPrivate?`<span class="chip mut">🔒 ${t("se.private")}</span>`:""}
-      ${connected?`<span class="chip ok">✓ ${t("gh.connectedAs")}</span>`:""}
-      <span class="rmeta"><span>${role}</span>${r.pushedAt?`<span>· ${timeAgo(r.pushedAt)}</span>`:""}</span>
-    </div>`;}).join("")||`<div class="more">${t("gh.noRepos")}</div>`;
-  if(shown.length>cap)list.innerHTML+=`<div class="more">${t("gh.moreRepos",{n:shown.length-cap})}</div>`;
-}
-$("#repo-list").addEventListener("click",e=>{
-  const row=e.target.closest(".repo-row");if(!row)return;
-  selectedRepoUrl=row.dataset.repo;
-  renderRepoList(repoList,$("#repo-search").value);
-});
-$("#repo-search").addEventListener("input",e=>renderRepoList(repoList,e.target.value));
-
-/* ================= 3-step publish wizard =================
-   1 Connect → 2 Choose repository → 3 Publish. Step 3 owns the port form,
-   the sub-step progress (formerly a modal) and the live "your app is
-   running" card. The server state decides the landing step on reload. */
-let wizStep=1,pendingRepoUrl=null,pubTimer=null,pubBusy=false;
+/* ================= github view: single screen =================
+   Connection + a repository dropdown (connected apps and the account's other
+   repos) + an inline publish panel for whichever repo is chosen. No stepper —
+   everything is visible and under the user's control at once. */
+let pendingRepoUrl=null,pubTimer=null,pubBusy=false,ghPublishOpen=false;
 let pubInfoCache=null,pubPortsSeededFor=null,portCheckTimer=null,hostPortOk=true;
 
 function stopPubPoll(){if(pubTimer){clearInterval(pubTimer);pubTimer=null;}}
-function gotoStep(n){
-  wizStep=n;
-  if(n!==3)stopPubPoll();
-  for(const i of[1,2,3])$("#wstep-"+i).classList.toggle("hidden",i!==n);
-  document.querySelectorAll("#wiz-stepper .st").forEach(el=>{
-    const s=+el.dataset.step;
-    el.className="st "+(s<n?"done":s===n?"active":"locked");
-    el.querySelector(".st-n").textContent=s<n?"✓":s;
-  });
-  if(n===3)initPublishPanel();
+
+// The dropdown lists connected apps first, then the account's other repos.
+// Each option value encodes which: "app:<id>" or "repo:<url>".
+function renderRepoSelect(){
+  const sel=$("#repo-select");if(!sel)return;
+  const cur=currentApp();
+  const connectedUrls=new Set(apps.map(a=>a.repoUrl));
+  let html="";
+  if(!cur&&!pendingRepoUrl)html+=`<option value="" selected>${esc(t("gh.selectRepo"))}</option>`;
+  if(apps.length)html+=`<optgroup label="${esc(t("gh.grpApps"))}">`+apps.map(a=>
+      `<option value="app:${esc(a.id)}"${cur&&cur.id===a.id?" selected":""}>${esc(a.fullName||a.id)}</option>`).join("")+`</optgroup>`;
+  const others=repoList.filter(r=>!connectedUrls.has(`https://github.com/${r.fullName}`));
+  if(others.length)html+=`<optgroup label="${esc(t("gh.grpRepos"))}">`+others.map(r=>{
+      const url=`https://github.com/${r.fullName}`;
+      return`<option value="repo:${esc(url)}"${url===pendingRepoUrl?" selected":""}>${esc(r.fullName)}${r.isPrivate?` · ${t("se.private")}`:""}</option>`;
+    }).join("")+`</optgroup>`;
+  sel.innerHTML=html;
 }
-// completed steps are clickable to go back; future steps stay locked
-$("#wiz-stepper").addEventListener("click",e=>{
-  const el=e.target.closest(".st.done");
-  if(el&&!pubBusy)gotoStep(+el.dataset.step);
-});
-function syncWizard(){
+function showPublish(open){
+  ghPublishOpen=open;
+  $("#gh-publish").classList.toggle("hidden",!open);
+  $("#gh-no-repo").classList.toggle("hidden",open);
+  if(!open)stopPubPoll();
+}
+// Decide the whole view from the connection + current selection. This never
+// fires network calls itself — loadGithubView and the dropdown handler do.
+function renderGithubView(){
   const connected=!!(settingsCache&&settingsCache.patMasked);
-  $("#btn-step1-next").classList.toggle("hidden",!connected);
-  const hasApp=!!(pendingRepoUrl||currentApp());
-  // Never park the user on a step that lost its prerequisite; only
-  // auto-advance out of step 1 (sign-in just completed), so a refresh never
-  // yanks someone away from the repo list they are browsing.
-  if(!connected)gotoStep(1);
-  else if(wizStep===1)gotoStep(hasApp?3:2);
-  else if(wizStep===3&&!hasApp)gotoStep(2);
-  else gotoStep(wizStep);
+  $("#gh-connect-box").classList.toggle("hidden",connected);
+  $("#gh-repo-card").classList.toggle("hidden",!connected);
+  renderRepoSelect();
+  // the danger zone (remove app) only applies to an already-connected app
+  $("#gh-danger").classList.toggle("hidden",!currentApp()||!!pendingRepoUrl);
+  showPublish(connected&&!!(currentApp()||pendingRepoUrl));
 }
-$("#btn-step1-next").onclick=()=>gotoStep((pendingRepoUrl||currentApp())?3:2);
+$("#repo-select").addEventListener("change",e=>{
+  if(pubBusy){renderRepoSelect();return;} // never switch repo mid-publish
+  const v=e.target.value;
+  if(!v){pendingRepoUrl=null;$("#gh-danger").classList.add("hidden");showPublish(false);return;}
+  if(v.startsWith("app:")){
+    pendingRepoUrl=null;
+    setCurrentApp(v.slice(4),{quiet:true,force:true});
+    $("#gh-danger").classList.remove("hidden");
+    showPublish(true);initPublishPanel();
+  }else if(v.startsWith("repo:")){
+    pendingRepoUrl=v.slice(5);
+    $("#gh-danger").classList.add("hidden"); // not a connected app yet
+    showPublish(true);initPublishPanel();
+  }
+});
+$("#btn-repo-refresh").onclick=()=>loadGithubView();
 $("#app-switch").onchange=e=>setCurrentApp(e.target.value);
-$("#btn-add-app").onclick=()=>{pendingRepoUrl=null;setView("github");gotoStep(2);};
-$("#btn-step2-back").onclick=()=>gotoStep(1);
-$("#btn-step3-back").onclick=()=>{if(!pubBusy)gotoStep(2);};
-$("#lnk-change-repo").addEventListener("click",e=>{e.preventDefault();if(!pubBusy)gotoStep(2);});
-$("#btn-repo-install").onclick=()=>{if(selectedRepoUrl){pendingRepoUrl=selectedRepoUrl;gotoStep(3);}};
+// "add app" from the topbar lands on the GitHub view with the dropdown ready.
+$("#btn-add-app").onclick=()=>{pendingRepoUrl=null;setView("github");setTimeout(()=>{const s=$("#repo-select");if(s)s.focus();},60);};
 $("#btn-publish").onclick=()=>runPublish();
 
 /* --- step 3: sub-step plumbing (shared by pre-seed and the publish run) --- */
@@ -2344,11 +2417,11 @@ const wizMark=(k,state,detail,spin)=>{
     bar.style.width=Math.round(fin/WIZ_KEYS.length*100)+"%";}
 };
 
-/* --- step 3: pre-publish panel — ports form + readiness pre-seed --- */
+/* --- publish panel: ports form + readiness pre-seed for the chosen repo --- */
 async function initPublishPanel(){
   if(pubBusy)return;
-  // A repo picked in step 2 becomes an app connection first (idempotent: an
-  // already-added repo just gets selected).
+  // A brand-new repo picked from the dropdown becomes an app connection first
+  // (idempotent: an already-added repo just gets selected).
   if(pendingRepoUrl){
     const url=pendingRepoUrl;
     const existing=apps.find(a=>a.repoUrl===url);
@@ -2359,13 +2432,14 @@ async function initPublishPanel(){
         ghCache=null;pendingRepoUrl=null;
         await reloadSettings();
         setCurrentApp(r.appId,{quiet:true,force:true});
-        renderRepoList(repoList,$("#repo-search").value);
-      }catch(ex){toast(ex.message,"err");return gotoStep(2);}
+      }catch(ex){toast(ex.message,"err");pendingRepoUrl=null;renderGithubView();return;}
     }
+    // the repo is now a connected app — reflect that in the dropdown + danger zone
+    renderRepoSelect();
+    $("#gh-danger").classList.toggle("hidden",!currentApp());
   }
   const app=currentApp();
-  if(!app)return gotoStep(2);
-  $("#pub-repo-name").textContent=app.fullName||app.repoUrl.replace(/^https?:\/\/[^/]+\//,"");
+  if(!app){showPublish(false);return;}
   $("#pub-live").innerHTML="";
   $("#wiz-summary").innerHTML="";$("#wiz-log").textContent=""; // a previous app's run must not linger
   let info=null,s=null;
@@ -2507,7 +2581,7 @@ $("#pub-ctrport").addEventListener("input",()=>{
 function startPubPoll(){
   stopPubPoll();
   const tick=async()=>{
-    if(view!=="github"||wizStep!==3||pubBusy)return;
+    if(view!=="github"||!ghPublishOpen||pubBusy)return;
     try{renderLive(await api(withApp("/api/setup/app-status")));}catch{}
   };
   tick();
@@ -2584,7 +2658,7 @@ async function runPublish(){
   if(pubBusy)return;
   const app=currentApp();
   const repoUrl=pendingRepoUrl||(app&&app.repoUrl);
-  if(!repoUrl)return gotoStep(2);
+  if(!repoUrl){showPublish(false);return;}
   const hostPort=+$("#pub-hostport").value,ctrPort=+$("#pub-ctrport").value;
   pubBusy=true;stopPubPoll();
   $("#btn-publish").disabled=true;
@@ -2602,11 +2676,11 @@ async function runPublish(){
   if(!await step("connect",async()=>{
     // Idempotent upsert: same URL returns the existing app connection.
     const r=await api("/api/settings",{method:"POST",body:JSON.stringify({repoUrl})});
-    ghCache=null;
+    ghCache=null;pendingRepoUrl=null;
     await reloadSettings();
     setCurrentApp(r.appId,{quiet:true,force:true});
-    selectedRepoUrl=repoUrl;
-    renderRepoList(repoList,$("#repo-search").value);
+    renderRepoSelect();
+    $("#gh-danger").classList.toggle("hidden",!currentApp());
     wizSay("✓ "+t("se.connected",{r:r.fullName}));
     return esc(r.fullName)+(r.isPrivate?" 🔒":"");
   }))failedAt=t("wiz.connect");
@@ -2803,14 +2877,24 @@ $("#settings-form").addEventListener("submit",async e=>{
 });
 $("#btn-app-remove").onclick=()=>{
   const app=currentApp();if(!app)return;
-  openModal(t("app.remove"),esc(t("app.removeConfirm",{n:app.fullName||app.id})),[
-    {label:t("c.cancel")},{label:t("c.remove"),danger:true,onClick:async()=>{closeModal();
+  const name=app.fullName||app.id;
+  // Two-step removal: an explanatory confirm, and the Remove button stays
+  // disabled until the repo's name is typed back — no accidental removals.
+  openModal(t("app.remove"),
+    `<p class="muted" style="font-size:13px;margin:0 0 14px">${esc(t("app.removeConfirm",{n:name}))}</p>
+     <label for="rm-confirm" style="margin-top:0">${t("app.removeTypePrompt",{n:`<code>${esc(name)}</code>`})}</label>
+     <input id="rm-confirm" autocomplete="off" spellcheck="false" placeholder="${esc(name)}">`,
+    [{label:t("c.cancel")},{label:t("c.remove"),danger:true,onClick:async()=>{closeModal();
       try{
         const r=await api("/api/settings/apps/remove",{method:"POST",body:JSON.stringify({id:app.id})});
-        toast(t("app.removed",{n:app.fullName||app.id,p:(r.kept||[]).join(", ")}),"ok");
+        toast(t("app.removed",{n:name,p:(r.kept||[]).join(", ")}),"ok");
         setCurrentApp(null,{quiet:true,force:true});
         await loadGithubView();
       }catch(ex){toast(ex.message,"err");}}}]);
+  // gate the destructive button on an exact name match
+  const btn=$("#modal-foot button.danger");if(btn)btn.disabled=true;
+  const inp=$("#rm-confirm");
+  if(inp){inp.addEventListener("input",()=>{if(btn)btn.disabled=inp.value.trim()!==name;});inp.focus();}
 };
 
 /* ================= domains / reverse proxy ================= */

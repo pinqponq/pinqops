@@ -22,6 +22,23 @@ and this project adheres to a rolling release model (latest `master` only).
   "Networks" tabs.** Storage keeps volumes and Docker disk usage; Networks holds
   the network list (create/remove/connect) and the visual network map. Each
   loads independently.
+- **The GitHub view is now a single screen instead of a three-step wizard.** The
+  connection, a repository **dropdown** (connected apps first, then the account's
+  other repositories), and the publish panel are all visible at once — no stepper
+  to walk through and no more duplicated "change repository" link plus repo name
+  in the header. Choosing a connected app manages it; choosing a new repository
+  connects and sets it up. Publishing is optional: connecting GitHub alone is a
+  valid end state.
+- **Removing an app is now discoverable and two-step.** The action moved out of
+  the collapsed "Advanced" panel into a labelled danger zone under the repository,
+  and its confirm dialog keeps the destructive button disabled until you type the
+  repository's name back — no accidental removals.
+- **Redesigned the notifications settings card.** Each channel (Webhook, Slack,
+  Telegram) is now its own row with a brand logo, an on/off toggle switch, and its
+  inputs; the trigger events are toggle pills grouped under a "Notify on" heading.
+- **Sidebar navigation items are left-aligned.** Each entry's icon and label
+  previously inherited a centering rule from the base button style, so the whole
+  row floated toward the middle of the sidebar; they now hug the left edge.
 
 ### Removed
 
