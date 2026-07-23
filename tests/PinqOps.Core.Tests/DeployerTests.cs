@@ -72,6 +72,25 @@ public class DeployerTests : IDisposable
     }
 
     [Fact]
+    public async Task DeployAsync_RunsComposeCommands_FromTheComposeFilesDirectory()
+    {
+        var runner = ScriptedRunner();
+        var deployer = new Deployer(runner);
+
+        var result = await deployer.DeployAsync(Options());
+
+        Assert.True(result);
+        // Every `docker compose` invocation must run from the project directory so
+        // the project's .env is interpolated — the chosen host/container ports
+        // live there, and a stale CWD silently drops them to the YAML defaults.
+        var composeCalls = runner.Invocations
+            .Where(invocation => invocation.Arguments.Contains("compose"))
+            .ToList();
+        Assert.NotEmpty(composeCalls);
+        Assert.All(composeCalls, invocation => Assert.Equal(_projectDirectory, invocation.WorkingDirectory));
+    }
+
+    [Fact]
     public async Task DeployAsync_PullFails_SkipsUp_ReturnsFalse()
     {
         var runner = ScriptedRunner(pullExit: 1);

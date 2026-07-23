@@ -267,6 +267,9 @@ app.MapGet("/api/auth/state", (UiConfigStore store) => Results.Json(new
     // The lock screen only shows a username field once there is more than one
     // user; a lone migrated admin logs in with just a password, as before.
     multiUser = store.Current.Users.Count > 1,
+    // The lock screen renders the version before anyone is authenticated, so it
+    // must come from this anonymous endpoint (settings is auth-gated).
+    version = PinqOpsVersion.Current,
 }));
 
 app.MapPost("/api/auth/setup", async (HttpContext context, UiConfigStore store, SessionStore sessions, LoginThrottle throttle) =>
@@ -1566,7 +1569,8 @@ app.MapPost("/api/compose/apply", (HttpContext context, UiConfigStore store, IPr
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         var result = await processRunner.RunAsync(
-            "docker", DockerComposeCommandBuilder.Up(composeFile), workingDirectory: null, cts.Token);
+            "docker", DockerComposeCommandBuilder.Up(composeFile),
+            PinqOpsStatePaths.ComposeWorkingDirectory(composeFile), cts.Token);
         if (!result.Succeeded)
         {
             throw new InvalidOperationException($"compose up failed: {result.StandardError.Trim()}");

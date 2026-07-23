@@ -46,4 +46,31 @@ public static class PinqOpsStatePaths
 
         return Path.Combine(directory, ".env");
     }
+
+    /// <summary>
+    /// Directory to run <c>docker compose</c> from so the project's <c>.env</c>
+    /// is loaded and the project directory is unambiguous. Compose only
+    /// interpolates <c>.env</c> when the working directory (equivalently, the
+    /// project directory) is the one holding the file — passing <c>-f</c> with an
+    /// unrelated CWD silently drops every <c>${PINQOPS_HOST_PORT:-…}</c> to its
+    /// YAML default and makes a port change in <c>.env</c> produce no config diff,
+    /// so <c>up -d</c> never recreates the container onto the chosen port.
+    /// Returns null when it can't be resolved to an existing directory; callers
+    /// then fall back to the process CWD, exactly as before.
+    /// </summary>
+    public static string? ComposeWorkingDirectory(string composeFilePath)
+    {
+        // Rooted only: a relative -f would be re-resolved against this working
+        // directory and point at a different file. Every real call site passes an
+        // absolute compose path. Directory.Exists keeps a missing compose file
+        // producing docker's clean "file not found" instead of a Process.Start
+        // directory-not-found throw (and keeps fake-path unit tests at null).
+        if (string.IsNullOrWhiteSpace(composeFilePath) || !Path.IsPathRooted(composeFilePath))
+        {
+            return null;
+        }
+
+        var directory = Path.GetDirectoryName(Path.GetFullPath(composeFilePath));
+        return !string.IsNullOrEmpty(directory) && Directory.Exists(directory) ? directory : null;
+    }
 }

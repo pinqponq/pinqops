@@ -28,7 +28,8 @@ public sealed class ImageRetentionPruner
         ArgumentException.ThrowIfNullOrWhiteSpace(composeFilePath);
         ArgumentOutOfRangeException.ThrowIfLessThan(keepImages, 1);
 
-        var imagesResult = await RunAsync(DockerComposeCommandBuilder.ConfigImages(composeFilePath), cancellationToken)
+        var workingDirectory = PinqOpsStatePaths.ComposeWorkingDirectory(composeFilePath);
+        var imagesResult = await RunAsync(DockerComposeCommandBuilder.ConfigImages(composeFilePath), workingDirectory, cancellationToken)
             .ConfigureAwait(false);
         if (!imagesResult.Succeeded)
         {
@@ -45,16 +46,16 @@ public sealed class ImageRetentionPruner
 
         foreach (var repository in repositories)
         {
-            await PruneRepositoryAsync(repository, keepImages, cancellationToken).ConfigureAwait(false);
+            await PruneRepositoryAsync(repository, keepImages, workingDirectory, cancellationToken).ConfigureAwait(false);
         }
 
         // Dangling layers left behind by removed tags.
-        await RunAsync(DockerComposeCommandBuilder.PruneImages(), cancellationToken).ConfigureAwait(false);
+        await RunAsync(DockerComposeCommandBuilder.PruneImages(), workingDirectory, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task PruneRepositoryAsync(string repository, int keepImages, CancellationToken cancellationToken)
+    private async Task PruneRepositoryAsync(string repository, int keepImages, string? workingDirectory, CancellationToken cancellationToken)
     {
-        var listResult = await RunAsync(DockerComposeCommandBuilder.ListRepoImages(repository), cancellationToken)
+        var listResult = await RunAsync(DockerComposeCommandBuilder.ListRepoImages(repository), workingDirectory, cancellationToken)
             .ConfigureAwait(false);
         if (!listResult.Succeeded)
         {
@@ -93,7 +94,7 @@ public sealed class ImageRetentionPruner
         foreach (var tag in ordered.Skip(keepImages))
         {
             var reference = $"{repository}:{tag}";
-            var removeResult = await RunAsync(DockerComposeCommandBuilder.RemoveImage(reference), cancellationToken)
+            var removeResult = await RunAsync(DockerComposeCommandBuilder.RemoveImage(reference), workingDirectory, cancellationToken)
                 .ConfigureAwait(false);
             _log?.Invoke(removeResult.Succeeded
                 ? $"removed old image {reference}"
@@ -139,6 +140,6 @@ public sealed class ImageRetentionPruner
             : null;
     }
 
-    private Task<ProcessResult> RunAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken) =>
-        _processRunner.RunAsync("docker", arguments, workingDirectory: null, cancellationToken);
+    private Task<ProcessResult> RunAsync(IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken cancellationToken) =>
+        _processRunner.RunAsync("docker", arguments, workingDirectory, cancellationToken);
 }

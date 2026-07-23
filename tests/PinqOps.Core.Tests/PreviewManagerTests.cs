@@ -55,6 +55,12 @@ public class PreviewManagerTests : IDisposable
         var dockerCalls = runner.Invocations.Where(i => i.FileName == "docker").ToList();
         Assert.Equal("docker compose -f " + composeFile + " pull", dockerCalls[0].CommandLine);
         Assert.Equal("docker compose -f " + composeFile + " up -d", dockerCalls[1].CommandLine);
+
+        // Both must run from the preview's own directory so its per-PR .env
+        // (pinned image/tag/host port) is loaded instead of prod's defaults.
+        var previewDirectory = PreviewManager.PreviewDirectory(_prodCompose, 12);
+        Assert.Equal(previewDirectory, dockerCalls[0].WorkingDirectory);
+        Assert.Equal(previewDirectory, dockerCalls[1].WorkingDirectory);
     }
 
     [Fact]

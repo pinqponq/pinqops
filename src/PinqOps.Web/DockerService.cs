@@ -98,8 +98,24 @@ public sealed class DockerService
         return result.Succeeded ? ParseElement(result.StandardOutput) : null;
     }
 
-    public Task<List<JsonElement>> ComposeServicesAsync(string composeFile) =>
-        JsonLinesAsync("compose", "-f", composeFile, "ps", "-a", "--format", "json");
+    public async Task<List<JsonElement>> ComposeServicesAsync(string composeFile)
+    {
+        // Run from the compose file's directory so its .env is interpolated and
+        // the project directory is unambiguous — the same reason deploys apply
+        // the chosen host/container ports (see PinqOpsStatePaths.ComposeWorkingDirectory).
+        using var cts = new CancellationTokenSource(CommandTimeout);
+        var result = await _processRunner.RunAsync(
+            "docker",
+            new[] { "compose", "-f", composeFile, "ps", "-a", "--format", "json" },
+            PinqOpsStatePaths.ComposeWorkingDirectory(composeFile),
+            cts.Token).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            throw Failed(result);
+        }
+
+        return ParseJsonLinesOrArray(result.StandardOutput);
+    }
 
     public async Task<string> ContainerLogsAsync(string containerId, int tail)
     {
