@@ -67,6 +67,19 @@ rastgele şifreyle gelir. Kurulum sonunda gösterilir; sonradan uygulama
 satırındaki 🔑 düğmesiyle (maskeli, göster/kopyala) erişirsin. Yeniden
 kurulumda aynı şifre kullanılır, mevcut veri bozulmaz.
 
+## Güncelleme
+
+README'den komut kopyalamaya gerek yok — ikili dosya kendini yerinde günceller:
+
+```bash
+sudo pinqops update       # pinqops ikilisini en son sürümle değiştirir
+sudo pinqops-ui update    # pinqops-ui'yi değiştirir ve servisini yeniden başlatır
+```
+
+Her ikisi de en son sürümü indirir, ikiliyi atomik olarak yerine koyar; panel
+systemd servisi olarak çalışıyorsa yeni sürümün devralması için servisi yeniden
+başlatır. Sürümü `pinqops version` ile doğrula.
+
 ## Loglar
 
 Konteyner logları ayrı bir menü değil: **Konteynerler** görünümünde bir

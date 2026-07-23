@@ -88,24 +88,45 @@ public sealed class NotificationDispatcher : IDeployObserver, IDisposable
         }
     }
 
-    private IEnumerable<INotifier> BuildNotifiers(NotificationConfig config, bool includeDisabled = false)
+    private IReadOnlyList<INotifier> BuildNotifiers(NotificationConfig config, bool includeDisabled = false)
     {
+        var notifiers = new List<INotifier>();
+
+        // Each channel's notifier validates its own URL/token in its constructor
+        // and throws on a bad one. Build them independently so a single
+        // misconfigured channel (e.g. a webhook URL missing its scheme) is
+        // skipped instead of aborting the whole enumeration and silently
+        // dropping every other, valid channel.
+        void TryAdd(string channel, Func<INotifier> create)
+        {
+            try
+            {
+                notifiers.Add(create());
+            }
+            catch (ArgumentException exception)
+            {
+                _log?.Invoke($"skipping the {channel} notification channel: {exception.Message}");
+            }
+        }
+
         if ((config.Webhook.Enabled || includeDisabled) && !string.IsNullOrWhiteSpace(config.Webhook.Url))
         {
-            yield return new WebhookNotifier(config.Webhook.Url, _httpClient);
+            TryAdd("webhook", () => new WebhookNotifier(config.Webhook.Url, _httpClient));
         }
 
         if ((config.Slack.Enabled || includeDisabled) && !string.IsNullOrWhiteSpace(config.Slack.WebhookUrl))
         {
-            yield return new SlackNotifier(config.Slack.WebhookUrl, _httpClient);
+            TryAdd("slack", () => new SlackNotifier(config.Slack.WebhookUrl, _httpClient));
         }
 
         if ((config.Telegram.Enabled || includeDisabled)
             && !string.IsNullOrWhiteSpace(config.Telegram.BotToken)
             && !string.IsNullOrWhiteSpace(config.Telegram.ChatId))
         {
-            yield return new TelegramNotifier(config.Telegram.BotToken, config.Telegram.ChatId, _httpClient);
+            TryAdd("telegram", () => new TelegramNotifier(config.Telegram.BotToken, config.Telegram.ChatId, _httpClient));
         }
+
+        return notifiers;
     }
 
     public void Dispose()

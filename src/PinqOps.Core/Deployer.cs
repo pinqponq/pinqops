@@ -130,10 +130,13 @@ public sealed class Deployer
                 : $"image pull failed: {pullFailure}";
 
             // Nothing was applied; restore the previously pinned tag so the
-            // .env keeps describing what is actually running.
-            if (options.Tag is not null && previousTag is not null && previousTag != options.Tag)
+            // .env keeps describing what is actually running. RestoreEnvValue
+            // removes the key when there was no prior tag (a first deploy), so a
+            // failed pull never leaves a tag pinned to an image that never ran —
+            // mirroring the image-restore path above.
+            if (options.Tag is not null && previousTag != options.Tag)
             {
-                EnvFileStore.SetValue(envFile, TagVariable, previousTag);
+                RestoreEnvValue(envFile, TagVariable, previousTag);
             }
 
             await FinishAsync(options, startedAt, DeployRecordValues.ResultFailed, previousTag, healthState, error, cancellationToken)

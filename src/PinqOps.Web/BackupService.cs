@@ -229,14 +229,30 @@ public sealed class BackupService
 
     // ---- last-run state -----------------------------------------------------------
 
-    public DateTimeOffset? LastRun(string targetId) => LoadLastRun().GetValueOrDefault(targetId);
+    private readonly Lock _lastRunGate = new();
+
+    public DateTimeOffset? LastRun(string targetId)
+    {
+        lock (_lastRunGate)
+        {
+            return LoadLastRun().GetValueOrDefault(targetId);
+        }
+    }
 
     private void SetLastRun(string targetId, DateTimeOffset at)
     {
-        var map = LoadLastRun();
-        map[targetId] = at;
-        Directory.CreateDirectory(BackupRoot);
-        File.WriteAllText(_lastRunPath, JsonSerializer.Serialize(map));
+        // The scheduler runs targets concurrently, so this read-modify-write of
+        // the shared lastRun.json must be serialized — otherwise two finishing
+        // backups each write only their own entry and the last writer wins,
+        // dropping the other's timestamp and re-firing it every minute until the
+        // hour rolls over. The write is atomic so a concurrent read can't see a
+        // torn file either.
+        lock (_lastRunGate)
+        {
+            var map = LoadLastRun();
+            map[targetId] = at;
+            SecureFile.WriteAllText(_lastRunPath, JsonSerializer.Serialize(map), ownerOnly: false);
+        }
     }
 
     private Dictionary<string, DateTimeOffset> LoadLastRun()
