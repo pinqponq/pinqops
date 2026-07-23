@@ -993,7 +993,7 @@ tr:{
  "nav.grp.monitor":"İzleme","nav.grp.docker":"Docker","nav.grp.server":"Sunucu","nav.grp.github":"Yayınlama",
  "nav.overview":"Genel Bakış","nav.deployments":"Dağıtımlar","nav.runner":"Runner","nav.containers":"Konteynerler",
  "nav.images":"İmajlar","nav.storage":"Depolama","nav.networks":"Ağlar","nav.system":"Sistem","nav.settings":"Ayarlar",
- "nav.apps":"Uygulamalar","nav.github":"GitHub","nav.domains":"Alan adları","nav.backups":"Yedekler",
+ "nav.apps":"Uygulamalar","nav.github":"GitHub","nav.domains":"Alan adları","nav.backups":"Yedekler","nav.audit":"Denetim",
  "bk.add":"Yedek zamanla","bk.help":"Bir veritabanı konteynerini ya da docker volume'ünü zamanlanmış olarak yedekle. Snapshot'lar /opt/pinqops/backups altında tutulur; eskiler saklama sayısına göre budanır.",
  "bk.source":"Kaynak","bk.schedule":"Zamanlama","bk.hourly":"Saatlik","bk.daily":"Günlük","bk.weekly":"Haftalık",
  "bk.atHour":"Saat (UTC)","bk.retention":"Son N'yi tut","bk.addBtn":"Zamanlama ekle","bk.added":"Yedek zamanlaması eklendi",
@@ -1394,7 +1394,7 @@ function applyLang(){
   $("#ov-h-runchart").textContent=t("ov.hRunchart");$("#ov-h-reschart").textContent=t("ov.hReschart");
   $("#ov-h-loadspark").textContent=t("ov.hLoadspark");$("#ov-h-memspark").textContent=t("ov.hMemspark");
   $("#net-name").placeholder=t("st.netName");
-  $("#btn-repo-refresh").title=t("gh.refresh");
+  $("#btn-repo-refresh").innerHTML=IC.refresh;$("#btn-repo-refresh").title=t("gh.refresh");
   $("#view-title").textContent=t("nav."+view);
   buildNav();
   // re-render the repo dropdown (its option/optgroup labels are localised)
