@@ -150,13 +150,14 @@ public sealed class PreviewManager
 
         WritePreviewEnv(prodEnv, PinqOpsStatePaths.EnvFile(composeFile), request.Image, request.Tag, hostPort.Value);
 
-        var pullFailure = await RunStepAsync(DockerComposeCommandBuilder.Pull(composeFile), cancellationToken).ConfigureAwait(false);
+        var composeDirectory = PinqOpsStatePaths.ComposeWorkingDirectory(composeFile);
+        var pullFailure = await RunStepAsync(DockerComposeCommandBuilder.Pull(composeFile), composeDirectory, cancellationToken).ConfigureAwait(false);
         if (pullFailure is not null)
         {
             return new PreviewDeployResult(false, hostPort.Value, null, $"image pull failed: {pullFailure}");
         }
 
-        var upFailure = await RunStepAsync(DockerComposeCommandBuilder.Up(composeFile), cancellationToken).ConfigureAwait(false);
+        var upFailure = await RunStepAsync(DockerComposeCommandBuilder.Up(composeFile), composeDirectory, cancellationToken).ConfigureAwait(false);
         if (upFailure is not null)
         {
             return new PreviewDeployResult(false, hostPort.Value, null, $"compose up failed: {upFailure}");
@@ -182,7 +183,10 @@ public sealed class PreviewManager
         if (File.Exists(composeFile))
         {
             // down -v: a preview's data is throwaway, so its volumes go with it.
-            await RunStepAsync(new[] { "compose", "-f", composeFile, "down", "-v" }, cancellationToken).ConfigureAwait(false);
+            await RunStepAsync(
+                new[] { "compose", "-f", composeFile, "down", "-v" },
+                PinqOpsStatePaths.ComposeWorkingDirectory(composeFile),
+                cancellationToken).ConfigureAwait(false);
         }
 
         var directory = PreviewDirectory(prodComposeFilePath, pullRequestNumber);
@@ -331,10 +335,10 @@ public sealed class PreviewManager
     private static bool IsPreviewMarker(string? target) =>
         target is not null && target.StartsWith("preview:", StringComparison.Ordinal);
 
-    private async Task<string?> RunStepAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    private async Task<string?> RunStepAsync(IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken cancellationToken)
     {
         _log?.Invoke($"$ {DockerExecutable} {string.Join(' ', arguments)}");
-        var result = await _runner.RunAsync(DockerExecutable, arguments, workingDirectory: null, cancellationToken).ConfigureAwait(false);
+        var result = await _runner.RunAsync(DockerExecutable, arguments, workingDirectory, cancellationToken).ConfigureAwait(false);
         if (result.StandardOutput.Length > 0)
         {
             _log?.Invoke(result.StandardOutput.TrimEnd());

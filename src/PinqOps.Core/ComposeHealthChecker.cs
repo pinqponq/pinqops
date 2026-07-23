@@ -36,13 +36,14 @@ public sealed class ComposeHealthChecker
 
         var deadline = DateTimeOffset.UtcNow + timeout;
         string lastState = "no containers reported";
+        var workingDirectory = PinqOpsStatePaths.ComposeWorkingDirectory(composeFilePath);
 
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             var result = await _processRunner
-                .RunAsync("docker", DockerComposeCommandBuilder.Ps(composeFilePath), workingDirectory: null, cancellationToken)
+                .RunAsync("docker", DockerComposeCommandBuilder.Ps(composeFilePath), workingDirectory, cancellationToken)
                 .ConfigureAwait(false);
             if (!result.Succeeded)
             {

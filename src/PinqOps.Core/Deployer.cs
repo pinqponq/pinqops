@@ -67,6 +67,7 @@ public sealed class Deployer
 
         var startedAt = DateTimeOffset.UtcNow;
         var envFile = PinqOpsStatePaths.EnvFile(options.ComposeFilePath);
+        var composeDirectory = PinqOpsStatePaths.ComposeWorkingDirectory(options.ComposeFilePath);
         var previousTag = EnvFileStore.GetValue(envFile, TagVariable);
         var previousImage = EnvFileStore.GetValue(envFile, ImageVariable);
         var healthState = DeployRecordValues.HealthSkipped;
@@ -120,7 +121,7 @@ public sealed class Deployer
         }
 
         var pullFailure = pullNeeded
-            ? await RunStepAsync(DockerComposeCommandBuilder.Pull(options.ComposeFilePath), token).ConfigureAwait(false)
+            ? await RunStepAsync(DockerComposeCommandBuilder.Pull(options.ComposeFilePath), composeDirectory, token).ConfigureAwait(false)
             : null;
         if (pullFailure is not null)
         {
@@ -144,7 +145,7 @@ public sealed class Deployer
             return false;
         }
 
-        var upFailure = await RunStepAsync(DockerComposeCommandBuilder.Up(options.ComposeFilePath), token)
+        var upFailure = await RunStepAsync(DockerComposeCommandBuilder.Up(options.ComposeFilePath), composeDirectory, token)
             .ConfigureAwait(false);
         if (upFailure is not null)
         {
@@ -248,7 +249,7 @@ public sealed class Deployer
     private async Task<string?> FindImageMismatchAsync(string expectedImage, string composeFilePath, CancellationToken cancellationToken)
     {
         var imagesResult = await _processRunner
-            .RunAsync(DockerExecutable, DockerComposeCommandBuilder.ConfigImages(composeFilePath), workingDirectory: null, cancellationToken)
+            .RunAsync(DockerExecutable, DockerComposeCommandBuilder.ConfigImages(composeFilePath), PinqOpsStatePaths.ComposeWorkingDirectory(composeFilePath), cancellationToken)
             .ConfigureAwait(false);
         if (!imagesResult.Succeeded)
         {
@@ -359,7 +360,8 @@ public sealed class Deployer
     {
         try
         {
-            var images = await RunCapturedAsync(DockerComposeCommandBuilder.ConfigImages(composeFilePath), cancellationToken)
+            var workingDirectory = PinqOpsStatePaths.ComposeWorkingDirectory(composeFilePath);
+            var images = await RunCapturedAsync(DockerComposeCommandBuilder.ConfigImages(composeFilePath), workingDirectory, cancellationToken)
                 .ConfigureAwait(false);
             var image = images?
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -369,7 +371,7 @@ public sealed class Deployer
                 return;
             }
 
-            var exposedJson = await RunCapturedAsync(DockerComposeCommandBuilder.InspectImageExposedPorts(image), cancellationToken)
+            var exposedJson = await RunCapturedAsync(DockerComposeCommandBuilder.InspectImageExposedPorts(image), workingDirectory, cancellationToken)
                 .ConfigureAwait(false);
             var exposed = ParseExposedPorts(exposedJson);
             if (exposed.Count == 0)
@@ -378,7 +380,7 @@ public sealed class Deployer
                 return;
             }
 
-            var psOutput = await RunCapturedAsync(DockerComposeCommandBuilder.Ps(composeFilePath), cancellationToken)
+            var psOutput = await RunCapturedAsync(DockerComposeCommandBuilder.Ps(composeFilePath), workingDirectory, cancellationToken)
                 .ConfigureAwait(false);
             if (psOutput is null)
             {
@@ -454,10 +456,10 @@ public sealed class Deployer
     }
 
     /// <summary>Standard output of a docker command, or null when it failed.</summary>
-    private async Task<string?> RunCapturedAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    private async Task<string?> RunCapturedAsync(IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken cancellationToken)
     {
         var result = await _processRunner
-            .RunAsync(DockerExecutable, arguments, workingDirectory: null, cancellationToken)
+            .RunAsync(DockerExecutable, arguments, workingDirectory, cancellationToken)
             .ConfigureAwait(false);
         return result.Succeeded ? result.StandardOutput : null;
     }
@@ -465,8 +467,9 @@ public sealed class Deployer
     /// <summary>True when every image the compose project references exists locally.</summary>
     private async Task<bool> ImagesPresentLocallyAsync(string composeFilePath, CancellationToken cancellationToken)
     {
+        var workingDirectory = PinqOpsStatePaths.ComposeWorkingDirectory(composeFilePath);
         var imagesResult = await _processRunner
-            .RunAsync(DockerExecutable, DockerComposeCommandBuilder.ConfigImages(composeFilePath), workingDirectory: null, cancellationToken)
+            .RunAsync(DockerExecutable, DockerComposeCommandBuilder.ConfigImages(composeFilePath), workingDirectory, cancellationToken)
             .ConfigureAwait(false);
         if (!imagesResult.Succeeded)
         {
@@ -483,7 +486,7 @@ public sealed class Deployer
         foreach (var reference in references)
         {
             var inspect = await _processRunner
-                .RunAsync(DockerExecutable, DockerComposeCommandBuilder.InspectImage(reference), workingDirectory: null, cancellationToken)
+                .RunAsync(DockerExecutable, DockerComposeCommandBuilder.InspectImage(reference), workingDirectory, cancellationToken)
                 .ConfigureAwait(false);
             if (!inspect.Succeeded)
             {
@@ -500,12 +503,12 @@ public sealed class Deployer
     /// so "port is already allocated" reaches Slack instead of a bare
     /// "compose up failed".
     /// </summary>
-    private async Task<string?> RunStepAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
+    private async Task<string?> RunStepAsync(IReadOnlyList<string> arguments, string? workingDirectory, CancellationToken cancellationToken)
     {
         _log?.Invoke($"$ {DockerExecutable} {string.Join(' ', arguments)}");
 
         var result = await _processRunner
-            .RunAsync(DockerExecutable, arguments, workingDirectory: null, cancellationToken)
+            .RunAsync(DockerExecutable, arguments, workingDirectory, cancellationToken)
             .ConfigureAwait(false);
 
         if (result.StandardOutput.Length > 0)
